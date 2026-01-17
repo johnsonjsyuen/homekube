@@ -6,7 +6,7 @@ set -eu
 cd "$(dirname "$0")"
 
 echo "Building fresh Docker image (no-cache)..."
-docker build . -t localhost:5000/weather-service:latest --no-cache
+docker build . -t localhost:5000/weather-service:latest
 
 echo "Pushing to local registry..."
 docker push localhost:5000/weather-service:latest
