@@ -1,0 +1,6 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cloudflare-tunnel-token
+stringData:
+  token: eyJhIjoiZGVmMDJiOTVkOWY0NjAzZTg1Y2ExNGRiZmY5NjY4MzMiLCJ0IjoiMzJlZmZjMmItZDEwYi00MzA5LTgwYTQtMTVjZmQ0OWEyNGM5IiwicyI6IllqTTFaak16TURZdE5HSXhOQzAwTkRWbExXSmxPVGt0TWpWaE5HTm1NbU13TURRdyJ9
