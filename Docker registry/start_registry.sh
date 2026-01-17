@@ -12,16 +12,16 @@ if [ "$(docker ps -q -f name=$REGISTRY_NAME)" ]; then
 else
     # Check if the container exists but is stopped
     if [ "$(docker ps -aq -f name=$REGISTRY_NAME)" ]; then
-        echo "Removing existing stopped registry container..."
-        docker rm $REGISTRY_NAME
+        echo "Restarting existing stopped registry container..."
+        docker start $REGISTRY_NAME
+    else
+        # Run the registry
+        docker run -d \
+          -p $REGISTRY_PORT:5000 \
+          --restart=always \
+          --name $REGISTRY_NAME \
+          registry:2
     fi
-
-    # Run the registry
-    docker run -d \
-      -p $REGISTRY_PORT:5000 \
-      --restart=always \
-      --name $REGISTRY_NAME \
-      registry:2
 
     if [ $? -eq 0 ]; then
         echo "Registry started successfully!"
