@@ -72,7 +72,7 @@
             <div id="hourly-details" class="hourly-section">
                 <div class="hourly-title">
                     <span id="hourly-date-title"
-                        >{selectedDateName} Wind Forecast</span
+                        >{selectedDateName}'s Wind Forecast</span
                     >
                 </div>
                 <div class="hourly-scroll" id="hourly-container">
