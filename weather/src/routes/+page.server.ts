@@ -43,27 +43,35 @@ const LOCATIONS: Record<string, { lat: string, lon: string, timezone: string, na
     "hong_kong": { lat: "22.3193", lon: "114.1694", timezone: "Asia/Hong_Kong", name: "Hong Kong" }
 };
 
-export const load: PageServerLoad = async ({ url }) => {
-    const latParam = url.searchParams.get('lat');
-    const lonParam = url.searchParams.get('lon');
-    const locationKey = url.searchParams.get('location');
+// Cache for saved locations
+let weatherCache: Record<string, any> = {};
 
-    let lat: string, lon: string, timezone: string, locationName: string;
-
-    if (latParam && lonParam) {
-        lat = latParam;
-        lon = lonParam;
-        timezone = "auto";
-        locationName = "Current Location";
-    } else {
-        const key = locationKey || 'port_melbourne';
-        const data = LOCATIONS[key] || LOCATIONS['port_melbourne'];
-        lat = data.lat;
-        lon = data.lon;
-        timezone = data.timezone;
-        locationName = data.name;
+const fetchWithRetry = async (url: string, retries = 1, timeout = 10000) => {
+    for (let i = 0; i <= retries; i++) {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeout);
+        try {
+            console.log(`Fetching weather data (attempt ${i + 1}/${retries + 1})...`);
+            const res = await fetch(url, {
+                headers: {
+                    'User-Agent': 'WeatherApp/1.0 (homekube)'
+                },
+                signal: controller.signal
+            });
+            clearTimeout(id);
+            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+            return res;
+        } catch (err) {
+            clearTimeout(id);
+            if (i === retries) throw err;
+            console.warn(`Fetch attempt ${i + 1} failed, retrying...`, err);
+            await new Promise(r => setTimeout(r, 1000));
+        }
     }
+    throw new Error("Should not be reached");
+};
 
+async function fetchWeatherData(lat: string, lon: string, timezone: string) {
     const baseUrl = "https://api.open-meteo.com/v1/forecast";
     const params = new URLSearchParams({
         "latitude": lat,
@@ -75,36 +83,67 @@ export const load: PageServerLoad = async ({ url }) => {
         "timezone": timezone
     });
 
-    try {
-        // Fetch with timeout and retry
-        const fetchWithRetry = async (url: string, retries = 1, timeout = 10000) => {
-            for (let i = 0; i <= retries; i++) {
-                const controller = new AbortController();
-                const id = setTimeout(() => controller.abort(), timeout);
-                try {
-                    console.log(`Fetching weather data (attempt ${i + 1}/${retries + 1})...`);
-                    const res = await fetch(url, {
-                        headers: {
-                            'User-Agent': 'WeatherApp/1.0 (homekube)'
-                        },
-                        signal: controller.signal
-                    });
-                    clearTimeout(id);
-                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                    return res;
-                } catch (err) {
-                    clearTimeout(id);
-                    if (i === retries) throw err;
-                    console.warn(`Fetch attempt ${i + 1} failed, retrying...`, err);
-                    // Wait a bit before retrying (exponential backoff could be added here, but simple wait is fine)
-                    await new Promise(r => setTimeout(r, 1000));
-                }
-            }
-            throw new Error("Should not be reached");
-        };
+    const response = await fetchWithRetry(`${baseUrl}?${params}`);
+    return await response.json();
+}
 
-        const response = await fetchWithRetry(`${baseUrl}?${params}`);
-        const weatherRes = await response.json();
+async function updateSavedLocationsCache() {
+    console.log("Refreshing weather cache for saved locations...");
+    for (const [key, data] of Object.entries(LOCATIONS)) {
+        try {
+            const weatherData = await fetchWeatherData(data.lat, data.lon, data.timezone);
+            weatherCache[key] = weatherData;
+        } catch (error) {
+            console.error(`Failed to update cache for ${key}:`, error);
+        }
+    }
+}
+
+// Initial fetch and interval (15 minutes)
+updateSavedLocationsCache();
+setInterval(updateSavedLocationsCache, 15 * 60 * 1000);
+
+export const load: PageServerLoad = async ({ url }) => {
+    const latParam = url.searchParams.get('lat');
+    const lonParam = url.searchParams.get('lon');
+    const locationKey = url.searchParams.get('location');
+
+    let lat: string, lon: string, timezone: string, locationName: string;
+    let weatherRes;
+
+    if (latParam && lonParam) {
+        lat = latParam;
+        lon = lonParam;
+        timezone = "auto";
+        locationName = "Current Location";
+        try {
+            weatherRes = await fetchWeatherData(lat, lon, timezone);
+        } catch (e) {
+            console.error("Error fetching current location weather:", e);
+            weatherRes = null;
+        }
+    } else {
+        const key = locationKey || 'port_melbourne';
+        const data = LOCATIONS[key] || LOCATIONS['port_melbourne'];
+        lat = data.lat;
+        lon = data.lon;
+        timezone = data.timezone;
+        locationName = data.name;
+
+        if (weatherCache[key]) {
+            weatherRes = weatherCache[key];
+        } else {
+            try {
+                weatherRes = await fetchWeatherData(lat, lon, timezone);
+            } catch (e) {
+                console.error(`Error fetching weather for ${key}:`, e);
+                weatherRes = null;
+            }
+        }
+    }
+
+    try {
+        if (!weatherRes) throw new Error("No weather data available");
 
         // Use the timezone returned by the API if we used "auto", or the one we requested
         const responseTimezone = weatherRes.timezone || timezone;
