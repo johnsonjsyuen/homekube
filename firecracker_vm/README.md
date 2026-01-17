@@ -9,8 +9,7 @@ This directory contains scripts to set up and launch a Firecracker MicroVM runni
 - **Dependencies**:
   - `docker` (for building the rootfs)
   - `sudo` (for setting up networking)
-  - `curl`, `tar`, `iproute2`, `iptables`
-  - `sshpass` (optional, for the python example script)
+  - `curl`, `tar`, `iproute2`, `iptables`, `rsync`, `sshpass`
 
 ## Quick Start
 
@@ -20,59 +19,38 @@ This directory contains scripts to set up and launch a Firecracker MicroVM runni
    ./setup.sh
    ```
 
-2. **Build Root Filesystem & Kernel**:
-   Create the Ubuntu 22.04 root filesystem image and extract the compatible kernel. This uses Docker to pull the image, install the kernel and necessary packages (Python, SSH, etc.).
+2. **Start the Agent Session**:
+   The `agent_start.py` script manages the entire lifecycle. It will build the VM image (if missing), start the VM, and push the repository code into it.
    ```bash
-   sudo ./create_rootfs.sh
+   python3 agent_start.py
+   ```
+   *Note: This requires `sudo` internally for network setup and Docker operations. Ensure your user has sudo privileges.*
+
+3. **Work**:
+   The agent or user can now connect to the VM and work on the code in `/root/workspace`.
+   ```bash
+   sshpass -p root ssh root@172.16.0.2
    ```
 
-3. **Launch the VM**:
-   Start the Firecracker VM.
+4. **Sync Changes**:
+   To pull changes made inside the VM back to the host:
    ```bash
-   sudo ./launch.sh
-   ```
-   The VM will boot and output logs to the console. It sets up a network tap device `tap0` with IP `172.16.0.1` (host) and assigns `172.16.0.2` to the VM.
-
-## Connecting to the VM
-
-The VM runs an OpenSSH server. You can connect using:
-
-```bash
-ssh root@172.16.0.2
-# Password: root
-```
-
-### For AI Agents
-
-An example Python script `agent_connect.py` is provided to demonstrate how an AI agent can connect to the VM and execute commands.
-
-1. Install `sshpass` (if using password auth):
-   ```bash
-   sudo apt install sshpass
+   python3 agent_start.py sync
    ```
 
-2. Run the agent script (while the VM is running):
+5. **Stop**:
+   To pull changes and shut down the VM:
    ```bash
-   python3 agent_connect.py
+   python3 agent_start.py stop
    ```
 
-### Synchronizing Code
+## Manual Steps (Advanced)
 
-You can use the `agent_sync.py` script to copy the repository into the VM, let the agent work, and then copy the changes back.
+If you prefer to run steps manually:
 
-1. **Push** the repository to the VM:
-   ```bash
-   python3 agent_sync.py push
-   ```
-   This copies the current repository (excluding artifacts) to `/root/workspace` inside the VM.
-
-2. **Work** inside the VM.
-
-3. **Pull** the changes back to the host:
-   ```bash
-   python3 agent_sync.py pull
-   ```
-   This overwrites local files with the versions from the VM.
+1. **Build Rootfs**: `sudo ./create_rootfs.sh`
+2. **Launch VM**: `sudo ./launch.sh`
+3. **Connect**: `ssh root@172.16.0.2` (password: root)
 
 ## Customization
 
