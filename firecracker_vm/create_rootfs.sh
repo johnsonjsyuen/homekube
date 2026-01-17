@@ -5,7 +5,7 @@ IMAGE="ubuntu-rootfs.ext4"
 KERNEL_OUT="ubuntu-vmlinux.bin"
 INITRD_OUT="ubuntu-initrd.img"
 SIZE="3072" # 3GB
-DOCKER_IMAGE="ubuntu:22.04"
+DOCKER_IMAGE="ubuntu:24.04"
 CONTAINER_NAME="firecracker_ubuntu_builder"
 
 if [ "$EUID" -ne 0 ]; then
@@ -25,7 +25,7 @@ echo "Installing packages..."
 docker exec $CONTAINER_NAME apt-get update
 docker exec $CONTAINER_NAME apt-get install -y \
     openssh-server python3 curl iproute2 net-tools nano udev systemd \
-    linux-image-kvm sudo kmod rsync
+    linux-image-kvm sudo kmod rsync netplan.io
 
 echo "Configuring network..."
 cat <<EOF > netplan_config.yaml
