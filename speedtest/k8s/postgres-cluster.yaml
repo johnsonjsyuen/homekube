@@ -1,0 +1,16 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: speedtest-db
+spec:
+  instances: 2
+  storage:
+    size: 1Gi
+  bootstrap:
+    initdb:
+      database: speedtest
+      owner: app
+      secret:
+        name: speedtest-db-app-user
+  monitoring:
+    enablePodMonitor: true
