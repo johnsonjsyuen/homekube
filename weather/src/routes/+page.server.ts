@@ -36,20 +36,29 @@ function degToCompass(num: number): string {
     return arr[(val % 16)];
 }
 
-export const load: PageServerLoad = async () => {
-    // Port Melbourne coordinates
+// Location mapping
+const LOCATIONS: Record<string, { lat: string, lon: string, timezone: string, name: string }> = {
+    "port_melbourne": { lat: "-37.8396", lon: "144.9423", timezone: "Australia/Melbourne", name: "Port Melbourne, Australia" },
+    "sydney": { lat: "-33.8688", lon: "151.2093", timezone: "Australia/Sydney", name: "Sydney, Australia" },
+    "hong_kong": { lat: "22.3193", lon: "114.1694", timezone: "Asia/Hong_Kong", name: "Hong Kong" }
+};
+
+export const load: PageServerLoad = async ({ url }) => {
+    const locationKey = url.searchParams.get('location') || 'port_melbourne';
+    const locationData = LOCATIONS[locationKey] || LOCATIONS['port_melbourne'];
+
     const baseUrl = "https://api.open-meteo.com/v1/forecast";
     const params = new URLSearchParams({
-        "latitude": "-37.8396",
-        "longitude": "144.9423",
+        "latitude": locationData.lat,
+        "longitude": locationData.lon,
         "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,cloud_cover",
         "daily": "weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max",
         "hourly": "wind_speed_10m,wind_direction_10m",
         "wind_speed_unit": "kn",
-        "timezone": "Australia/Melbourne"
+        "timezone": locationData.timezone
     });
 
-    // Local time in Melbourne
+    // Local time in target location
     const options: Intl.DateTimeFormatOptions = {
         weekday: 'long',
         year: 'numeric',
@@ -57,7 +66,7 @@ export const load: PageServerLoad = async () => {
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
-        timeZone: 'Australia/Melbourne'
+        timeZone: locationData.timezone
     };
     const localTime = new Date().toLocaleString('en-US', options).replace(' at ', ' • ');
 
@@ -123,7 +132,7 @@ export const load: PageServerLoad = async () => {
         }
 
         return {
-            location: "Port Melbourne, Australia",
+            location: locationData.name,
             localTime,
             temperature,
             condition,
@@ -140,7 +149,7 @@ export const load: PageServerLoad = async () => {
 
     } catch (e) {
         return {
-            location: "Port Melbourne, Australia",
+            location: locationData.name,
             localTime,
             error: String(e),
             temperature: null,

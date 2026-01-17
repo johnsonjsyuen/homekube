@@ -30,7 +30,7 @@ body {
     color: #8b8b9e;
     text-transform: uppercase;
     letter-spacing: 3px;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0;
 }
 
 .datetime {
@@ -298,4 +298,46 @@ body {
     font-size: 1.2rem;
     margin-top: 0.5rem;
     display: inline-block;
+}
+
+.location-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.location-select {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #8b8b9e;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0.3rem 1rem 0.3rem 0.5rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    width: auto;
+    min-width: fit-content;
+}
+
+.location-select:hover {
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.location-select:focus {
+    outline: none;
+    border-color: #4fc3f7;
+    color: #ffffff;
+}
+
+.location-select option {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    padding: 0.5rem;
 }

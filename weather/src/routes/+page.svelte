@@ -1,18 +1,37 @@
 <script lang="ts">
+    import { goto } from "$app/navigation";
+    import { page } from "$app/stores";
     import type { PageData } from "./$types";
 
     let { data } = $props();
 
-    let selectedDate = $state(
-        data.forecast && data.forecast.length > 0 ? data.forecast[0].date : "",
-    );
-    let selectedDateName = $state(
-        data.forecast && data.forecast.length > 0 ? data.forecast[0].name : "",
-    );
+    let selectedDate = $state("");
+    let selectedDateName = $state("");
+
+    $effect(() => {
+        if (data.forecast && data.forecast.length > 0) {
+            // Only reset if selectedDate is empty or not in the new forecast
+            const dateExists = data.forecast.some(
+                (d) => d.date === selectedDate,
+            );
+            if (!selectedDate || !dateExists) {
+                selectedDate = data.forecast[0].date;
+                selectedDateName = data.forecast[0].name;
+            }
+        }
+    });
 
     function handleMouseEnter(date: string, name: string) {
         selectedDate = date;
         selectedDateName = name;
+    }
+
+    function handleLocationChange(event: Event) {
+        const select = event.target as HTMLSelectElement;
+        const location = select.value;
+        const url = new URL($page.url);
+        url.searchParams.set("location", location);
+        goto(url);
     }
 
     let hourlyData = $derived(
@@ -22,7 +41,19 @@
 
 <div class="container">
     <header class="header">
-        <div class="location">📍 {data.location}</div>
+        <div class="location-container">
+            <div class="location">📍 {data.location}</div>
+            <select
+                class="location-select"
+                onchange={handleLocationChange}
+                value={$page.url.searchParams.get("location") ||
+                    "port_melbourne"}
+            >
+                <option value="port_melbourne">Port Melbourne</option>
+                <option value="sydney">Sydney</option>
+                <option value="hong_kong">Hong Kong</option>
+            </select>
+        </div>
         <div class="datetime">{data.localTime}</div>
     </header>
 
