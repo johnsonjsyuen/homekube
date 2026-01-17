@@ -6,10 +6,10 @@ set -eu
 cd "$(dirname "$0")"
 
 echo "Building fresh Docker image (no-cache)..."
-docker build . -t localhost:5000/weather-service:latest
+docker build --platform linux/amd64 . -t localhost:5001/weather-service:latest
 
 echo "Pushing to local registry..."
-docker push localhost:5000/weather-service:latest
+docker push localhost:5001/weather-service:latest
 
 echo "Updating Kubernetes deployment..."
 kubectl apply -f weather-deployment.yaml
