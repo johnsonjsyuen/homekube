@@ -6,13 +6,13 @@ set -eu
 cd "$(dirname "$0")"
 
 echo "Building fresh Docker image (no-cache)..."
-docker build --platform linux/amd64 . -t localhost:5001/weather:latest
+docker build --platform linux/amd64 . -t localhost:5001/homepage:latest
 
 echo "Pushing to local registry..."
-docker push localhost:5001/weather:latest
+docker push localhost:5001/homepage:latest
 
 echo "Updating Kubernetes deployment..."
-kubectl apply -f weather-deployment.yaml
+kubectl apply -f homepage-deployment.yaml
 
 echo "Restarting pods to pull new image..."
-kubectl rollout restart deployment weather-service
+kubectl rollout restart deployment homepage

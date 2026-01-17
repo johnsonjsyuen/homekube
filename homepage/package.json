@@ -1,5 +1,5 @@
 {
-	"name": "weather",
+	"name": "homepage",
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
@@ -17,10 +17,16 @@
 		"@sveltejs/kit": "^2.49.1",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
 		"@tailwindcss/vite": "^4.1.17",
+		"@types/pg": "^8.10.9",
 		"svelte": "^5.45.6",
 		"svelte-check": "^4.3.4",
 		"tailwindcss": "^4.1.17",
 		"typescript": "^5.9.3",
 		"vite": "^7.2.6"
+	},
+	"dependencies": {
+		"chart.js": "^4.4.1",
+		"pg": "^8.11.3",
+		"svelte-chartjs": "^3.1.2"
 	}
 }

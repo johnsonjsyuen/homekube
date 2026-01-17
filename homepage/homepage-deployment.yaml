@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: weather-service
+  name: homepage
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: weather-service
+      app: homepage
   template:
     metadata:
       labels:
-        app: weather-service
+        app: homepage
     spec:
       containers:
-      - name: weather-service
-        image: localhost:5001/weather:latest
+      - name: homepage
+        image: localhost:5001/homepage:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
@@ -22,10 +22,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: weather-service
+  name: homepage
 spec:
   selector:
-    app: weather-service
+    app: homepage
   ports:
     - protocol: TCP
       port: 80
