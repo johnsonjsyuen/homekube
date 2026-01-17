@@ -44,35 +44,83 @@ const LOCATIONS: Record<string, { lat: string, lon: string, timezone: string, na
 };
 
 export const load: PageServerLoad = async ({ url }) => {
-    const locationKey = url.searchParams.get('location') || 'port_melbourne';
-    const locationData = LOCATIONS[locationKey] || LOCATIONS['port_melbourne'];
+    const latParam = url.searchParams.get('lat');
+    const lonParam = url.searchParams.get('lon');
+    const locationKey = url.searchParams.get('location');
+
+    let lat: string, lon: string, timezone: string, locationName: string;
+
+    if (latParam && lonParam) {
+        lat = latParam;
+        lon = lonParam;
+        timezone = "auto";
+        locationName = "Current Location";
+    } else {
+        const key = locationKey || 'port_melbourne';
+        const data = LOCATIONS[key] || LOCATIONS['port_melbourne'];
+        lat = data.lat;
+        lon = data.lon;
+        timezone = data.timezone;
+        locationName = data.name;
+    }
 
     const baseUrl = "https://api.open-meteo.com/v1/forecast";
     const params = new URLSearchParams({
-        "latitude": locationData.lat,
-        "longitude": locationData.lon,
+        "latitude": lat,
+        "longitude": lon,
         "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,cloud_cover",
         "daily": "weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max",
         "hourly": "wind_speed_10m,wind_direction_10m",
         "wind_speed_unit": "kn",
-        "timezone": locationData.timezone
+        "timezone": timezone
     });
 
-    // Local time in target location
-    const options: Intl.DateTimeFormatOptions = {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: locationData.timezone
-    };
-    const localTime = new Date().toLocaleString('en-US', options).replace(' at ', ' • ');
-
     try {
-        const response = await fetch(`${baseUrl}?${params}`);
+        // Fetch with timeout and retry
+        const fetchWithRetry = async (url: string, retries = 1, timeout = 10000) => {
+            for (let i = 0; i <= retries; i++) {
+                const controller = new AbortController();
+                const id = setTimeout(() => controller.abort(), timeout);
+                try {
+                    console.log(`Fetching weather data (attempt ${i + 1}/${retries + 1})...`);
+                    const res = await fetch(url, {
+                        headers: {
+                            'User-Agent': 'WeatherApp/1.0 (homekube)'
+                        },
+                        signal: controller.signal
+                    });
+                    clearTimeout(id);
+                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                    return res;
+                } catch (err) {
+                    clearTimeout(id);
+                    if (i === retries) throw err;
+                    console.warn(`Fetch attempt ${i + 1} failed, retrying...`, err);
+                    // Wait a bit before retrying (exponential backoff could be added here, but simple wait is fine)
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+            }
+            throw new Error("Should not be reached");
+        };
+
+        const response = await fetchWithRetry(`${baseUrl}?${params}`);
         const weatherRes = await response.json();
+
+        // Use the timezone returned by the API if we used "auto", or the one we requested
+        const responseTimezone = weatherRes.timezone || timezone;
+
+        // Local time in target location
+        const options: Intl.DateTimeFormatOptions = {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: responseTimezone
+        };
+        const localTime = new Date().toLocaleString('en-US', options).replace(' at ', ' • ');
+
 
         const current = weatherRes.current || {};
         const daily = weatherRes.daily || {};
@@ -132,7 +180,7 @@ export const load: PageServerLoad = async ({ url }) => {
         }
 
         return {
-            location: locationData.name,
+            location: locationName,
             localTime,
             temperature,
             condition,
@@ -148,8 +196,10 @@ export const load: PageServerLoad = async ({ url }) => {
         };
 
     } catch (e) {
+        // Fallback time if fetch fails (using UTC or system time as best effort, or just empty)
+        const localTime = new Date().toLocaleString();
         return {
-            location: locationData.name,
+            location: locationName,
             localTime,
             error: String(e),
             temperature: null,

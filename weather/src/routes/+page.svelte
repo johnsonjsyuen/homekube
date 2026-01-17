@@ -29,14 +29,52 @@
     function handleLocationChange(event: Event) {
         const select = event.target as HTMLSelectElement;
         const location = select.value;
-        const url = new URL(page.url);
-        url.searchParams.set("location", location);
-        goto(url);
+
+        if (location === "current_location") {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const { latitude, longitude } = position.coords;
+                        const url = new URL(page.url);
+                        url.searchParams.delete("location");
+                        url.searchParams.set("lat", latitude.toString());
+                        url.searchParams.set("lon", longitude.toString());
+                        goto(url);
+                    },
+                    (error) => {
+                        console.error("Error getting location:", error);
+                        alert(
+                            "Could not get your location. Please allow location access.",
+                        );
+                        // Reset selection to previous or default
+                        select.value =
+                            page.url.searchParams.get("location") ||
+                            "port_melbourne";
+                    },
+                );
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
+        } else {
+            const url = new URL(page.url);
+            url.searchParams.delete("lat");
+            url.searchParams.delete("lon");
+            url.searchParams.set("location", location);
+            goto(url);
+        }
     }
 
     let hourlyData = $derived(
         data.dailyHourlyMap ? data.dailyHourlyMap[selectedDate] : [],
     );
+
+    // Determine the current value for the select dropdown
+    let currentSelectValue = $derived.by(() => {
+        const lat = page.url.searchParams.get("lat");
+        const lon = page.url.searchParams.get("lon");
+        if (lat && lon) return "current_location";
+        return page.url.searchParams.get("location") || "port_melbourne";
+    });
 </script>
 
 <div class="container">
@@ -46,12 +84,12 @@
             <select
                 class="location-select"
                 onchange={handleLocationChange}
-                value={page.url.searchParams.get("location") ||
-                    "port_melbourne"}
+                value={currentSelectValue}
             >
                 <option value="port_melbourne">Port Melbourne</option>
                 <option value="sydney">Sydney</option>
                 <option value="hong_kong">Hong Kong</option>
+                <option value="current_location">Current Location</option>
             </select>
         </div>
         <div class="datetime">{data.localTime}</div>
