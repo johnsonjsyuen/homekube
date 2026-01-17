@@ -54,4 +54,25 @@ impl Db {
 
         Ok(())
     }
+
+    pub async fn get_recent_results(&self) -> Result<Vec<crate::api::SpeedtestResultResponse>> {
+        let results = sqlx::query_as::<_, crate::api::SpeedtestResultResponse>(
+            r#"
+            SELECT 
+                timestamp,
+                server_name,
+                server_country,
+                latency_ms,
+                download_bandwidth,
+                upload_bandwidth
+            FROM speedtest_results
+            ORDER BY timestamp DESC
+            LIMIT 100
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(results)
+    }
 }

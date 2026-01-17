@@ -1,3 +1,4 @@
+mod api;
 mod db;
 mod speedtest;
 
@@ -66,6 +67,12 @@ async fn main() -> Result<()> {
     info!("Scheduler started");
     sched.start().await?;
 
+    // Create HTTP server
+    let db_for_api = std::sync::Arc::new(db.clone());
+    let app = api::create_router(db_for_api);
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
+    info!("API server listening on port 3000");
+
     // Run once immediately on startup for verification
     tokio::spawn(async move {
         info!("Running initial startup speedtest cycle");
@@ -89,9 +96,13 @@ async fn main() -> Result<()> {
         }
     });
 
-    // Keep the main thread alive
-    tokio::signal::ctrl_c().await?;
-    info!("Shutting down");
+    // Run HTTP server until shutdown signal
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            tokio::signal::ctrl_c().await.ok();
+            info!("Shutting down");
+        })
+        .await?;
 
     Ok(())
 }

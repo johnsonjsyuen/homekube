@@ -1,5 +1,4 @@
 import type { PageServerLoad } from './$types';
-import { query } from '$lib/server/db';
 
 // Weather code to description and icon mapping
 const WEATHER_CODES: Record<number, [string, string]> = {
@@ -125,22 +124,15 @@ export const load: PageServerLoad = async ({ url }) => {
     let weatherRes;
     let fetchError;
 
-    // Fetch speedtest results
+    // Fetch speedtest results from speedtest API
     let speedtestResults = [];
     try {
-        const res = await query(`
-            SELECT 
-                timestamp,
-                server_name,
-                server_country,
-                latency_ms,
-                download_bandwidth,
-                upload_bandwidth
-            FROM speedtest_results
-            ORDER BY timestamp DESC
-            LIMIT 100
-        `);
-        speedtestResults = res.rows;
+        const res = await fetch('http://speedtest:3000/api/results');
+        if (res.ok) {
+            speedtestResults = await res.json();
+        } else {
+            console.error("Error fetching speedtest results:", res.status);
+        }
     } catch (e) {
         console.error("Error fetching speedtest results:", e);
     }
