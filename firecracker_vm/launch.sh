@@ -6,6 +6,7 @@ TAP_DEV="tap0"
 TAP_IP="172.16.0.1"
 MASK_SHORT="/24"
 KERNEL="ubuntu-vmlinux.bin"
+INITRD="ubuntu-initrd.img"
 ROOTFS="ubuntu-rootfs.ext4"
 FC_BINARY="./firecracker"
 API_SOCKET="/tmp/firecracker.socket"
@@ -17,6 +18,11 @@ fi
 
 if [ ! -f "$KERNEL" ]; then
     echo "Kernel file $KERNEL not found. Please run create_rootfs.sh."
+    exit 1
+fi
+
+if [ ! -f "$INITRD" ]; then
+    echo "Initrd file $INITRD not found. Please run create_rootfs.sh."
     exit 1
 fi
 
@@ -59,7 +65,8 @@ cat <<EOF > vm_config.json
 {
   "boot-source": {
     "kernel_image_path": "$KERNEL",
-    "boot_args": "console=ttyS0 reboot=k panic=1 pci=off init=/lib/systemd/systemd rw"
+    "initrd_path": "$INITRD",
+    "boot_args": "console=ttyS0 reboot=k panic=1 pci=off init=/lib/systemd/systemd rw root=/dev/vda"
   },
   "drives": [
     {

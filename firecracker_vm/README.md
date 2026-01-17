@@ -56,11 +56,29 @@ An example Python script `agent_connect.py` is provided to demonstrate how an AI
    python3 agent_connect.py
    ```
 
+### Synchronizing Code
+
+You can use the `agent_sync.py` script to copy the repository into the VM, let the agent work, and then copy the changes back.
+
+1. **Push** the repository to the VM:
+   ```bash
+   python3 agent_sync.py push
+   ```
+   This copies the current repository (excluding artifacts) to `/root/workspace` inside the VM.
+
+2. **Work** inside the VM.
+
+3. **Pull** the changes back to the host:
+   ```bash
+   python3 agent_sync.py pull
+   ```
+   This overwrites local files with the versions from the VM.
+
 ## Customization
 
 - **Packages**: Edit `create_rootfs.sh` to add more packages to the `docker exec ... apt-get install` command.
 - **Network**: Edit `launch.sh` to change IP addresses or network interfaces.
-- **Kernel**: The `create_rootfs.sh` script extracts the `linux-image-virtual` kernel from the Ubuntu container. This ensures compatibility with the Ubuntu userland.
+- **Kernel**: The `create_rootfs.sh` script extracts the `linux-image-kvm` kernel and initrd from the Ubuntu container. This ensures compatibility with the Ubuntu userland and Firecracker.
 
 ## Troubleshooting
 

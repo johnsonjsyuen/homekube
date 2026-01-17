@@ -3,6 +3,7 @@ set -e
 
 IMAGE="ubuntu-rootfs.ext4"
 KERNEL_OUT="ubuntu-vmlinux.bin"
+INITRD_OUT="ubuntu-initrd.img"
 SIZE="3072" # 3GB
 DOCKER_IMAGE="ubuntu:22.04"
 CONTAINER_NAME="firecracker_ubuntu_builder"
@@ -14,17 +15,17 @@ fi
 
 echo "Cleaning up previous runs..."
 docker rm -f $CONTAINER_NAME 2>/dev/null || true
-rm -f $IMAGE $KERNEL_OUT
+rm -f $IMAGE $KERNEL_OUT $INITRD_OUT
 
 echo "Starting Docker container..."
 docker run -it -d --name $CONTAINER_NAME $DOCKER_IMAGE /bin/bash
 
 echo "Installing packages..."
-# Install linux-image-virtual to get a compatible kernel and modules
+# Install linux-image-kvm which is optimized for virtual environments
 docker exec $CONTAINER_NAME apt-get update
 docker exec $CONTAINER_NAME apt-get install -y \
     openssh-server python3 curl iproute2 net-tools nano udev systemd \
-    linux-image-virtual sudo kmod
+    linux-image-kvm sudo kmod rsync
 
 echo "Configuring network..."
 cat <<EOF > netplan_config.yaml
@@ -52,7 +53,6 @@ docker exec $CONTAINER_NAME ssh-keygen -A
 
 echo "Fixing systemd for VM..."
 # Unmask services masked by Docker image
-# We remove the masks that point to /dev/null
 docker exec $CONTAINER_NAME bash -c '
 for i in $(grep -l "/dev/null" /etc/systemd/system/*.service /lib/systemd/system/*.service 2>/dev/null); do
   echo "Removing mask: $i"
@@ -60,7 +60,7 @@ for i in $(grep -l "/dev/null" /etc/systemd/system/*.service /lib/systemd/system
 done
 '
 
-# Enable serial console (important for firecracker logs)
+# Enable serial console
 docker exec $CONTAINER_NAME bash -c '
 mkdir -p /etc/systemd/system/getty.target.wants
 ln -sf /lib/systemd/system/serial-getty@.service /etc/systemd/system/getty.target.wants/serial-getty@ttyS0.service
@@ -69,19 +69,25 @@ ln -sf /lib/systemd/system/serial-getty@.service /etc/systemd/system/getty.targe
 # Create fstab
 docker exec $CONTAINER_NAME bash -c 'echo "/dev/vda / ext4 defaults 0 0" > /etc/fstab'
 
-echo "Extracting Kernel..."
-# Look for vmlinuz in /boot. We grab the one we just installed.
+echo "Extracting Kernel and Initrd..."
+# Look for vmlinuz and initrd.img in /boot
 KERNEL_PATH=$(docker exec $CONTAINER_NAME sh -c 'ls /boot/vmlinuz-* | head -n 1')
+INITRD_PATH=$(docker exec $CONTAINER_NAME sh -c 'ls /boot/initrd.img-* | head -n 1')
+
 echo "Found kernel: $KERNEL_PATH"
-if [ -z "$KERNEL_PATH" ]; then
-    echo "Error: No kernel found in /boot"
+echo "Found initrd: $INITRD_PATH"
+
+if [ -z "$KERNEL_PATH" ] || [ -z "$INITRD_PATH" ]; then
+    echo "Error: Kernel or Initrd not found in /boot"
     exit 1
 fi
-docker cp $CONTAINER_NAME:$KERNEL_PATH ./$KERNEL_OUT
 
-# Change ownership of artifacts to the sudo user if applicable
+docker cp $CONTAINER_NAME:$KERNEL_PATH ./$KERNEL_OUT
+docker cp $CONTAINER_NAME:$INITRD_PATH ./$INITRD_OUT
+
+# Change ownership of artifacts
 if [ ! -z "$SUDO_USER" ]; then
-    chown $SUDO_USER:$SUDO_USER $KERNEL_OUT
+    chown $SUDO_USER:$SUDO_USER $KERNEL_OUT $INITRD_OUT
 fi
 
 echo "Exporting filesystem..."
@@ -108,3 +114,4 @@ fi
 
 echo "Rootfs created: $IMAGE"
 echo "Kernel extracted: $KERNEL_OUT"
+echo "Initrd extracted: $INITRD_OUT"
