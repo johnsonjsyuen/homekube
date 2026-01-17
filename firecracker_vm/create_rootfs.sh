@@ -25,7 +25,7 @@ echo "Installing packages..."
 docker exec $CONTAINER_NAME apt-get update
 docker exec $CONTAINER_NAME apt-get install -y \
     openssh-server python3 curl iproute2 net-tools nano udev systemd \
-    linux-image-kvm sudo kmod rsync netplan.io
+    linux-image-kvm sudo kmod rsync netplan.io binutils
 
 echo "Configuring network..."
 cat <<EOF > netplan_config.yaml
@@ -71,16 +71,25 @@ docker exec $CONTAINER_NAME bash -c 'echo "/dev/vda / ext4 defaults 0 0" > /etc/
 
 echo "Extracting Kernel and Initrd..."
 # Look for vmlinuz and initrd.img in /boot
-KERNEL_PATH=$(docker exec $CONTAINER_NAME sh -c 'ls /boot/vmlinuz-* | head -n 1')
+KERNEL_Z_PATH=$(docker exec $CONTAINER_NAME sh -c 'ls /boot/vmlinuz-* | head -n 1')
 INITRD_PATH=$(docker exec $CONTAINER_NAME sh -c 'ls /boot/initrd.img-* | head -n 1')
 
-echo "Found kernel: $KERNEL_PATH"
+echo "Found compressed kernel: $KERNEL_Z_PATH"
 echo "Found initrd: $INITRD_PATH"
 
-if [ -z "$KERNEL_PATH" ] || [ -z "$INITRD_PATH" ]; then
+if [ -z "$KERNEL_Z_PATH" ] || [ -z "$INITRD_PATH" ]; then
     echo "Error: Kernel or Initrd not found in /boot"
     exit 1
 fi
+
+# Extract vmlinux from vmlinuz
+echo "Downloading extract-vmlinux script..."
+docker exec $CONTAINER_NAME curl -s https://raw.githubusercontent.com/torvalds/linux/master/scripts/extract-vmlinux -o /usr/local/bin/extract-vmlinux
+docker exec $CONTAINER_NAME chmod +x /usr/local/bin/extract-vmlinux
+
+echo "Extracting vmlinux..."
+docker exec $CONTAINER_NAME sh -c "/usr/local/bin/extract-vmlinux $KERNEL_Z_PATH > /boot/vmlinux"
+KERNEL_PATH="/boot/vmlinux"
 
 docker cp $CONTAINER_NAME:$KERNEL_PATH ./$KERNEL_OUT
 docker cp $CONTAINER_NAME:$INITRD_PATH ./$INITRD_OUT
