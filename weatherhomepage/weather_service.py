@@ -39,11 +39,11 @@ WEATHER_CODES = {
 
 @app.route('/')
 def weather_and_time():
-    # Melbourne coordinates
+    # Port Melbourne coordinates
     base_url = "https://api.open-meteo.com/v1/forecast"
     params = {
-        "latitude": -37.81,
-        "longitude": 144.96,
+        "latitude": -37.8396,
+        "longitude": 144.9423,
         "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,cloud_cover",
         "daily": "weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max",
         "hourly": "wind_speed_10m,wind_direction_10m",
@@ -118,7 +118,7 @@ def weather_and_time():
         
         return render_template(
             'weather.html',
-            location="Melbourne, Australia",
+            location="Port Melbourne, Australia",
             local_time=local_time,
             temperature=temperature,
             condition=condition,
@@ -135,7 +135,7 @@ def weather_and_time():
     except Exception as e:
         return render_template(
             'weather.html',
-            location="Melbourne, Australia",
+            location="Port Melbourne, Australia",
             local_time=local_time,
             error=str(e),
             temperature=None,
@@ -153,8 +153,8 @@ def weather_api():
     """JSON API endpoint for programmatic access"""
     base_url = "https://api.open-meteo.com/v1/forecast"
     params = {
-        "latitude": -37.81,
-        "longitude": 144.96,
+        "latitude": -37.8396,
+        "longitude": 144.9423,
         "current": "temperature_2m,weather_code,wind_speed_10m",
         "timezone": "Australia/Melbourne"
     }
@@ -167,7 +167,7 @@ def weather_api():
         now = datetime.datetime.now(tz)
         
         return {
-            "location": "Melbourne",
+            "location": "Port Melbourne",
             "temperature_celsius": current.get('temperature_2m'),
             "wind_speed_kmh": current.get('wind_speed_10m'),
             "local_time": now.strftime('%Y-%m-%d %H:%M:%S')
