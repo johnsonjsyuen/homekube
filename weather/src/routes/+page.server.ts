@@ -89,19 +89,31 @@ async function fetchWeatherData(lat: string, lon: string, timezone: string) {
 
 async function updateSavedLocationsCache() {
     console.log("Refreshing weather cache for saved locations...");
+    let allSuccess = true;
     for (const [key, data] of Object.entries(LOCATIONS)) {
         try {
             const weatherData = await fetchWeatherData(data.lat, data.lon, data.timezone);
-            weatherCache[key] = weatherData;
+            if (weatherData) {
+                weatherCache[key] = weatherData;
+            } else {
+                console.warn(`Received empty data for ${key}`);
+                allSuccess = false;
+            }
         } catch (error) {
             console.error(`Failed to update cache for ${key}:`, error);
+            allSuccess = false;
         }
     }
+
+    const delay = allSuccess ? 15 * 60 * 1000 : 10 * 1000;
+    if (!allSuccess) {
+        console.log("Some updates failed, retrying in 10 seconds...");
+    }
+    setTimeout(updateSavedLocationsCache, delay);
 }
 
-// Initial fetch and interval (15 minutes)
+// Initial fetch
 updateSavedLocationsCache();
-setInterval(updateSavedLocationsCache, 15 * 60 * 1000);
 
 export const load: PageServerLoad = async ({ url }) => {
     const latParam = url.searchParams.get('lat');
@@ -110,6 +122,7 @@ export const load: PageServerLoad = async ({ url }) => {
 
     let lat: string, lon: string, timezone: string, locationName: string;
     let weatherRes;
+    let fetchError;
 
     if (latParam && lonParam) {
         lat = latParam;
@@ -120,6 +133,7 @@ export const load: PageServerLoad = async ({ url }) => {
             weatherRes = await fetchWeatherData(lat, lon, timezone);
         } catch (e) {
             console.error("Error fetching current location weather:", e);
+            fetchError = e;
             weatherRes = null;
         }
     } else {
@@ -131,19 +145,22 @@ export const load: PageServerLoad = async ({ url }) => {
         locationName = data.name;
 
         if (weatherCache[key]) {
+            console.log(`Cache hit for ${key}`);
             weatherRes = weatherCache[key];
         } else {
+            console.log(`Cache miss for ${key}, fetching...`);
             try {
                 weatherRes = await fetchWeatherData(lat, lon, timezone);
             } catch (e) {
                 console.error(`Error fetching weather for ${key}:`, e);
+                fetchError = e;
                 weatherRes = null;
             }
         }
     }
 
     try {
-        if (!weatherRes) throw new Error("No weather data available");
+        if (!weatherRes) throw fetchError || new Error("No weather data available");
 
         // Use the timezone returned by the API if we used "auto", or the one we requested
         const responseTimezone = weatherRes.timezone || timezone;

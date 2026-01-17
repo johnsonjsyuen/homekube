@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+	
+	<style data-sveltekit>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+    min-height: 100vh;
+    color: #e0e0e0;
+    padding: 2rem;
+}
+
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.location {
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: #8b8b9e;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 0;
+}
+
+.datetime {
+    font-size: 0.95rem;
+    color: #6b6b7e;
+}
+
+.main-weather {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    padding: 3rem;
+    text-align: center;
+    margin-bottom: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.weather-icon {
+    font-size: 6rem;
+    margin-bottom: 1rem;
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+.temperature {
+    font-size: 5rem;
+    font-weight: 300;
+    background: linear-gradient(135deg, #ffffff 0%, #a0a0c0 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+}
+
+.temperature .unit {
+    font-size: 2rem;
+    font-weight: 400;
+    vertical-align: super;
+}
+
+.condition {
+    font-size: 1.3rem;
+    color: #9090a8;
+    margin-top: 0.5rem;
+    font-weight: 400;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
+    padding: 1.5rem;
+    text-align: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+}
+
+.stat-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.stat-value {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: #6b6b7e;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 0.25rem;
+}
+
+.forecast-section {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    padding: 2rem;
+}
+
+.forecast-title {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #8b8b9e;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 1.5rem;
+}
+
+.forecast-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .forecast-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .forecast-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.forecast-day {
+    text-align: center;
+    padding: 1rem 0.5rem;
+    border-radius: 12px;
+    transition: background 0.3s ease;
+    cursor: pointer;
+}
+
+.forecast-day:hover,
+.forecast-day.active {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.forecast-day-name {
+    font-size: 0.8rem;
+    color: #6b6b7e;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.forecast-icon {
+    font-size: 1.8rem;
+    margin-bottom: 0.5rem;
+}
+
+.forecast-temps {
+    font-size: 0.85rem;
+}
+
+.forecast-high {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.forecast-low {
+    color: #6b6b7e;
+}
+
+.forecast-wind {
+    font-size: 0.75rem;
+    color: #4fc3f7;
+    margin-top: 0.5rem;
+    font-weight: 500;
+}
+
+.error-message {
+    background: rgba(255, 82, 82, 0.1);
+    border: 1px solid rgba(255, 82, 82, 0.3);
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    color: #ff5252;
+}
+
+.wind-direction {
+    display: inline-block;
+    transition: transform 0.3s ease;
+}
+
+/* Hourly Forecast Styles */
+
+.hourly-section {
+    margin-top: 2rem;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+
+.hourly-title {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #8b8b9e;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.hourly-scroll {
+    display: flex;
+    overflow-x: auto;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.hourly-scroll::-webkit-scrollbar {
+    height: 6px;
+}
+
+.hourly-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.hourly-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.hourly-card {
+    min-width: 100px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    padding: 1rem;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.hourly-time {
+    font-size: 0.85rem;
+    color: #8b8b9e;
+    margin-bottom: 0.5rem;
+}
+
+.hourly-wind {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 0.25rem;
+}
+
+.hourly-unit {
+    font-size: 0.7rem;
+    color: #8b8b9e;
+}
+
+.hourly-dir {
+    font-size: 1.2rem;
+    margin-top: 0.5rem;
+    display: inline-block;
+}
+
+.location-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.location-select {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #8b8b9e;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0.3rem 1rem 0.3rem 0.5rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    width: auto;
+    min-width: fit-content;
+}
+
+.location-select:hover {
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.location-select:focus {
+    outline: none;
+    border-color: #4fc3f7;
+    color: #ffffff;
+}
+
+.location-select option {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    padding: 0.5rem;
+}</style><!--12qhfyh--><link rel="icon" href="data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='107'%20height='128'%20viewBox='0%200%20107%20128'%3e%3ctitle%3esvelte-logo%3c/title%3e%3cpath%20d='M94.157%2022.819c-10.4-14.885-30.94-19.297-45.792-9.835L22.282%2029.608A29.92%2029.92%200%200%200%208.764%2049.65a31.5%2031.5%200%200%200%203.108%2020.231%2030%2030%200%200%200-4.477%2011.183%2031.9%2031.9%200%200%200%205.448%2024.116c10.402%2014.887%2030.942%2019.297%2045.791%209.835l26.083-16.624A29.92%2029.92%200%200%200%2098.235%2078.35a31.53%2031.53%200%200%200-3.105-20.232%2030%2030%200%200%200%204.474-11.182%2031.88%2031.88%200%200%200-5.447-24.116'%20style='fill:%23ff3e00'/%3e%3cpath%20d='M45.817%20106.582a20.72%2020.72%200%200%201-22.237-8.243%2019.17%2019.17%200%200%201-3.277-14.503%2018%2018%200%200%201%20.624-2.435l.49-1.498%201.337.981a33.6%2033.6%200%200%200%2010.203%205.098l.97.294-.09.968a5.85%205.85%200%200%200%201.052%203.878%206.24%206.24%200%200%200%206.695%202.485%205.8%205.8%200%200%200%201.603-.704L69.27%2076.28a5.43%205.43%200%200%200%202.45-3.631%205.8%205.8%200%200%200-.987-4.371%206.24%206.24%200%200%200-6.698-2.487%205.7%205.7%200%200%200-1.6.704l-9.953%206.345a19%2019%200%200%201-5.296%202.326%2020.72%2020.72%200%200%201-22.237-8.243%2019.17%2019.17%200%200%201-3.277-14.502%2017.99%2017.99%200%200%201%208.13-12.052l26.081-16.623a19%2019%200%200%201%205.3-2.329%2020.72%2020.72%200%200%201%2022.237%208.243%2019.17%2019.17%200%200%201%203.277%2014.503%2018%2018%200%200%201-.624%202.435l-.49%201.498-1.337-.98a33.6%2033.6%200%200%200-10.203-5.1l-.97-.294.09-.968a5.86%205.86%200%200%200-1.052-3.878%206.24%206.24%200%200%200-6.696-2.485%205.8%205.8%200%200%200-1.602.704L37.73%2051.72a5.42%205.42%200%200%200-2.449%203.63%205.79%205.79%200%200%200%20.986%204.372%206.24%206.24%200%200%200%206.698%202.486%205.8%205.8%200%200%200%201.602-.704l9.952-6.342a19%2019%200%200%201%205.295-2.328%2020.72%2020.72%200%200%201%2022.237%208.242%2019.17%2019.17%200%200%201%203.277%2014.503%2018%2018%200%200%201-8.13%2012.053l-26.081%2016.622a19%2019%200%200%201-5.3%202.328'%20style='fill:%23fff'/%3e%3c/svg%3e"/><!---->
+</head>
+
+<body data-sveltekit-preload-data="hover">
+	<div style="display: contents"><!--[--><!--[--><!----><!----><div class="container"><header class="header"><div class="location-container"><div class="location">📍 Port Melbourne, Australia</div> <select class="location-select"><option value="port_melbourne" selected>Port Melbourne</option><option value="sydney">Sydney</option><option value="hong_kong">Hong Kong</option><option value="current_location">Current Location</option></select></div> <div class="datetime">Sunday, January 18, 2026 • 06:44 AM</div></header> <!--[!--><div class="main-weather"><div class="weather-icon">🌤️</div> <div class="temperature">15.8<span class="unit">°C</span></div> <div class="condition">Mainly clear</div></div> <div class="stats-grid"><div class="stat-card"><div class="stat-icon">💨</div> <div class="stat-value">0.6 <small>kn</small></div> <div class="stat-label">Wind Speed</div></div> <div class="stat-card"><div class="stat-icon wind-direction" style="transform: rotate(288deg);">🧭</div> <div class="stat-value">WNW</div> <div class="stat-label">Wind Direction</div></div> <div class="stat-card"><div class="stat-icon">🌡️</div> <div class="stat-value">81%</div> <div class="stat-label">Humidity</div></div> <div class="stat-card"><div class="stat-icon">☁️</div> <div class="stat-value">25%</div> <div class="stat-label">Cloud Cover</div></div></div> <!--[!--><!--]--> <!--[--><div class="forecast-section"><div class="forecast-title">7-Day Forecast</div> <div class="forecast-grid"><!--[--><div class="forecast-day "><div class="forecast-day-name">Today</div> <div class="forecast-icon">☁️</div> <div class="forecast-temps"><span class="forecast-high">28°</span> <span class="forecast-low">16°</span></div> <div class="forecast-wind">💨 8.8 kn</div></div><div class="forecast-day "><div class="forecast-day-name">Mon</div> <div class="forecast-icon">☁️</div> <div class="forecast-temps"><span class="forecast-high">29°</span> <span class="forecast-low">19°</span></div> <div class="forecast-wind">💨 11.1 kn</div></div><div class="forecast-day "><div class="forecast-day-name">Tue</div> <div class="forecast-icon">☁️</div> <div class="forecast-temps"><span class="forecast-high">29°</span> <span class="forecast-low">18°</span></div> <div class="forecast-wind">💨 9.6 kn</div></div><div class="forecast-day "><div class="forecast-day-name">Wed</div> <div class="forecast-icon">☁️</div> <div class="forecast-temps"><span class="forecast-high">24°</span> <span class="forecast-low">17°</span></div> <div class="forecast-wind">💨 12.3 kn</div></div><div class="forecast-day "><div class="forecast-day-name">Thu</div> <div class="forecast-icon">☁️</div> <div class="forecast-temps"><span class="forecast-high">24°</span> <span class="forecast-low">15°</span></div> <div class="forecast-wind">💨 14.8 kn</div></div><div class="forecast-day "><div class="forecast-day-name">Fri</div> <div class="forecast-icon">⛅</div> <div class="forecast-temps"><span class="forecast-high">29°</span> <span class="forecast-low">14°</span></div> <div class="forecast-wind">💨 9.9 kn</div></div><div class="forecast-day "><div class="forecast-day-name">Sat</div> <div class="forecast-icon">☁️</div> <div class="forecast-temps"><span class="forecast-high">40°</span> <span class="forecast-low">17°</span></div> <div class="forecast-wind">💨 7.5 kn</div></div><!--]--></div></div><!--]--><!--]--></div><!----><!----><!----><!--]--> <!--[!--><!--]--><!--]-->
+			
+			<script>
+				{
+					__sveltekit_dev = {
+						base: new URL(".", location).pathname.slice(0, -1),
+						env: {}
+					};
+
+					const element = document.currentScript.parentElement;
+
+					Promise.all([
+						import("/node_modules/@sveltejs/kit/src/runtime/client/entry.js"),
+						import("/@fs/Users/johnsonyuen/Code/homekube/weather/.svelte-kit/generated/client/app.js")
+					]).then(([kit, app]) => {
+						kit.start(app, element, {
+							node_ids: [0, 2],
+							data: [null,{type:"data",data:{location:"Port Melbourne, Australia",localTime:"Sunday, January 18, 2026 • 06:44 AM",temperature:15.8,condition:"Mainly clear",currentIcon:"🌤️",windSpeed:.6,windDirection:288,windDirectionDesc:"WNW",humidity:81,cloudCover:25,forecast:[{date:"2026-01-18",name:"Today",icon:"☁️",high:28,low:16,max_wind:8.8},{date:"2026-01-19",name:"Mon",icon:"☁️",high:29,low:19,max_wind:11.1},{date:"2026-01-20",name:"Tue",icon:"☁️",high:29,low:18,max_wind:9.6},{date:"2026-01-21",name:"Wed",icon:"☁️",high:24,low:17,max_wind:12.3},{date:"2026-01-22",name:"Thu",icon:"☁️",high:24,low:15,max_wind:14.8},{date:"2026-01-23",name:"Fri",icon:"⛅",high:29,low:14,max_wind:9.9},{date:"2026-01-24",name:"Sat",icon:"☁️",high:40,low:17,max_wind:7.5}],dailyHourlyMap:{"2026-01-18":[{time:"12 AM",wind_speed:6,wind_direction:123,wind_direction_desc:"ESE"},{time:"1 AM",wind_speed:4.9,wind_direction:127,wind_direction_desc:"SE"},{time:"2 AM",wind_speed:3.6,wind_direction:131,wind_direction_desc:"SE"},{time:"3 AM",wind_speed:2.2,wind_direction:135,wind_direction_desc:"SE"},{time:"4 AM",wind_speed:1,wind_direction:143,wind_direction_desc:"SE"},{time:"5 AM",wind_speed:.4,wind_direction:180,wind_direction_desc:"S"},{time:"6 AM",wind_speed:.6,wind_direction:270,wind_direction_desc:"W"},{time:"7 AM",wind_speed:.4,wind_direction:297,wind_direction_desc:"WNW"},{time:"8 AM",wind_speed:.4,wind_direction:117,wind_direction_desc:"ESE"},{time:"9 AM",wind_speed:2,wind_direction:119,wind_direction_desc:"ESE"},{time:"10 AM",wind_speed:2.9,wind_direction:132,wind_direction_desc:"SE"},{time:"11 AM",wind_speed:4.3,wind_direction:141,wind_direction_desc:"SE"},{time:"12 PM",wind_speed:5.3,wind_direction:152,wind_direction_desc:"SSE"},{time:"1 PM",wind_speed:6.3,wind_direction:158,wind_direction_desc:"SSE"},{time:"2 PM",wind_speed:7.4,wind_direction:153,wind_direction_desc:"SSE"},{time:"3 PM",wind_speed:7.7,wind_direction:152,wind_direction_desc:"SSE"},{time:"4 PM",wind_speed:7.8,wind_direction:148,wind_direction_desc:"SSE"},{time:"5 PM",wind_speed:7.9,wind_direction:142,wind_direction_desc:"SE"},{time:"6 PM",wind_speed:8.3,wind_direction:143,wind_direction_desc:"SE"},{time:"7 PM",wind_speed:8.8,wind_direction:131,wind_direction_desc:"SE"},{time:"8 PM",wind_speed:8.7,wind_direction:124,wind_direction_desc:"SE"},{time:"9 PM",wind_speed:8.4,wind_direction:119,wind_direction_desc:"ESE"},{time:"10 PM",wind_speed:6.2,wind_direction:122,wind_direction_desc:"ESE"},{time:"11 PM",wind_speed:3.9,wind_direction:127,wind_direction_desc:"SE"}],"2026-01-19":[{time:"12 AM",wind_speed:2.8,wind_direction:124,wind_direction_desc:"SE"},{time:"1 AM",wind_speed:1.2,wind_direction:141,wind_direction_desc:"SE"},{time:"2 AM",wind_speed:.4,wind_direction:360,wind_direction_desc:"N"},{time:"3 AM",wind_speed:.9,wind_direction:297,wind_direction_desc:"WNW"},{time:"4 AM",wind_speed:1.6,wind_direction:14,wind_direction_desc:"NNE"},{time:"5 AM",wind_speed:1.9,wind_direction:37,wind_direction_desc:"NE"},{time:"6 AM",wind_speed:3.2,wind_direction:47,wind_direction_desc:"NE"},{time:"7 AM",wind_speed:3.2,wind_direction:47,wind_direction_desc:"NE"},{time:"8 AM",wind_speed:4,wind_direction:51,wind_direction_desc:"NE"},{time:"9 AM",wind_speed:6.5,wind_direction:39,wind_direction_desc:"NE"},{time:"10 AM",wind_speed:7.7,wind_direction:36,wind_direction_desc:"NE"},{time:"11 AM",wind_speed:7.4,wind_direction:43,wind_direction_desc:"NE"},{time:"12 PM",wind_speed:6.4,wind_direction:55,wind_direction_desc:"NE"},{time:"1 PM",wind_speed:5.3,wind_direction:82,wind_direction_desc:"E"},{time:"2 PM",wind_speed:5.9,wind_direction:113,wind_direction_desc:"ESE"},{time:"3 PM",wind_speed:7.6,wind_direction:140,wind_direction_desc:"SE"},{time:"4 PM",wind_speed:10.1,wind_direction:142,wind_direction_desc:"SE"},{time:"5 PM",wind_speed:11.1,wind_direction:134,wind_direction_desc:"SE"},{time:"6 PM",wind_speed:10,wind_direction:136,wind_direction_desc:"SE"},{time:"7 PM",wind_speed:9.6,wind_direction:137,wind_direction_desc:"SE"},{time:"8 PM",wind_speed:8.3,wind_direction:129,wind_direction_desc:"SE"},{time:"9 PM",wind_speed:6.9,wind_direction:122,wind_direction_desc:"ESE"},{time:"10 PM",wind_speed:6.1,wind_direction:138,wind_direction_desc:"SE"},{time:"11 PM",wind_speed:3.5,wind_direction:174,wind_direction_desc:"S"}],"2026-01-20":[{time:"12 AM",wind_speed:4.5,wind_direction:185,wind_direction_desc:"S"},{time:"1 AM",wind_speed:4.7,wind_direction:180,wind_direction_desc:"S"},{time:"2 AM",wind_speed:3.2,wind_direction:191,wind_direction_desc:"S"},{time:"3 AM",wind_speed:3.3,wind_direction:220,wind_direction_desc:"SW"},{time:"4 AM",wind_speed:3.7,wind_direction:231,wind_direction_desc:"SW"},{time:"5 AM",wind_speed:2.2,wind_direction:260,wind_direction_desc:"W"},{time:"6 AM",wind_speed:1.1,wind_direction:301,wind_direction_desc:"WNW"},{time:"7 AM",wind_speed:2.2,wind_direction:322,wind_direction_desc:"NW"},{time:"8 AM",wind_speed:3,wind_direction:293,wind_direction_desc:"WNW"},{time:"9 AM",wind_speed:1.5,wind_direction:310,wind_direction_desc:"NW"},{time:"10 AM",wind_speed:1.2,wind_direction:180,wind_direction_desc:"S"},{time:"11 AM",wind_speed:3.2,wind_direction:169,wind_direction_desc:"S"},{time:"12 PM",wind_speed:5.6,wind_direction:151,wind_direction_desc:"SSE"},{time:"1 PM",wind_speed:7.1,wind_direction:154,wind_direction_desc:"SSE"},{time:"2 PM",wind_speed:6.7,wind_direction:168,wind_direction_desc:"SSE"},{time:"3 PM",wind_speed:7.6,wind_direction:177,wind_direction_desc:"S"},{time:"4 PM",wind_speed:9.1,wind_direction:170,wind_direction_desc:"S"},{time:"5 PM",wind_speed:9.6,wind_direction:167,wind_direction_desc:"SSE"},{time:"6 PM",wind_speed:9,wind_direction:166,wind_direction_desc:"SSE"},{time:"7 PM",wind_speed:8.2,wind_direction:173,wind_direction_desc:"S"},{time:"8 PM",wind_speed:7.8,wind_direction:177,wind_direction_desc:"S"},{time:"9 PM",wind_speed:7,wind_direction:153,wind_direction_desc:"SSE"},{time:"10 PM",wind_speed:6.9,wind_direction:151,wind_direction_desc:"SSE"},{time:"11 PM",wind_speed:7.1,wind_direction:151,wind_direction_desc:"SSE"}],"2026-01-21":[{time:"12 AM",wind_speed:6.3,wind_direction:154,wind_direction_desc:"SSE"},{time:"1 AM",wind_speed:5.8,wind_direction:166,wind_direction_desc:"SSE"},{time:"2 AM",wind_speed:4.9,wind_direction:178,wind_direction_desc:"S"},{time:"3 AM",wind_speed:4.1,wind_direction:183,wind_direction_desc:"S"},{time:"4 AM",wind_speed:3.4,wind_direction:193,wind_direction_desc:"SSW"},{time:"5 AM",wind_speed:3.8,wind_direction:195,wind_direction_desc:"SSW"},{time:"6 AM",wind_speed:4.6,wind_direction:192,wind_direction_desc:"SSW"},{time:"7 AM",wind_speed:6.1,wind_direction:189,wind_direction_desc:"S"},{time:"8 AM",wind_speed:7,wind_direction:186,wind_direction_desc:"S"},{time:"9 AM",wind_speed:7.4,wind_direction:182,wind_direction_desc:"S"},{time:"10 AM",wind_speed:7.4,wind_direction:177,wind_direction_desc:"S"},{time:"11 AM",wind_speed:7.6,wind_direction:174,wind_direction_desc:"S"},{time:"12 PM",wind_speed:8.4,wind_direction:175,wind_direction_desc:"S"},{time:"1 PM",wind_speed:9.3,wind_direction:178,wind_direction_desc:"S"},{time:"2 PM",wind_speed:10.3,wind_direction:179,wind_direction_desc:"S"},{time:"3 PM",wind_speed:10.9,wind_direction:179,wind_direction_desc:"S"},{time:"4 PM",wind_speed:11.5,wind_direction:178,wind_direction_desc:"S"},{time:"5 PM",wind_speed:11.9,wind_direction:178,wind_direction_desc:"S"},{time:"6 PM",wind_speed:12.2,wind_direction:179,wind_direction_desc:"S"},{time:"7 PM",wind_speed:12.2,wind_direction:181,wind_direction_desc:"S"},{time:"8 PM",wind_speed:12.3,wind_direction:182,wind_direction_desc:"S"},{time:"9 PM",wind_speed:11.9,wind_direction:180,wind_direction_desc:"S"},{time:"10 PM",wind_speed:11.1,wind_direction:177,wind_direction_desc:"S"},{time:"11 PM",wind_speed:10.5,wind_direction:176,wind_direction_desc:"S"}],"2026-01-22":[{time:"12 AM",wind_speed:9.9,wind_direction:178,wind_direction_desc:"S"},{time:"1 AM",wind_speed:9.3,wind_direction:182,wind_direction_desc:"S"},{time:"2 AM",wind_speed:8.8,wind_direction:186,wind_direction_desc:"S"},{time:"3 AM",wind_speed:8.4,wind_direction:188,wind_direction_desc:"S"},{time:"4 AM",wind_speed:8.1,wind_direction:190,wind_direction_desc:"S"},{time:"5 AM",wind_speed:7.9,wind_direction:191,wind_direction_desc:"S"},{time:"6 AM",wind_speed:8,wind_direction:194,wind_direction_desc:"SSW"},{time:"7 AM",wind_speed:8.1,wind_direction:195,wind_direction_desc:"SSW"},{time:"8 AM",wind_speed:8,wind_direction:194,wind_direction_desc:"SSW"},{time:"9 AM",wind_speed:7.3,wind_direction:188,wind_direction_desc:"S"},{time:"10 AM",wind_speed:6.4,wind_direction:177,wind_direction_desc:"S"},{time:"11 AM",wind_speed:6.3,wind_direction:164,wind_direction_desc:"SSE"},{time:"12 PM",wind_speed:6.7,wind_direction:154,wind_direction_desc:"SSE"},{time:"1 PM",wind_speed:7.6,wind_direction:151,wind_direction_desc:"SSE"},{time:"2 PM",wind_speed:8.5,wind_direction:153,wind_direction_desc:"SSE"},{time:"3 PM",wind_speed:10.2,wind_direction:167,wind_direction_desc:"SSE"},{time:"4 PM",wind_speed:13,wind_direction:179,wind_direction_desc:"S"},{time:"5 PM",wind_speed:14.8,wind_direction:183,wind_direction_desc:"S"},{time:"6 PM",wind_speed:14.4,wind_direction:175,wind_direction_desc:"S"},{time:"7 PM",wind_speed:13.4,wind_direction:161,wind_direction_desc:"SSE"},{time:"8 PM",wind_speed:13,wind_direction:148,wind_direction_desc:"SSE"},{time:"9 PM",wind_speed:12.1,wind_direction:143,wind_direction_desc:"SE"},{time:"10 PM",wind_speed:10.8,wind_direction:142,wind_direction_desc:"SE"},{time:"11 PM",wind_speed:9.4,wind_direction:142,wind_direction_desc:"SE"}],"2026-01-23":[{time:"12 AM",wind_speed:8.1,wind_direction:145,wind_direction_desc:"SE"},{time:"1 AM",wind_speed:6.7,wind_direction:150,wind_direction_desc:"SSE"},{time:"2 AM",wind_speed:5.5,wind_direction:157,wind_direction_desc:"SSE"},{time:"3 AM",wind_speed:3.9,wind_direction:160,wind_direction_desc:"SSE"},{time:"4 AM",wind_speed:2.2,wind_direction:165,wind_direction_desc:"SSE"},{time:"5 AM",wind_speed:.8,wind_direction:180,wind_direction_desc:"S"},{time:"6 AM",wind_speed:.8,wind_direction:315,wind_direction_desc:"NW"},{time:"7 AM",wind_speed:2,wind_direction:331,wind_direction_desc:"NNW"},{time:"8 AM",wind_speed:2.3,wind_direction:336,wind_direction_desc:"NNW"},{time:"9 AM",wind_speed:1.2,wind_direction:360,wind_direction_desc:"N"},{time:"10 AM",wind_speed:1.8,wind_direction:103,wind_direction_desc:"ESE"},{time:"11 AM",wind_speed:3.6,wind_direction:126,wind_direction_desc:"SE"},{time:"12 PM",wind_speed:5.1,wind_direction:137,wind_direction_desc:"SE"},{time:"1 PM",wind_speed:6.6,wind_direction:146,wind_direction_desc:"SE"},{time:"2 PM",wind_speed:7.7,wind_direction:152,wind_direction_desc:"SSE"},{time:"3 PM",wind_speed:8.9,wind_direction:154,wind_direction_desc:"SSE"},{time:"4 PM",wind_speed:9.7,wind_direction:158,wind_direction_desc:"SSE"},{time:"5 PM",wind_speed:9.9,wind_direction:160,wind_direction_desc:"SSE"},{time:"6 PM",wind_speed:9,wind_direction:167,wind_direction_desc:"SSE"},{time:"7 PM",wind_speed:7.4,wind_direction:180,wind_direction_desc:"S"},{time:"8 PM",wind_speed:6.1,wind_direction:191,wind_direction_desc:"S"},{time:"9 PM",wind_speed:4.8,wind_direction:194,wind_direction_desc:"SSW"},{time:"10 PM",wind_speed:3.2,wind_direction:191,wind_direction_desc:"S"},{time:"11 PM",wind_speed:2,wind_direction:186,wind_direction_desc:"S"}],"2026-01-24":[{time:"12 AM",wind_speed:1.3,wind_direction:207,wind_direction_desc:"SSW"},{time:"1 AM",wind_speed:1.6,wind_direction:240,wind_direction_desc:"WSW"},{time:"2 AM",wind_speed:1.8,wind_direction:257,wind_direction_desc:"WSW"},{time:"3 AM",wind_speed:1.8,wind_direction:276,wind_direction_desc:"W"},{time:"4 AM",wind_speed:1.5,wind_direction:293,wind_direction_desc:"WNW"},{time:"5 AM",wind_speed:1.5,wind_direction:310,wind_direction_desc:"NW"},{time:"6 AM",wind_speed:1.4,wind_direction:315,wind_direction_desc:"NW"},{time:"7 AM",wind_speed:1.1,wind_direction:315,wind_direction_desc:"NW"},{time:"8 AM",wind_speed:1.2,wind_direction:342,wind_direction_desc:"NNW"},{time:"9 AM",wind_speed:3,wind_direction:11,wind_direction_desc:"N"},{time:"10 AM",wind_speed:5.8,wind_direction:20,wind_direction_desc:"NNE"},{time:"11 AM",wind_speed:7.5,wind_direction:21,wind_direction_desc:"NNE"},{time:"12 PM",wind_speed:7.3,wind_direction:17,wind_direction_desc:"NNE"},{time:"1 PM",wind_speed:6.3,wind_direction:7,wind_direction_desc:"N"},{time:"2 PM",wind_speed:5.1,wind_direction:4,wind_direction_desc:"N"},{time:"3 PM",wind_speed:3.6,wind_direction:29,wind_direction_desc:"NNE"},{time:"4 PM",wind_speed:4.2,wind_direction:79,wind_direction_desc:"E"},{time:"5 PM",wind_speed:5.8,wind_direction:102,wind_direction_desc:"ESE"},{time:"6 PM",wind_speed:6.2,wind_direction:110,wind_direction_desc:"ESE"},{time:"7 PM",wind_speed:6,wind_direction:115,wind_direction_desc:"ESE"},{time:"8 PM",wind_speed:5.6,wind_direction:115,wind_direction_desc:"ESE"},{time:"9 PM",wind_speed:5,wind_direction:103,wind_direction_desc:"ESE"},{time:"10 PM",wind_speed:4.7,wind_direction:83,wind_direction_desc:"E"},{time:"11 PM",wind_speed:4.8,wind_direction:63,wind_direction_desc:"ENE"}]},error:null},uses:{search_params:["lat","lon","location"]}}],
+							form: null,
+							error: null
+						});
+					});
+				}
+			</script>
+		</div>
+</body>
+
+</html>
