@@ -1,0 +1,6 @@
+firecracker-vm/firecracker
+firecracker-vm/ubuntu-initrd.img
+firecracker-vm/ubuntu-rootfs.ext4
+firecracker-vm/ubuntu-vmlinux.bin
+firecracker-vm/vm.log
+firecracker-vm/vm_config.json

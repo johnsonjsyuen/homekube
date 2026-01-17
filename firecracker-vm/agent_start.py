@@ -92,12 +92,12 @@ def run_rsync(source, dest):
     # Exclude artifacts and .git
     excludes = [
         "--exclude=.git",
-        "--exclude=firecracker_vm/ubuntu-rootfs.ext4",
-        "--exclude=firecracker_vm/ubuntu.tar",
-        "--exclude=firecracker_vm/ubuntu-vmlinux.bin",
-        "--exclude=firecracker_vm/ubuntu-initrd.img",
-        "--exclude=firecracker_vm/firecracker",
-        "--exclude=firecracker_vm/vm.log"
+        "--exclude=firecracker-vm/ubuntu-rootfs.ext4",
+        "--exclude=firecracker-vm/ubuntu.tar",
+        "--exclude=firecracker-vm/ubuntu-vmlinux.bin",
+        "--exclude=firecracker-vm/ubuntu-initrd.img",
+        "--exclude=firecracker-vm/firecracker",
+        "--exclude=firecracker-vm/vm.log"
     ]
 
     # Insert excludes before source
