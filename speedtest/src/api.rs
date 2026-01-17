@@ -15,9 +15,9 @@ pub struct SpeedtestResultResponse {
     pub timestamp: DateTime<Utc>,
     pub server_name: String,
     pub server_country: String,
-    pub latency_ms: f64,
-    pub download_bandwidth: i64,
-    pub upload_bandwidth: i64,
+    pub latency_ms: f32,
+    pub download_bandwidth: i32,
+    pub upload_bandwidth: i32,
 }
 
 pub fn create_router(db: Arc<Db>) -> Router {
