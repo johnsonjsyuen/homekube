@@ -1,6 +1,6 @@
 <script lang="ts">
     import { goto } from "$app/navigation";
-    import { page } from "$app/stores";
+    import { page } from "$app/state";
     import type { PageData } from "./$types";
 
     let { data } = $props();
@@ -29,7 +29,7 @@
     function handleLocationChange(event: Event) {
         const select = event.target as HTMLSelectElement;
         const location = select.value;
-        const url = new URL($page.url);
+        const url = new URL(page.url);
         url.searchParams.set("location", location);
         goto(url);
     }
@@ -46,7 +46,7 @@
             <select
                 class="location-select"
                 onchange={handleLocationChange}
-                value={$page.url.searchParams.get("location") ||
+                value={page.url.searchParams.get("location") ||
                     "port_melbourne"}
             >
                 <option value="port_melbourne">Port Melbourne</option>
