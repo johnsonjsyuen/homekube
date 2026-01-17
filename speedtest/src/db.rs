@@ -3,6 +3,7 @@ use sqlx::{Pool, Postgres};
 use std::env;
 use anyhow::Result;
 use crate::speedtest::SpeedtestResult;
+use log;
 
 #[derive(Clone)]
 pub struct Db {
@@ -18,6 +19,12 @@ impl Db {
             .max_connections(5)
             .connect(&database_url)
             .await?;
+
+        log::info!("Running database migrations...");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await?;
+        log::info!("Database migrations complete.");
 
         Ok(Self { pool })
     }
