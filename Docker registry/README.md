@@ -33,10 +33,10 @@ To allow K3s to pull images from this insecure (HTTP) registry, you need to conf
 2.  Add the following configuration:
 
     ```yaml
-    mirrors:
-      "localhost:5000":
-        endpoint:
-          - "http://localhost:5000"
+mirrors:
+  "localhost:5000":
+    endpoint:
+      - "http://localhost:5000"
     ```
 
     *Note: If you are accessing the registry from a different node, replace `localhost` with the IP address of the machine running the registry.*

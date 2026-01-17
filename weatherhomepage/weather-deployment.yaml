@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: weather-service
-        image: weather-service:latest
+        image: localhost:5000/weather-service:latest
         imagePullPolicy: Never
         ports:
         - containerPort: 5000
