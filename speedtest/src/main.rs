@@ -70,8 +70,8 @@ async fn main() -> Result<()> {
     // Create HTTP server
     let db_for_api = std::sync::Arc::new(db.clone());
     let app = api::create_router(db_for_api);
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
-    info!("API server listening on port 3000");
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:80").await?;
+    info!("API server listening on port 80");
 
     // Run once immediately on startup for verification
     tokio::spawn(async move {

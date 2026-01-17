@@ -127,7 +127,7 @@ export const load: PageServerLoad = async ({ url }) => {
     // Fetch speedtest results from speedtest API
     let speedtestResults = [];
     try {
-        const res = await fetch('http://speedtest:3000/api/results');
+        const res = await fetch('http://speedtest/api/results');
         if (res.ok) {
             speedtestResults = await res.json();
         } else {
