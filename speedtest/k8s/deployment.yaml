@@ -19,11 +19,18 @@ spec:
         image: localhost:5001/speedtest:latest
         imagePullPolicy: Always # Pull from local registry
         env:
-        - name: DATABASE_URL
+        - name: DB_USER
           valueFrom:
             secretKeyRef:
-              name: speedtest-db-app
-              key: uri
+              name: speedtest-db-app-user
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: speedtest-db-app-user
+              key: password
+        - name: DATABASE_URL
+          value: "postgres://$(DB_USER):$(DB_PASSWORD)@speedtest-db-rw:5432/speedtest"
         resources:
           limits:
             memory: "512Mi"

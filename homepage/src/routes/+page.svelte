@@ -13,7 +13,6 @@
         CategoryScale,
         TimeScale,
     } from "chart.js";
-    import { Line } from "svelte-chartjs";
 
     ChartJS.register(
         Title,
@@ -165,6 +164,26 @@
             },
         },
     };
+
+    let canvas: HTMLCanvasElement;
+    let chartInstance: ChartJS | null = null;
+
+    $effect(() => {
+        if (activeTab === "speedtest" && canvas && chartData) {
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new ChartJS(canvas, {
+                type: "line",
+                data: chartData,
+                options: chartOptions,
+            });
+            return () => {
+                if (chartInstance) {
+                    chartInstance.destroy();
+                    chartInstance = null;
+                }
+            };
+        }
+    });
 </script>
 
 <div class="container">
@@ -309,7 +328,7 @@
         <div class="speedtest-container">
             {#if chartData}
                 <div class="chart-container">
-                    <Line data={chartData} options={chartOptions} />
+                    <canvas bind:this={canvas}></canvas>
                 </div>
 
                 <div class="table-container">
