@@ -43,8 +43,8 @@ const LOCATIONS: Record<string, { lat: string, lon: string, timezone: string, na
     "hong_kong": { lat: "22.3193", lon: "114.1694", timezone: "Asia/Hong_Kong", name: "Hong Kong" }
 };
 
-// Cache for saved locations
-let weatherCache: Record<string, any> = {};
+// Cache for saved locations (stores weather data with fetch timestamp)
+let weatherCache: Record<string, { data: any; fetchedAt: Date }> = {};
 
 const fetchWithRetry = async (url: string, retries = 1, timeout = 10000) => {
     for (let i = 0; i <= retries; i++) {
@@ -102,7 +102,7 @@ async function updateSavedLocationsCache(locationsToUpdate?: string[]) {
         try {
             const weatherData = await fetchWeatherData(data.lat, data.lon, data.timezone);
             if (weatherData) {
-                weatherCache[key] = weatherData;
+                weatherCache[key] = { data: weatherData, fetchedAt: new Date() };
             } else {
                 console.warn(`Received empty data for ${key}`);
                 failedKeys.push(key);
@@ -135,6 +135,7 @@ export const load: PageServerLoad = async ({ url }) => {
     let lat: string, lon: string, timezone: string, locationName: string;
     let weatherRes;
     let fetchError;
+    let fetchedAt: Date | null = null;
 
     // Fetch speedtest results from speedtest API
     let speedtestResults = [];
@@ -156,6 +157,7 @@ export const load: PageServerLoad = async ({ url }) => {
         locationName = "Current Location";
         try {
             weatherRes = await fetchWeatherData(lat, lon, timezone);
+            fetchedAt = new Date();
         } catch (e) {
             console.error("Error fetching current location weather:", e);
             fetchError = e;
@@ -171,11 +173,13 @@ export const load: PageServerLoad = async ({ url }) => {
 
         if (weatherCache[key]) {
             console.log(`Cache hit for ${key}`);
-            weatherRes = weatherCache[key];
+            weatherRes = weatherCache[key].data;
+            fetchedAt = weatherCache[key].fetchedAt;
         } else {
             console.log(`Cache miss for ${key}, fetching...`);
             try {
                 weatherRes = await fetchWeatherData(lat, lon, timezone);
+                fetchedAt = new Date();
             } catch (e) {
                 console.error(`Error fetching weather for ${key}:`, e);
                 fetchError = e;
@@ -263,6 +267,7 @@ export const load: PageServerLoad = async ({ url }) => {
         return {
             location: locationName,
             localTime,
+            fetchedAt: fetchedAt?.toISOString() || null,
             temperature,
             condition,
             currentIcon,
@@ -283,6 +288,7 @@ export const load: PageServerLoad = async ({ url }) => {
         return {
             location: locationName,
             localTime,
+            fetchedAt: null,
             error: String(e),
             temperature: null,
             condition: null,

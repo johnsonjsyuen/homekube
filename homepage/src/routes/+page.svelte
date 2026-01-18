@@ -218,7 +218,16 @@
                 </select>
             </div>
         {/if}
-        <div class="datetime">{data.localTime}</div>
+        <div class="datetime-container">
+            <div class="datetime">{data.localTime}</div>
+            {#if data.fetchedAt}
+                <div class="fetched-at">
+                    Last updated: {new Date(
+                        data.fetchedAt,
+                    ).toLocaleTimeString()}
+                </div>
+            {/if}
+        </div>
     </header>
 
     {#if activeTab === "weather"}
@@ -441,9 +450,19 @@
         font-size: 0.9rem;
     }
 
+    .datetime-container {
+        text-align: right;
+    }
+
     .datetime {
         font-size: 0.9rem;
         color: #888;
+    }
+
+    .fetched-at {
+        font-size: 0.75rem;
+        color: #666;
+        margin-top: 2px;
     }
 
     .main-weather {
