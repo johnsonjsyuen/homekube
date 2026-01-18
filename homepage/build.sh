@@ -6,10 +6,10 @@ set -eu
 cd "$(dirname "$0")"
 
 echo "Building fresh Docker image (no-cache)..."
-docker build --platform linux/amd64 . -t localhost:5001/homepage:latest
+docker build --platform linux/amd64 . -t localhost:5000/homepage:latest
 
 echo "Pushing to local registry..."
-docker push localhost:5001/homepage:latest
+docker push localhost:5000/homepage:latest
 
 echo "Updating Kubernetes deployment..."
 kubectl apply -f homepage-deployment.yaml

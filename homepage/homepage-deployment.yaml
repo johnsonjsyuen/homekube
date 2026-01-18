@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: homepage
-        image: localhost:5001/homepage:latest
+        image: localhost:5000/homepage:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 3000

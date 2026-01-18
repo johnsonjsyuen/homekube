@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: speedtest
-        image: localhost:5001/speedtest:latest
+        image: localhost:5000/speedtest:latest
         imagePullPolicy: Always # Pull from local registry
         env:
         - name: DB_USER

@@ -6,10 +6,10 @@ set -eu
 cd "$(dirname "$0")"
 
 echo "Building fresh Docker image (no-cache)..."
-docker build --platform linux/amd64 . -t localhost:5001/speedtest:latest
+docker build --platform linux/amd64 . -t localhost:5000/speedtest:latest
 
 echo "Pushing to local registry..."
-docker push localhost:5001/speedtest:latest
+docker push localhost:5000/speedtest:latest
 
 echo "Applying Kubernetes manifests..."
 kubectl apply -f k8s/
