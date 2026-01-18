@@ -96,6 +96,17 @@
         return page.url.searchParams.get("location") || "port_melbourne";
     });
 
+    // UV level classification
+    let uvLevel = $derived.by(() => {
+        const uv = data.uvIndex;
+        if (uv === null || uv === undefined) return null;
+        if (uv <= 2) return "low";
+        if (uv <= 5) return "moderate";
+        if (uv <= 7) return "high";
+        if (uv <= 10) return "very-high";
+        return "extreme";
+    });
+
     // Speedtest Data Processing
     let chartData = $derived.by(() => {
         if (!data.speedtestResults) return null;
@@ -272,6 +283,18 @@
                     <div class="stat-value">{data.cloudCover}%</div>
                     <div class="stat-label">Cloud Cover</div>
                 </div>
+                {#if data.uvIndex !== null}
+                    <div class="stat-card uv-card">
+                        <div class="stat-icon">☀️</div>
+                        <div class="stat-value uv-value uv-{uvLevel}">
+                            {data.uvIndex}
+                        </div>
+                        <div class="stat-label">UV Index</div>
+                        {#if data.uvTime}
+                            <div class="uv-time">at {data.uvTime}</div>
+                        {/if}
+                    </div>
+                {/if}
             </div>
 
             {#if hourlyData && hourlyData.length > 0}
@@ -713,5 +736,41 @@
 
     tr:hover {
         background-color: #333;
+    }
+
+    /* UV Index Card Styles */
+    .uv-card {
+        position: relative;
+    }
+
+    .uv-value {
+        font-weight: 700;
+    }
+
+    /* UV color coding based on risk level */
+    .uv-value.uv-low {
+        color: #4ade80; /* Low - green */
+    }
+
+    .uv-value.uv-moderate {
+        color: #facc15; /* Moderate - yellow */
+    }
+
+    .uv-value.uv-high {
+        color: #fb923c; /* High - orange */
+    }
+
+    .uv-value.uv-very-high {
+        color: #f87171; /* Very High - red */
+    }
+
+    .uv-value.uv-extreme {
+        color: #c084fc; /* Extreme - purple */
+    }
+
+    .uv-time {
+        font-size: 0.7rem;
+        color: #666;
+        margin-top: 4px;
     }
 </style>

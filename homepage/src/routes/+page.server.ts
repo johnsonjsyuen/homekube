@@ -1,4 +1,5 @@
 import type { PageServerLoad } from './$types';
+import { XMLParser } from 'fast-xml-parser';
 
 // Weather code to description and icon mapping
 const WEATHER_CODES: Record<number, [string, string]> = {
@@ -46,12 +47,24 @@ const LOCATIONS: Record<string, { lat: string, lon: string, timezone: string, na
 // Cache for saved locations (stores weather data with fetch timestamp)
 let weatherCache: Record<string, { data: any; fetchedAt: Date }> = {};
 
+// Cache for UV data from ARPANSA
+let uvCache: { data: Record<string, { index: number; time: string }>; fetchedAt: Date | null } = {
+    data: {},
+    fetchedAt: null
+};
+
+// UV location mapping (location key -> ARPANSA station id)
+const UV_LOCATION_MAP: Record<string, string> = {
+    "sydney": "Sydney",
+    "port_melbourne": "Melbourne"
+};
+
 const fetchWithRetry = async (url: string, retries = 1, timeout = 10000) => {
     for (let i = 0; i <= retries; i++) {
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), timeout);
         try {
-            console.log(`Fetching weather data (attempt ${i + 1}/${retries + 1})...`);
+            console.log(`Fetching data (attempt ${i + 1}/${retries + 1})...`);
             const res = await fetch(url, {
                 headers: {
                     'User-Agent': 'WeatherApp/1.0 (homekube)'
@@ -70,6 +83,47 @@ const fetchWithRetry = async (url: string, retries = 1, timeout = 10000) => {
     }
     throw new Error("Should not be reached");
 };
+
+// Fetch UV data from ARPANSA
+async function fetchUVData() {
+    try {
+        console.log('Fetching UV data from ARPANSA...');
+        const response = await fetchWithRetry('https://uvdata.arpansa.gov.au/xml/uvvalues.xml', 1, 10000);
+        const xmlText = await response.text();
+
+        const parser = new XMLParser({ ignoreAttributes: false });
+        const result = parser.parse(xmlText);
+
+        const uvData: Record<string, { index: number; time: string }> = {};
+
+        if (result.stations?.location) {
+            const locations = Array.isArray(result.stations.location)
+                ? result.stations.location
+                : [result.stations.location];
+
+            for (const loc of locations) {
+                const id = loc['@_id'] || loc.id;
+                if (id) {
+                    // Handle both attribute (@_id) and element (id) based on parser config
+                    const stationId = typeof id === 'object' ? Object.keys(id)[0] : id;
+                    uvData[stationId] = {
+                        index: parseFloat(loc.index) || 0,
+                        time: loc.time || ''
+                    };
+                }
+            }
+        }
+
+        uvCache = { data: uvData, fetchedAt: new Date() };
+        console.log(`UV data updated. Stations: ${Object.keys(uvData).join(', ')}`);
+    } catch (error) {
+        console.error('Failed to fetch UV data:', error);
+    }
+}
+
+// Initial UV fetch and schedule refreshes
+fetchUVData();
+setInterval(fetchUVData, 15 * 60 * 1000);
 
 async function fetchWeatherData(lat: string, lon: string, timezone: string) {
     const baseUrl = "https://api.open-meteo.com/v1/forecast";
@@ -264,6 +318,11 @@ export const load: PageServerLoad = async ({ url }) => {
             }
         }
 
+        // Get UV data for Australian locations
+        const locationKeyForUV = locationKey || 'port_melbourne';
+        const uvStationId = UV_LOCATION_MAP[locationKeyForUV];
+        const uvData = uvStationId && uvCache.data[uvStationId] ? uvCache.data[uvStationId] : null;
+
         return {
             location: locationName,
             localTime,
@@ -276,6 +335,8 @@ export const load: PageServerLoad = async ({ url }) => {
             windDirectionDesc,
             humidity,
             cloudCover,
+            uvIndex: uvData?.index ?? null,
+            uvTime: uvData?.time ?? null,
             forecast,
             dailyHourlyMap,
             speedtestResults,
@@ -297,6 +358,8 @@ export const load: PageServerLoad = async ({ url }) => {
             windDirection: null,
             humidity: null,
             cloudCover: null,
+            uvIndex: null,
+            uvTime: null,
             forecast: null,
             dailyHourlyMap: null,
             speedtestResults: []

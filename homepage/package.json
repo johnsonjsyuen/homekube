@@ -26,6 +26,7 @@
 	},
 	"dependencies": {
 		"chart.js": "^4.4.1",
+		"fast-xml-parser": "^5.3.3",
 		"pg": "^8.11.3"
 	}
 }
