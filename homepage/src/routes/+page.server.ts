@@ -87,29 +87,41 @@ async function fetchWeatherData(lat: string, lon: string, timezone: string) {
     return await response.json();
 }
 
-async function updateSavedLocationsCache() {
-    console.log("Refreshing weather cache for saved locations...");
-    let allSuccess = true;
-    for (const [key, data] of Object.entries(LOCATIONS)) {
+async function updateSavedLocationsCache(locationsToUpdate?: string[]) {
+    const keysToFetch = locationsToUpdate || Object.keys(LOCATIONS);
+    console.log(`Refreshing weather cache for: ${keysToFetch.join(', ')}...`);
+
+    const failedKeys: string[] = [];
+
+    for (const key of keysToFetch) {
+        const data = LOCATIONS[key];
+        if (!data) {
+            console.warn(`Unknown location key: ${key}`);
+            continue;
+        }
         try {
             const weatherData = await fetchWeatherData(data.lat, data.lon, data.timezone);
             if (weatherData) {
                 weatherCache[key] = weatherData;
             } else {
                 console.warn(`Received empty data for ${key}`);
-                allSuccess = false;
+                failedKeys.push(key);
             }
         } catch (error) {
             console.error(`Failed to update cache for ${key}:`, error);
-            allSuccess = false;
+            failedKeys.push(key);
         }
     }
 
-    const delay = allSuccess ? 15 * 60 * 1000 : 10 * 1000;
-    if (!allSuccess) {
-        console.log("Some updates failed, retrying in 10 seconds...");
+    if (failedKeys.length > 0) {
+        console.log(`Failed to fetch: ${failedKeys.join(', ')}. Retrying in 10 seconds...`);
+        setTimeout(() => updateSavedLocationsCache(failedKeys), 10 * 1000);
     }
-    setTimeout(updateSavedLocationsCache, delay);
+
+    // Schedule next full refresh only if this was a full refresh (not a retry of failed locations)
+    if (!locationsToUpdate) {
+        setTimeout(updateSavedLocationsCache, 15 * 60 * 1000);
+    }
 }
 
 // Initial fetch
