@@ -21,28 +21,51 @@ if speedtest --version | grep -q "speedtest-cli"; then
     exit 1
 fi
 
-echo "1. Setting up port-forward to Postgres..."
-# Kill any existing port-forward on 5432 to avoid conflicts
-lsof -ti:5432 | xargs kill -9 2>/dev/null || true
+# Check for docker
+if ! command -v docker &> /dev/null; then
+    echo "Error: 'docker' CLI not found."
+    echo "Please install Docker."
+    exit 1
+fi
 
-# Start port-forward in background
-kubectl port-forward service/speedtest-db-rw 5432:5432 > /dev/null 2>&1 &
-PF_PID=$!
-echo "Port-forward started (PID: $PF_PID)"
+DB_CONTAINER_NAME="speedtest-postgres-local"
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=speedtest
 
-# Ensure we kill the port-forward when the script exits
-trap "kill $PF_PID" EXIT
+echo "1. Starting Postgres container..."
+# Remove existing container if it exists
+docker rm -f $DB_CONTAINER_NAME 2>/dev/null || true
 
-# Wait for port-forward to establish
-echo "Waiting for connection..."
-sleep 3
+# Start new container
+docker run -d \
+    --name $DB_CONTAINER_NAME \
+    -e POSTGRES_USER=$DB_USER \
+    -e POSTGRES_PASSWORD=$DB_PASSWORD \
+    -e POSTGRES_DB=$DB_NAME \
+    -p $DB_PORT:5432 \
+    postgres:15-alpine > /dev/null
 
-echo "2. Fetching database credentials..."
-DB_PASSWORD=$(kubectl get secret speedtest-db-app-user -o jsonpath="{.data.password}" | base64 -d)
-DB_USER=$(kubectl get secret speedtest-db-app-user -o jsonpath="{.data.username}" | base64 -d)
+echo "Postgres container started ($DB_CONTAINER_NAME)"
 
-echo "3. Starting application..."
-export DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@localhost:5432/speedtest"
+# Ensure we stop the container when the script exits
+cleanup() {
+    echo "Stopping Postgres container..."
+    docker stop $DB_CONTAINER_NAME > /dev/null
+    docker rm $DB_CONTAINER_NAME > /dev/null
+    echo "Done."
+}
+trap cleanup EXIT
+
+echo "Waiting for Postgres to be ready..."
+until docker exec $DB_CONTAINER_NAME pg_isready -U $DB_USER > /dev/null 2>&1; do
+    sleep 1
+done
+echo "Postgres is ready."
+
+echo "2. Starting application..."
+export DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@localhost:${DB_PORT}/${DB_NAME}"
 export PORT=3001
 
 echo "Running on http://localhost:$PORT"

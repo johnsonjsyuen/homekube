@@ -45,10 +45,15 @@ async fn main() -> Result<()> {
                 info!("Running speedtest for {}", name);
                 match run_speedtest(server_id) {
                     Ok(result) => {
-                        info!("Speedtest for {} successful: {} ms latency, {} Mbps down", name, result.ping.latency, result.download.bandwidth / 125000); // bandwidth is in bytes/sec usually? No, speedtest-cli json is usually bits/s or bytes/s. Let's check. 
-                        // speedtest-cli json: bandwidth is bytes/sec. 
-                        // Wait, speedtest-rs or official cli? Official CLI `bandwidth` is bytes per second.
-                        
+                        info!(
+                            "Speedtest for {} successful: {} ms latency, {} Mbps down, {} Mbps up, Result URL: {}",
+                            name,
+                            result.ping.latency,
+                            result.download.bandwidth / 125000,
+                            result.upload.bandwidth / 125000,
+                            result.result.url
+                        );
+
                         if let Err(e) = db.insert_result(&result).await {
                             error!("Failed to insert result for {}: {}", name, e);
                         }
@@ -85,7 +90,14 @@ async fn main() -> Result<()> {
              // We reuse the logic, but just for local to test quickly
              match run_speedtest(server_id) {
                  Ok(result) => {
-                     info!("Initial speedtest for {} successful", name);
+                     info!(
+                         "Initial speedtest for {} successful: {} ms latency, {} Mbps down, {} Mbps up, Result URL: {}",
+                         name,
+                         result.ping.latency,
+                         result.download.bandwidth / 125000,
+                         result.upload.bandwidth / 125000,
+                         result.result.url
+                     );
                      if let Err(e) = db.insert_result(&result).await {
                          error!("Failed to insert initial result for {}: {}", name, e);
                      }
