@@ -24,10 +24,10 @@ async fn main() -> Result<()> {
     // Note: These IDs might need to be updated.
     let targets = vec![
         ("Local", None),
-        ("Los Angeles", Some(17383)), // AT&T
-        ("Hong Kong", Some(1536)),    // STC
-        ("New York", Some(5029)),     // AT&T
-        ("London", Some(2789)),       // Vodafone
+        ("Los Angeles", Some(18229)), // Starry
+        ("Hong Kong", Some(13538)),   // CSL
+        ("New York", Some(13098)),    // Pilot Fiber
+        ("London", Some(30690)),      // Community Fibre
     ];
 
     // Clone for the closure
