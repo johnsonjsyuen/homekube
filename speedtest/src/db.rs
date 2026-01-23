@@ -1,13 +1,19 @@
-use sqlx::postgres::PgPoolOptions;
-use sqlx::{Pool, Postgres};
+use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
+use tokio_postgres::NoTls;
 use std::env;
 use anyhow::Result;
 use crate::speedtest::SpeedtestResult;
 use log;
 
+// Embed migrations
+mod embedded {
+    use refinery::embed_migrations;
+    embed_migrations!("migrations");
+}
+
 #[derive(Clone)]
 pub struct Db {
-    pool: Pool<Postgres>,
+    pool: Pool,
 }
 
 impl Db {
@@ -15,22 +21,24 @@ impl Db {
         let database_url = env::var("DATABASE_URL")
             .expect("DATABASE_URL must be set");
 
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect(&database_url)
-            .await?;
+        let pg_config: tokio_postgres::Config = database_url.parse()?;
+        let mgr_config = ManagerConfig {
+            recycling_method: RecyclingMethod::Fast,
+        };
+        let mgr = Manager::from_config(pg_config, NoTls, mgr_config);
+        let pool = Pool::builder(mgr).max_size(5).build()?;
 
         log::info!("Running database migrations...");
-        sqlx::migrate!("./migrations")
-            .run(&pool)
-            .await?;
+        let mut client = pool.get().await?;
+        embedded::migrations::runner().run_async(&mut **client).await?;
         log::info!("Database migrations complete.");
 
         Ok(Self { pool })
     }
 
     pub async fn insert_result(&self, result: &SpeedtestResult) -> Result<()> {
-        sqlx::query(
+        let client = self.pool.get().await?;
+        client.execute(
             r#"
             INSERT INTO speedtest_results (
                 server_id, server_name, server_country, latency_ms,
@@ -38,25 +46,26 @@ impl Db {
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             "#,
+            &[
+                &result.server_id,
+                &result.server_name,
+                &result.server_country,
+                &result.latency_ms,
+                &result.download_bandwidth,
+                &result.upload_bandwidth,
+                &result.download_bytes,
+                &result.upload_bytes,
+                &result.result_url,
+            ]
         )
-        .bind(result.server_id)
-        .bind(result.server_name.clone())
-        .bind(result.server_country.clone())
-        .bind(result.latency_ms)
-        .bind(result.download_bandwidth)
-        .bind(result.upload_bandwidth)
-        .bind(result.download_bytes)
-        .bind(result.upload_bytes)
-        .bind(result.result_url.clone())
-
-        .execute(&self.pool)
         .await?;
 
         Ok(())
     }
 
     pub async fn get_recent_results(&self) -> Result<Vec<crate::api::SpeedtestResultResponse>> {
-        let results = sqlx::query_as::<_, crate::api::SpeedtestResultResponse>(
+        let client = self.pool.get().await?;
+        let rows = client.query(
             r#"
             SELECT 
                 timestamp,
@@ -68,10 +77,22 @@ impl Db {
             FROM speedtest_results
             ORDER BY timestamp DESC
             LIMIT 100
-            "#
+            "#,
+            &[]
         )
-        .fetch_all(&self.pool)
         .await?;
+
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(crate::api::SpeedtestResultResponse {
+                timestamp: row.get("timestamp"),
+                server_name: row.get("server_name"),
+                server_country: row.get("server_country"),
+                latency_ms: row.get("latency_ms"),
+                download_bandwidth: row.get("download_bandwidth"),
+                upload_bandwidth: row.get("upload_bandwidth"),
+            });
+        }
 
         Ok(results)
     }
