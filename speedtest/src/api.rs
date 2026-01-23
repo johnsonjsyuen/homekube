@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use crate::db::Db;
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct SpeedtestResultResponse {
     pub timestamp: DateTime<Utc>,
     pub server_name: String,
