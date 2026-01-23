@@ -1,5 +1,6 @@
 mod api;
 mod db;
+mod entities;
 mod speedtest;
 
 use crate::db::Db;
