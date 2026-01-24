@@ -52,6 +52,12 @@ pub struct BandwidthInfo {
     pub bytes: i32,
 }
 
+impl BandwidthInfo {
+    pub fn mbps(&self) -> f64 {
+        (self.bandwidth as f64) * 8.0 / 1_000_000.0
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ResultUrl {
     pub url: String,

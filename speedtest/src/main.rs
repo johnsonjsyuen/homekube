@@ -46,11 +46,11 @@ async fn main() -> Result<()> {
                 match run_speedtest(server_id) {
                     Ok(result) => {
                         info!(
-                            "Speedtest for {} successful: {} ms latency, {} Mbps down, {} Mbps up, Result URL: {}",
+                            "Speedtest for {} successful: {} ms latency, {:.2} Mbps down, {:.2} Mbps up, Result URL: {}",
                             name,
                             result.ping.latency,
-                            result.download.bandwidth / 125000,
-                            result.upload.bandwidth / 125000,
+                            result.download.mbps(),
+                            result.upload.mbps(),
                             result.result.url
                         );
 
@@ -91,11 +91,11 @@ async fn main() -> Result<()> {
              match run_speedtest(server_id) {
                  Ok(result) => {
                      info!(
-                         "Initial speedtest for {} successful: {} ms latency, {} Mbps down, {} Mbps up, Result URL: {}",
+                         "Initial speedtest for {} successful: {} ms latency, {:.2} Mbps down, {:.2} Mbps up, Result URL: {}",
                          name,
                          result.ping.latency,
-                         result.download.bandwidth / 125000,
-                         result.upload.bandwidth / 125000,
+                         result.download.mbps(),
+                         result.upload.mbps(),
                          result.result.url
                      );
                      if let Err(e) = db.insert_result(&result).await {

@@ -45,7 +45,7 @@ docker run -d \
     -e POSTGRES_PASSWORD=$DB_PASSWORD \
     -e POSTGRES_DB=$DB_NAME \
     -p $DB_PORT:5432 \
-    postgres:15-alpine > /dev/null
+    postgres:17-alpine > /dev/null
 
 echo "Postgres container started ($DB_CONTAINER_NAME)"
 
