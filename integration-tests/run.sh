@@ -43,7 +43,10 @@ create_cluster() {
     else
         $KIND create cluster --name "$CLUSTER_NAME"
     fi
-    $KUBECTL cluster-info --context "kind-$CLUSTER_NAME"
+
+    # Ensure we are using the correct context to avoid targeting the wrong cluster
+    $KUBECTL config use-context "kind-$CLUSTER_NAME"
+    $KUBECTL cluster-info
 }
 
 install_cnpg() {
@@ -82,10 +85,13 @@ test_homepage() {
     local pid=$!
 
     sleep 10 # Give port-forward some time
-    if curl -s "http://localhost:$port" > /dev/null; then
-        log "Homepage is accessible."
+    local response=$(curl -s "http://localhost:$port")
+
+    if echo "$response" | grep -q -E "Weather|Temperature"; then
+        log "Homepage is accessible and displaying weather data."
     else
-        log "Failed to access Homepage."
+        log "Failed to access Homepage or weather data not found."
+        log "Response content: $response"
         exit 1
     fi
     # Process killed by trap or explicitly
@@ -125,10 +131,14 @@ test_speedtest() {
     local pid=$!
 
     sleep 10
-    if curl -s "http://localhost:$port" > /dev/null; then
-        log "Speedtest app is accessible."
+    local response=$(curl -s "http://localhost:$port/api/results")
+
+    # Check if response starts with [ (JSON array)
+    if [[ "$response" =~ ^\[.* ]]; then
+        log "Speedtest API is accessible and returned a JSON array."
     else
-        log "Failed to access Speedtest app."
+        log "Failed to access Speedtest API or invalid response."
+        log "Response content: $response"
         exit 1
     fi
     kill $pid
