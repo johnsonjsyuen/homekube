@@ -240,6 +240,16 @@ def test_speedtest(use_rancher):
         log("Loading Speedtest image into Kind...")
         run_command([KIND, "load", "docker-image", "speedtest:test", "--name", CLUSTER_NAME])
     
+    log("Creating Speedtest DB Secret...")
+    run_command([KUBECTL, "delete", "secret", "speedtest-db-app-user", "--ignore-not-found"])
+    run_command([KUBECTL, "create", "secret", "generic", "speedtest-db-app-user", 
+                 "--from-literal=username=app", 
+                 "--from-literal=password=password"])
+    
+    def cleanup_secret():
+        run_command([KUBECTL, "delete", "secret", "speedtest-db-app-user", "--ignore-not-found"], check=False)
+    register_cleanup(cleanup_secret)
+    
     log("Deploying Speedtest Postgres Cluster...")
     run_command([KUBECTL, "apply", "-f", "speedtest/k8s/postgres-cluster.yaml"])
     
