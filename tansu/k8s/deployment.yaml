@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tansu
+  labels:
+    app: tansu
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tansu
+  template:
+    metadata:
+      labels:
+        app: tansu
+    spec:
+      containers:
+      - name: tansu
+        image: ghcr.io/tansu-io/tansu:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 9092
+          name: kafka
+        - containerPort: 9100
+          name: metrics
+        env:
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: tansu-db-app
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: tansu-db-app
+              key: password
+        - name: STORAGE_ENGINE
+          value: "postgres://$(DB_USER):$(DB_PASSWORD)@tansu-db-rw:5432/tansu"
+        - name: ADVERTISED_LISTENER_URL
+          value: "tcp://tansu:9092"
+        - name: LISTENER_URL
+          value: "tcp://0.0.0.0:9092"
+        - name: RUST_LOG
+          value: "info"
+        - name: CLUSTER_ID
+          value: "tansu-cluster"
+        - name: SCHEMA_REGISTRY
+          value: "file:///schema"
+        args:
+        - "--kafka-cluster-id=$(CLUSTER_ID)"
+        - "--kafka-listener-url=$(LISTENER_URL)"
+        - "--kafka-advertised-listener-url=$(ADVERTISED_LISTENER_URL)"
+        - "--storage-engine=$(STORAGE_ENGINE)"
+        - "--schema-registry=$(SCHEMA_REGISTRY)"
+        volumeMounts:
+        - name: schema-storage
+          mountPath: /schema
+        readinessProbe:
+          tcpSocket:
+            port: 9092
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 9092
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: schema-storage
+        persistentVolumeClaim:
+          claimName: tansu-schema

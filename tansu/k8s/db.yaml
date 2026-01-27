@@ -1,0 +1,14 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: tansu-db
+spec:
+  instances: 2
+  storage:
+    size: 1Gi
+  bootstrap:
+    initdb:
+      database: tansu
+      owner: app
+  monitoring:
+    enablePodMonitor: true
