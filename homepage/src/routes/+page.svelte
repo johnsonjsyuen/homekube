@@ -881,17 +881,19 @@
     /* Location Cards Grid */
     .location-cards {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 15px;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
     }
 
     .location-card {
         background: #2a2a2a;
-        padding: 16px;
+        padding: 14px;
         border-radius: 15px;
         cursor: pointer;
         transition: all 0.2s ease;
         border: 2px solid transparent;
+        overflow: hidden;
+        min-width: 0;
     }
 
     .location-card:hover {
@@ -907,34 +909,40 @@
     .location-header {
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 12px;
+        gap: 6px;
+        margin-bottom: 10px;
+        overflow: hidden;
     }
 
     .location-flag {
-        font-size: 1.3rem;
+        font-size: 1.1rem;
+        flex-shrink: 0;
     }
 
     .location-name {
         font-weight: 600;
-        font-size: 0.95rem;
+        font-size: 0.85rem;
         color: #fff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .location-speeds {
         display: flex;
-        gap: 12px;
-        margin-bottom: 8px;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 6px;
     }
 
     .speed-item {
         display: flex;
         align-items: baseline;
-        gap: 4px;
+        gap: 2px;
     }
 
     .speed-label {
-        font-size: 0.9rem;
+        font-size: 0.8rem;
         font-weight: 600;
     }
 
@@ -947,24 +955,24 @@
     }
 
     .speed-value {
-        font-size: 1.1rem;
+        font-size: 0.95rem;
         font-weight: 700;
         color: #fff;
     }
 
     .speed-unit {
-        font-size: 0.7rem;
+        font-size: 0.6rem;
         color: #888;
     }
 
     .location-latency {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         font-weight: 600;
         margin-bottom: 4px;
     }
 
     .location-time {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         color: #666;
     }
 
@@ -973,10 +981,15 @@
         padding-top: 8px;
         border-top: 1px solid #444;
         color: #888;
+        overflow: hidden;
     }
 
     .location-avg small {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: block;
     }
 
     /* Chart Section */
