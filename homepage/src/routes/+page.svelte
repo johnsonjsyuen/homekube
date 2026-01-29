@@ -12,6 +12,7 @@
         PointElement,
         CategoryScale,
         TimeScale,
+        Filler,
     } from "chart.js";
 
     ChartJS.register(
@@ -23,6 +24,7 @@
         PointElement,
         CategoryScale,
         TimeScale,
+        Filler,
     );
 
     let { data } = $props();

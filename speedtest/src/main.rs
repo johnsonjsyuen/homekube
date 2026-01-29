@@ -34,9 +34,8 @@ async fn main() -> Result<()> {
     let db_clone = db.clone();
     let targets_clone = targets.clone();
 
-    // Run every 10 minutes: "0 1/10 * * * *" (sec min hour day month day_of_week)
-    // Or simpler: "0 */10 * * * *"
-    let job = Job::new_async("0 */10 * * * *", move |_uuid, _l| {
+    // Run every hour
+    let job = Job::new_async("0 0 * * * *", move |_uuid, _l| {
         let db = db_clone.clone();
         let targets = targets_clone.clone();
         Box::pin(async move {
@@ -57,6 +56,8 @@ async fn main() -> Result<()> {
                         error!("Failed to run speedtest for {}: {}", name, e);
                     }
                 }
+                // Wait 60 seconds between speedtests to avoid overwhelming the network
+                tokio::time::sleep(std::time::Duration::from_secs(120)).await;
             }
             info!("Finished scheduled speedtest cycle");
         })

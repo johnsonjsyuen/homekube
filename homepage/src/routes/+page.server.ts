@@ -59,12 +59,12 @@ const UV_LOCATION_MAP: Record<string, string> = {
     "port_melbourne": "Melbourne"
 };
 
-const fetchWithRetry = async (url: string, retries = 1, timeout = 10000) => {
+const fetchWithRetry = async (url: string, retries = 3, timeout = 10000, retryDelay = 2000) => {
     for (let i = 0; i <= retries; i++) {
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), timeout);
         try {
-            console.log(`Fetching data (attempt ${i + 1}/${retries + 1})...`);
+            console.log(`Fetching ${url} (attempt ${i + 1}/${retries + 1})...`);
             const res = await fetch(url, {
                 headers: {
                     'User-Agent': 'WeatherApp/1.0 (homekube)'
@@ -77,8 +77,8 @@ const fetchWithRetry = async (url: string, retries = 1, timeout = 10000) => {
         } catch (err) {
             clearTimeout(id);
             if (i === retries) throw err;
-            console.warn(`Fetch attempt ${i + 1} failed, retrying...`, err);
-            await new Promise(r => setTimeout(r, 1000));
+            console.warn(`Fetch attempt ${i + 1} failed, retrying in ${retryDelay}ms...`, err);
+            await new Promise(r => setTimeout(r, retryDelay));
         }
     }
     throw new Error("Should not be reached");
@@ -178,10 +178,36 @@ async function updateSavedLocationsCache(locationsToUpdate?: string[]) {
     }
 }
 
-// Initial fetch
-updateSavedLocationsCache();
+// Track initial cache population status
+let cacheInitialized = false;
+let cacheInitPromise: Promise<void> | null = null;
+
+// Initialize cache and track completion
+async function initializeCache() {
+    try {
+        await updateSavedLocationsCache();
+        cacheInitialized = true;
+        console.log('Weather cache initialized successfully');
+    } catch (error) {
+        console.error('Failed to initialize weather cache:', error);
+        // Even if initial fetch fails, mark as initialized so we don't block forever
+        cacheInitialized = true;
+    }
+}
+
+// Start initial fetch
+cacheInitPromise = initializeCache();
 
 export const load: PageServerLoad = async ({ url }) => {
+    // Wait for initial cache population (with timeout to prevent indefinite blocking)
+    if (!cacheInitialized && cacheInitPromise) {
+        console.log('Waiting for cache initialization...');
+        await Promise.race([
+            cacheInitPromise,
+            new Promise(resolve => setTimeout(resolve, 30000)) // 30s timeout
+        ]);
+    }
+
     const latParam = url.searchParams.get('lat');
     const lonParam = url.searchParams.get('lon');
     const locationKey = url.searchParams.get('location');
@@ -201,22 +227,18 @@ export const load: PageServerLoad = async ({ url }) => {
     }> = {};
     let speedtestResults: any[] = [];
     try {
-        const res = await fetch('http://speedtest/api/results/by-location');
-        if (res.ok) {
-            speedtestByLocation = await res.json();
-            // Flatten results for backward compatibility with the table
-            for (const [, data] of Object.entries(speedtestByLocation)) {
-                speedtestResults.push(...data.results);
-            }
-            // Sort flattened results by timestamp descending
-            speedtestResults.sort((a, b) =>
-                new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-            );
-        } else {
-            console.error("Error fetching speedtest results:", res.status);
+        const res = await fetchWithRetry('http://speedtest/api/results/by-location', 3, 5000, 2000);
+        speedtestByLocation = await res.json();
+        // Flatten results for backward compatibility with the table
+        for (const [, data] of Object.entries(speedtestByLocation)) {
+            speedtestResults.push(...data.results);
         }
+        // Sort flattened results by timestamp descending
+        speedtestResults.sort((a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
     } catch (e) {
-        console.error("Error fetching speedtest results:", e);
+        console.error("Error fetching speedtest results after retries:", e);
     }
 
     if (latParam && lonParam) {
