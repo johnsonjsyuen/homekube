@@ -258,7 +258,7 @@
         },
     };
 
-    let canvas: HTMLCanvasElement;
+    let canvas = $state<HTMLCanvasElement>();
     let chartInstance: ChartJS | null = null;
 
     $effect(() => {
