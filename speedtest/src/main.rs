@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
         ("Local", None),
         ("Los Angeles", Some(18229)), // Starry
         ("Hong Kong", Some(13538)),   // CSL
-        ("New York", Some(13098)),    // Pilot Fiber
+        ("Atlanta", Some(10152)),     // Comcast - major peering hub, replaced slow NY server
         ("London", Some(30690)),      // Community Fibre
     ];
 

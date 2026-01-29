@@ -191,12 +191,27 @@ export const load: PageServerLoad = async ({ url }) => {
     let fetchError;
     let fetchedAt: Date | null = null;
 
-    // Fetch speedtest results from speedtest API
-    let speedtestResults = [];
+    // Fetch speedtest results grouped by location from speedtest API
+    let speedtestByLocation: Record<string, {
+        latest: any;
+        results: any[];
+        avg_download: number;
+        avg_upload: number;
+        avg_latency: number;
+    }> = {};
+    let speedtestResults: any[] = [];
     try {
-        const res = await fetch('http://speedtest/api/results');
+        const res = await fetch('http://speedtest/api/results/by-location');
         if (res.ok) {
-            speedtestResults = await res.json();
+            speedtestByLocation = await res.json();
+            // Flatten results for backward compatibility with the table
+            for (const [, data] of Object.entries(speedtestByLocation)) {
+                speedtestResults.push(...data.results);
+            }
+            // Sort flattened results by timestamp descending
+            speedtestResults.sort((a, b) =>
+                new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            );
         } else {
             console.error("Error fetching speedtest results:", res.status);
         }
@@ -340,6 +355,7 @@ export const load: PageServerLoad = async ({ url }) => {
             forecast,
             dailyHourlyMap,
             speedtestResults,
+            speedtestByLocation,
             error: null
         };
 
@@ -362,7 +378,8 @@ export const load: PageServerLoad = async ({ url }) => {
             uvTime: null,
             forecast: null,
             dailyHourlyMap: null,
-            speedtestResults: []
+            speedtestResults: [],
+            speedtestByLocation: {}
         };
     }
 };
