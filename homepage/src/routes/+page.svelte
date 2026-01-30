@@ -110,12 +110,18 @@
     });
 
     // Speedtest Data Processing
+    // Cast to Record<string, any> to avoid "Element implicitly has an 'any' type" errors
+    // because the server load function might return {} (empty object) which TS treats as not indexable by string
+    let speedtestByLocation = $derived(
+        data.speedtestByLocation as Record<string, any>,
+    );
+
     let selectedLocation = $state<string | null>(null);
 
     // Get list of locations from the data
     let speedtestLocations = $derived.by(() => {
-        if (!data.speedtestByLocation) return [];
-        return Object.keys(data.speedtestByLocation).sort();
+        if (!speedtestByLocation) return [];
+        return Object.keys(speedtestByLocation).sort();
     });
 
     // Select first location by default
@@ -168,8 +174,8 @@
 
     // Chart data for selected location
     let chartData = $derived.by(() => {
-        if (!data.speedtestByLocation || !selectedLocation) return null;
-        const locationData = data.speedtestByLocation[selectedLocation];
+        if (!speedtestByLocation || !selectedLocation) return null;
+        const locationData = speedtestByLocation[selectedLocation];
         if (!locationData || !locationData.results) return null;
 
         // Sort by timestamp ascending for charts
@@ -440,11 +446,11 @@
         {/if}
     {:else if activeTab === "speedtest"}
         <div class="speedtest-container">
-            {#if data.speedtestByLocation && Object.keys(data.speedtestByLocation).length > 0}
+            {#if speedtestByLocation && Object.keys(speedtestByLocation).length > 0}
                 <!-- Location Summary Cards -->
                 <div class="location-cards">
                     {#each speedtestLocations as location}
-                        {@const locData = data.speedtestByLocation[location]}
+                        {@const locData = speedtestByLocation[location]}
                         {#if locData && locData.latest}
                             <!-- svelte-ignore a11y_click_events_have_key_events -->
                             <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -550,7 +556,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {#each ((selectedLocation && data.speedtestByLocation[selectedLocation]?.results) || []).slice(0, 20) as result}
+                                {#each ((selectedLocation && speedtestByLocation[selectedLocation]?.results) || []).slice(0, 20) as result}
                                     <tr>
                                         <td
                                             >{new Date(
