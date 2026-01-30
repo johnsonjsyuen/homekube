@@ -130,7 +130,7 @@ async function fetchWeatherData(lat: string, lon: string, timezone: string) {
     const params = new URLSearchParams({
         "latitude": lat,
         "longitude": lon,
-        "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,cloud_cover",
+        "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,cloud_cover,uv_index",
         "daily": "weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max",
         "hourly": "wind_speed_10m,wind_direction_10m",
         "wind_speed_unit": "kn",
@@ -355,10 +355,14 @@ export const load: PageServerLoad = async ({ url }) => {
             }
         }
 
-        // Get UV data for Australian locations
+        // Get UV data for Australian locations (ARPANSA)
         const locationKeyForUV = locationKey || 'port_melbourne';
         const uvStationId = UV_LOCATION_MAP[locationKeyForUV];
         const uvData = uvStationId && uvCache.data[uvStationId] ? uvCache.data[uvStationId] : null;
+
+        // Use ARPANSA UV if available, otherwise fallback to OpenMeteo
+        const uvIndex = uvData?.index ?? current.uv_index ?? null;
+        const uvTime = uvData?.time ?? null; // OpenMeteo is "current", so no specific time label needed
 
         return {
             location: locationName,
@@ -372,8 +376,8 @@ export const load: PageServerLoad = async ({ url }) => {
             windDirectionDesc,
             humidity,
             cloudCover,
-            uvIndex: uvData?.index ?? null,
-            uvTime: uvData?.time ?? null,
+            uvIndex,
+            uvTime,
             forecast,
             dailyHourlyMap,
             speedtestResults,
