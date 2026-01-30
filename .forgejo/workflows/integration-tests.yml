@@ -14,9 +14,7 @@ jobs:
         uses: https://github.com/actions/checkout@v4
 
       - name: Setup Rust
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        uses: https://github.com/actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Setup Python
         uses: https://github.com/actions/setup-python@v6
