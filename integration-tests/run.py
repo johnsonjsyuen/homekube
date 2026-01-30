@@ -302,6 +302,113 @@ def test_speedtest(use_rancher):
         if cleanup_pf in CLEANUP_ACTIONS:
             CLEANUP_ACTIONS.remove(cleanup_pf)
 
+def test_text_to_speech(use_rancher):
+    log("Testing Text-to-Speech app...")
+    
+    log("Building Text-to-Speech image...")
+    build_image("text-to-speech:test", "./text-to-speech")
+    
+    if not use_rancher:
+        log("Loading Text-to-Speech image into Kind...")
+        run_command([KIND, "load", "docker-image", "text-to-speech:test", "--name", CLUSTER_NAME])
+    
+    log("Deploying Text-to-Speech Postgres Cluster...")
+    run_command([KUBECTL, "apply", "-f", "text-to-speech/k8s/db.yaml"])
+    
+    log("Waiting for Postgres Cluster to be ready...")
+    run_command([KUBECTL, "wait", "--for=condition=Ready", "cluster/text-to-speech-db", "--timeout=300s"])
+    
+    log("Deploying Text-to-Speech App...")
+    run_command([KUBECTL, "apply", "-f", "text-to-speech/k8s/pvc.yaml"])
+    run_command([KUBECTL, "apply", "-f", "text-to-speech/k8s/service.yaml"])
+    run_command([KUBECTL, "apply", "-f", "text-to-speech/k8s/deploy.yaml"])
+    
+    # Patch image and pull policy
+    run_command([KUBECTL, "set", "image", "deployment/text-to-speech", "text-to-speech=text-to-speech:test"])
+    run_command([KUBECTL, "patch", "deployment", "text-to-speech", "-p", '{"spec":{"template":{"spec":{"containers":[{"name":"text-to-speech","imagePullPolicy":"Never"}]}}}}'])
+    
+    log("Waiting for Text-to-Speech deployment rollout...")
+    run_command([KUBECTL, "rollout", "status", "deployment/text-to-speech", "--timeout=120s"])
+    
+    log("Verifying Text-to-Speech availability...")
+    port = 30082
+    
+    # Start port-forward
+    pf_process = subprocess.Popen(
+        [KUBECTL, "port-forward", "svc/text-to-speech", f"{port}:80"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+    
+    def cleanup_pf():
+        if pf_process.poll() is None:
+            pf_process.terminate()
+            pf_process.wait()
+            
+    register_cleanup(cleanup_pf)
+    
+    time.sleep(10)
+    
+    try:
+        # Create a dummy text file
+        test_file = "test_speech.txt"
+        with open(test_file, "w") as f:
+            f.write("Hello, integration test.")
+            
+        def cleanup_test_file():
+            if os.path.exists(test_file):
+                os.remove(test_file)
+        register_cleanup(cleanup_test_file)
+
+        # 1. Generate Speech
+        log("Sending generation request...")
+        curl_cmd = [
+            "curl", "-s", "-X", "POST",
+            "-F", f"text_file=@{test_file}",
+            "-F", "voice=af_heart",
+            "-F", "speed=1.0",
+            f"http://localhost:{port}/generate"
+        ]
+        response = run_command(curl_cmd, capture_output=True).stdout
+        log(f"Generate response: {response}")
+        
+        try:
+            data = json.loads(response)
+            job_id = data.get("id")
+            if not job_id:
+                raise Exception("No ID returned")
+        except:
+             log("Failed to parse generation response.")
+             sys.exit(1)
+             
+        # 2. Poll Status
+        log(f"Polling status for job {job_id}...")
+        start_wait = time.time()
+        completed = False
+        while time.time() - start_wait < 60: # 60s timeout
+            status_res = run_command(["curl", "-s", "-I", f"http://localhost:{port}/status/{job_id}"], capture_output=True).stdout
+            
+            # Check headers for content-type
+            # processing returns JSON, completed returns audio/mpeg
+            if "audio/mpeg" in status_res:
+                log("Job completed and audio is ready.")
+                completed = True
+                break
+                
+            time.sleep(2)
+            
+        if not completed:
+            log("Timeout waiting for TTS generation.")
+            sys.exit(1)
+            
+    except Exception as e:
+        log(f"Error checking text-to-speech: {e}")
+        sys.exit(1)
+    finally:
+        cleanup_pf()
+        if cleanup_pf in CLEANUP_ACTIONS:
+            CLEANUP_ACTIONS.remove(cleanup_pf)
+
 def main():
     # Register cleanup handler
     atexit.register(cleanup)
@@ -313,6 +420,7 @@ def main():
     install_cnpg()
     test_homepage(use_rancher)
     test_speedtest(use_rancher)
+    test_text_to_speech(use_rancher)
     
     log("Integration tests passed successfully!")
 
