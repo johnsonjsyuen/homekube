@@ -14,7 +14,7 @@ RUNNER_NAME=${RUNNER_NAME:-k8s-runner}
 read -p "Runner Labels (comma-separated, e.g., ubuntu-latest:docker://ubuntu:latest): " LABELS
 # Default labels if empty
 if [ -z "$LABELS" ]; then
-    LABELS="ubuntu-latest:docker://catthehacker/ubuntu:act-latest,ubuntu-base:docker://ubuntu:latest"
+    LABELS="ubuntu-latest:docker://node:24-bookworm,ubuntu-base:docker://ubuntu:latest"
 fi
 
 echo "Registering runner..."

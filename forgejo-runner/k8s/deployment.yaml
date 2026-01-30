@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: runner
-          image: code.forgejo.org/forgejo/runner:3.3.0
+          image: code.forgejo.org/forgejo/runner:12.6.3
           command:
             - /bin/bash
             - -c

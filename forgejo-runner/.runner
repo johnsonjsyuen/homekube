@@ -6,7 +6,7 @@
   "token": "6cb3bb05f83a6a0670ecf23f02ed952471350a6a",
   "address": "https://code.johnsonyuen.com",
   "labels": [
-    "ubuntu-latest:docker://node:20-bookworm",
+    "ubuntu-latest:docker://node:24-bookworm",
     "ubuntu-base:docker://ubuntu:latest"
   ]
 }
