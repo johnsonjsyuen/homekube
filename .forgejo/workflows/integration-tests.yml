@@ -1,0 +1,28 @@
+name: Integration Tests
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Kind
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: integration-test
+          wait: 60s
+
+      - name: Run Integration Tests
+        run: ./integration-tests/run.sh
