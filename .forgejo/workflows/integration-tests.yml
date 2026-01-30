@@ -13,11 +13,6 @@ jobs:
       - name: Checkout
         uses: https://github.com/actions/checkout@v4
 
-      - name: Debug Info
-        run: |
-          echo "Architecture: $(uname -m)"
-          cat /etc/os-release
-
       - name: Setup Rust
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
