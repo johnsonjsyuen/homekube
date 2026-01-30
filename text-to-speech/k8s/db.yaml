@@ -1,0 +1,15 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: text-to-speech-db
+  namespace: default
+spec:
+  instances: 2
+  storage:
+    size: 1Gi
+  bootstrap:
+    initdb:
+      database: text_to_speech
+      owner: app
+  monitoring:
+    enablePodMonitor: true

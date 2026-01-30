@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: text-to-speech
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: text-to-speech
+  template:
+    metadata:
+      labels:
+        app: text-to-speech
+    spec:
+      containers:
+      - name: text-to-speech
+        image: localhost:5000/text-to-speech:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        env:
+        - name: STORAGE_PATH
+          value: "/app/storage"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: text-to-speech-db-app
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: text-to-speech-db-app
+              key: password
+        - name: DB_HOST
+          value: "text-to-speech-db-rw"
+        - name: DB_NAME
+          value: "text_to_speech"
+        - name: DATABASE_URL
+          value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):5432/$(DB_NAME)"
+        volumeMounts:
+        - name: storage
+          mountPath: /app/storage
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: text-to-speech-storage

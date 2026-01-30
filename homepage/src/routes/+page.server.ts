@@ -59,12 +59,12 @@ const UV_LOCATION_MAP: Record<string, string> = {
     "port_melbourne": "Melbourne"
 };
 
-const fetchWithRetry = async (url: string, retries = 1, timeout = 10000) => {
+const fetchWithRetry = async (url: string, retries = 3, timeout = 10000, retryDelay = 2000) => {
     for (let i = 0; i <= retries; i++) {
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), timeout);
         try {
-            console.log(`Fetching data (attempt ${i + 1}/${retries + 1})...`);
+            console.log(`Fetching ${url} (attempt ${i + 1}/${retries + 1})...`);
             const res = await fetch(url, {
                 headers: {
                     'User-Agent': 'WeatherApp/1.0 (homekube)'
@@ -77,8 +77,8 @@ const fetchWithRetry = async (url: string, retries = 1, timeout = 10000) => {
         } catch (err) {
             clearTimeout(id);
             if (i === retries) throw err;
-            console.warn(`Fetch attempt ${i + 1} failed, retrying...`, err);
-            await new Promise(r => setTimeout(r, 1000));
+            console.warn(`Fetch attempt ${i + 1} failed, retrying in ${retryDelay}ms...`, err);
+            await new Promise(r => setTimeout(r, retryDelay));
         }
     }
     throw new Error("Should not be reached");
@@ -130,7 +130,7 @@ async function fetchWeatherData(lat: string, lon: string, timezone: string) {
     const params = new URLSearchParams({
         "latitude": lat,
         "longitude": lon,
-        "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,cloud_cover",
+        "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,cloud_cover,uv_index",
         "daily": "weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max",
         "hourly": "wind_speed_10m,wind_direction_10m",
         "wind_speed_unit": "kn",
@@ -178,10 +178,84 @@ async function updateSavedLocationsCache(locationsToUpdate?: string[]) {
     }
 }
 
-// Initial fetch
-updateSavedLocationsCache();
+// Track initial cache population status
+let cacheInitialized = false;
+let cacheInitPromise: Promise<void> | null = null;
+
+// Initialize cache and track completion
+async function initializeCache() {
+    try {
+        await updateSavedLocationsCache();
+        cacheInitialized = true;
+        console.log('Weather cache initialized successfully');
+    } catch (error) {
+        console.error('Failed to initialize weather cache:', error);
+        // Even if initial fetch fails, mark as initialized so we don't block forever
+        cacheInitialized = true;
+    }
+}
+
+// Start initial fetch
+cacheInitPromise = initializeCache();
+
+// Speedtest Cache
+let speedtestCache: {
+    data: Record<string, {
+        latest: any;
+        results: any[];
+        avg_download: number;
+        avg_upload: number;
+        avg_latency: number;
+    }>;
+    fetchedAt: Date | null;
+    results: any[];
+} = {
+    data: {},
+    fetchedAt: null,
+    results: []
+};
+
+async function fetchSpeedtestData() {
+    try {
+        console.log('Fetching speedtest data...');
+        // Shorter timeout for background refresh
+        const res = await fetchWithRetry('http://speedtest/api/results/by-location', 2, 5000, 1000);
+        const speedtestByLocation = await res.json();
+
+        const results: any[] = [];
+        for (const [, data] of Object.entries(speedtestByLocation)) {
+            // @ts-ignore
+            results.push(...data.results);
+        }
+        results.sort((a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+
+        speedtestCache = {
+            data: speedtestByLocation,
+            results: results,
+            fetchedAt: new Date()
+        };
+        console.log(`Speedtest data updated. Locations: ${Object.keys(speedtestByLocation).join(', ')}`);
+    } catch (e) {
+        console.error("Error fetching speedtest results (background):", e);
+    }
+}
+
+// Initial fetch and schedule refreshes
+// fetchSpeedtestData();
+// setInterval(fetchSpeedtestData, 5 * 60 * 1000); // Refresh every 5 minutes
 
 export const load: PageServerLoad = async ({ url }) => {
+    // Wait for initial cache population (with timeout to prevent indefinite blocking)
+    if (!cacheInitialized && cacheInitPromise) {
+        console.log('Waiting for cache initialization...');
+        await Promise.race([
+            cacheInitPromise,
+            new Promise(resolve => setTimeout(resolve, 30000)) // 30s timeout
+        ]);
+    }
+
     const latParam = url.searchParams.get('lat');
     const lonParam = url.searchParams.get('lon');
     const locationKey = url.searchParams.get('location');
@@ -191,18 +265,9 @@ export const load: PageServerLoad = async ({ url }) => {
     let fetchError;
     let fetchedAt: Date | null = null;
 
-    // Fetch speedtest results from speedtest API
-    let speedtestResults = [];
-    try {
-        const res = await fetch('http://speedtest/api/results');
-        if (res.ok) {
-            speedtestResults = await res.json();
-        } else {
-            console.error("Error fetching speedtest results:", res.status);
-        }
-    } catch (e) {
-        console.error("Error fetching speedtest results:", e);
-    }
+    // Use cached speedtest data immediately
+    const speedtestByLocation = speedtestCache.data;
+    const speedtestResults = speedtestCache.results;
 
     if (latParam && lonParam) {
         lat = latParam;
@@ -318,10 +383,14 @@ export const load: PageServerLoad = async ({ url }) => {
             }
         }
 
-        // Get UV data for Australian locations
+        // Get UV data for Australian locations (ARPANSA)
         const locationKeyForUV = locationKey || 'port_melbourne';
         const uvStationId = UV_LOCATION_MAP[locationKeyForUV];
         const uvData = uvStationId && uvCache.data[uvStationId] ? uvCache.data[uvStationId] : null;
+
+        // Use ARPANSA UV if available, otherwise fallback to OpenMeteo
+        const uvIndex = uvData?.index ?? current.uv_index ?? null;
+        const uvTime = uvData?.time ?? null; // OpenMeteo is "current", so no specific time label needed
 
         return {
             location: locationName,
@@ -335,11 +404,12 @@ export const load: PageServerLoad = async ({ url }) => {
             windDirectionDesc,
             humidity,
             cloudCover,
-            uvIndex: uvData?.index ?? null,
-            uvTime: uvData?.time ?? null,
+            uvIndex,
+            uvTime,
             forecast,
             dailyHourlyMap,
             speedtestResults,
+            speedtestByLocation,
             error: null
         };
 
@@ -362,7 +432,8 @@ export const load: PageServerLoad = async ({ url }) => {
             uvTime: null,
             forecast: null,
             dailyHourlyMap: null,
-            speedtestResults: []
+            speedtestResults: [],
+            speedtestByLocation: {}
         };
     }
 };
