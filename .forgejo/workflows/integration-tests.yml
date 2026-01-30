@@ -15,8 +15,8 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ca-certificates build-essential curl
+          apt-get update
+          apt-get install -y ca-certificates build-essential curl
 
       - name: Setup Rust
         uses: https://github.com/actions-rust-lang/setup-rust-toolchain@v1
