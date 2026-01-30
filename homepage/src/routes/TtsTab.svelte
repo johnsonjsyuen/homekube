@@ -34,6 +34,7 @@
             }
 
             const data = await res.json();
+            console.log("[TTS] Job started, ID:", data.id);
             ttsJobId = data.id;
             pollStatus(data.id);
         } catch (e: any) {
@@ -43,25 +44,35 @@
     }
 
     async function pollStatus(id: string) {
-        if (ttsStatus !== "processing") return;
+        if (ttsStatus !== "processing") {
+            console.log("[TTS] Polling stopped. Status:", ttsStatus);
+            return;
+        }
 
+        console.log(`[TTS] Polling status for job ${id}...`);
         try {
             const res = await fetch(`/api/tts/status/${id}`);
             const contentType = res.headers.get("content-type");
 
             if (contentType && contentType.includes("application/json")) {
                 const data = await res.json();
+                console.log("[TTS] Poll response:", data);
                 if (data.status === "error") {
                     ttsStatus = "error";
                     ttsError = data.message;
                 } else if (data.status === "processing") {
+                    console.log("[TTS] Still processing. Next poll in 10s.");
                     setTimeout(() => pollStatus(id), 10000);
                 }
             } else {
+                console.log(
+                    "[TTS] Response is not JSON (likely audio). Task completed.",
+                );
                 // Audio file is ready (stream)
                 ttsStatus = "completed";
             }
         } catch (e: any) {
+            console.error("[TTS] Poll error:", e);
             ttsStatus = "error";
             ttsError = e.message;
         }
