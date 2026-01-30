@@ -11,8 +11,12 @@ WORKDIR /app
 # Install system dependencies
 # ffmpeg for audio conversion, espeak-ng for phonemization (common requirement for TTS)
 RUN apt-get update && \
-    apt-get install -y ffmpeg espeak-ng && \
+    apt-get install -y ffmpeg espeak-ng libportaudio2 wget && \
     rm -rf /var/lib/apt/lists/*
+
+# Download Kokoro models
+RUN wget -q https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/kokoro-v1.0.onnx && \
+    wget -q https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/voices-v1.0.bin
 
 # Install kokoro-tts
 # Installing torch cpu version specifically often helps reduce size if GPU not needed/available

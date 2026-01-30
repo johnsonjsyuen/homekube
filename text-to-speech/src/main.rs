@@ -21,7 +21,7 @@ struct AppState {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(tag = "status", rename_all = "lowercase")]
 enum JobStatusResponse {
     Processing,
     Completed,
