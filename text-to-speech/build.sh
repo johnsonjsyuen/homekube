@@ -5,7 +5,7 @@ set -eu
 # Ensure we are building from the directory containing this script
 cd "$(dirname "$0")"
 
-echo "Building fresh Docker image (no-cache)..."
+echo "Building Docker image..."
 # Using linux/amd64 as per other services
 docker build --platform linux/amd64 . -t localhost:5000/text-to-speech:latest
 
