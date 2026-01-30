@@ -11,7 +11,7 @@ data:
       job_level: info
 
     runner:
-      file: /etc/forgejo-runner/.runner
+      file: /data/.runner
       capacity: 1
       envs:
         DOCKER_HOST: tcp://localhost:2376

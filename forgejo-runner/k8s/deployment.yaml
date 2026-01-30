@@ -21,6 +21,8 @@ spec:
             - /bin/bash
             - -c
             - |
+              cp /etc/forgejo-runner/.runner /data/.runner
+              chmod 600 /data/.runner
               while ! nc -z localhost 2376 </dev/null; do
                 echo 'Waiting for docker daemon...';
                 sleep 5;
@@ -47,7 +49,7 @@ spec:
             - name: data
               mountPath: /data
         - name: dind
-          image: docker:dind
+          image: docker:24-dind
           env:
             - name: DOCKER_TLS_CERTDIR
               value: /certs

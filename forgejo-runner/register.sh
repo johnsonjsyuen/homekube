@@ -14,14 +14,14 @@ RUNNER_NAME=${RUNNER_NAME:-k8s-runner}
 read -p "Runner Labels (comma-separated, e.g., ubuntu-latest:docker://ubuntu:latest): " LABELS
 # Default labels if empty
 if [ -z "$LABELS" ]; then
-    LABELS="ubuntu-latest:docker://ubuntu:latest"
+    LABELS="ubuntu-latest:docker://node:20-bookworm:docker://ubuntu:latest"
 fi
 
 echo "Registering runner..."
 
 # Run the registration using docker
 # We mount the current directory to /data to get the .runner file
-docker run --rm -v "$PWD":/data code.forgejo.org/forgejo/runner:3.3.0 register \
+nerdctl run --rm -v "$PWD":/data code.forgejo.org/forgejo/runner:3.3.0 forgejo-runner register \
   --instance "$INSTANCE_URL" \
   --token "$TOKEN" \
   --name "$RUNNER_NAME" \
