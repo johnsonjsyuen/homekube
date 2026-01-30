@@ -61,8 +61,8 @@
                     ttsStatus = "error";
                     ttsError = data.message;
                 } else if (data.status === "processing") {
-                    console.log("[TTS] Still processing. Next poll in 10s.");
-                    setTimeout(() => pollStatus(id), 10000);
+                    console.log("[TTS] Still processing. Next poll in 3s.");
+                    setTimeout(() => pollStatus(id), 3*1000);
                 }
             } else {
                 console.log(

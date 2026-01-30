@@ -198,6 +198,54 @@ async function initializeCache() {
 // Start initial fetch
 cacheInitPromise = initializeCache();
 
+// Speedtest Cache
+let speedtestCache: {
+    data: Record<string, {
+        latest: any;
+        results: any[];
+        avg_download: number;
+        avg_upload: number;
+        avg_latency: number;
+    }>;
+    fetchedAt: Date | null;
+    results: any[];
+} = {
+    data: {},
+    fetchedAt: null,
+    results: []
+};
+
+async function fetchSpeedtestData() {
+    try {
+        console.log('Fetching speedtest data...');
+        // Shorter timeout for background refresh
+        const res = await fetchWithRetry('http://speedtest/api/results/by-location', 2, 5000, 1000);
+        const speedtestByLocation = await res.json();
+
+        const results: any[] = [];
+        for (const [, data] of Object.entries(speedtestByLocation)) {
+            // @ts-ignore
+            results.push(...data.results);
+        }
+        results.sort((a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+
+        speedtestCache = {
+            data: speedtestByLocation,
+            results: results,
+            fetchedAt: new Date()
+        };
+        console.log(`Speedtest data updated. Locations: ${Object.keys(speedtestByLocation).join(', ')}`);
+    } catch (e) {
+        console.error("Error fetching speedtest results (background):", e);
+    }
+}
+
+// Initial fetch and schedule refreshes
+// fetchSpeedtestData();
+// setInterval(fetchSpeedtestData, 5 * 60 * 1000); // Refresh every 5 minutes
+
 export const load: PageServerLoad = async ({ url }) => {
     // Wait for initial cache population (with timeout to prevent indefinite blocking)
     if (!cacheInitialized && cacheInitPromise) {
@@ -217,29 +265,9 @@ export const load: PageServerLoad = async ({ url }) => {
     let fetchError;
     let fetchedAt: Date | null = null;
 
-    // Fetch speedtest results grouped by location from speedtest API
-    let speedtestByLocation: Record<string, {
-        latest: any;
-        results: any[];
-        avg_download: number;
-        avg_upload: number;
-        avg_latency: number;
-    }> = {};
-    let speedtestResults: any[] = [];
-    try {
-        const res = await fetchWithRetry('http://speedtest/api/results/by-location', 3, 5000, 2000);
-        speedtestByLocation = await res.json();
-        // Flatten results for backward compatibility with the table
-        for (const [, data] of Object.entries(speedtestByLocation)) {
-            speedtestResults.push(...data.results);
-        }
-        // Sort flattened results by timestamp descending
-        speedtestResults.sort((a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        );
-    } catch (e) {
-        console.error("Error fetching speedtest results after retries:", e);
-    }
+    // Use cached speedtest data immediately
+    const speedtestByLocation = speedtestCache.data;
+    const speedtestResults = speedtestCache.results;
 
     if (latParam && lonParam) {
         lat = latParam;
