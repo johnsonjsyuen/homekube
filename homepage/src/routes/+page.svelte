@@ -3,7 +3,7 @@
     import { page } from "$app/state";
     import type { PageData } from "./$types";
     import WeatherTab from "./WeatherTab.svelte";
-    import SpeedtestTab from "./SpeedtestTab.svelte";
+    // import SpeedtestTab from "./SpeedtestTab.svelte";
     import TtsTab from "./TtsTab.svelte";
 
     let { data } = $props();
@@ -65,12 +65,6 @@
                 Weather
             </button>
             <button
-                class="tab-btn {activeTab === 'speedtest' ? 'active' : ''}"
-                onclick={() => (activeTab = "speedtest")}
-            >
-                Speedtest
-            </button>
-            <button
                 class="tab-btn {activeTab === 'tts' ? 'active' : ''}"
                 onclick={() => (activeTab = "tts")}
             >
@@ -107,8 +101,6 @@
 
     {#if activeTab === "weather"}
         <WeatherTab {data} />
-    {:else if activeTab === "speedtest"}
-        <SpeedtestTab {data} />
     {:else if activeTab === "tts"}
         <TtsTab />
     {/if}

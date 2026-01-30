@@ -6,11 +6,6 @@ cd homepage
 ./build.sh
 cd ..
 
-echo "Building Speedtest..."
-cd speedtest
-./build.sh
-cd ..
-
 echo "Building Text-to-Speech..."
 cd text-to-speech
 ./build.sh
