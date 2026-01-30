@@ -13,8 +13,15 @@ jobs:
       - name: Checkout
         uses: https://github.com/actions/checkout@v4
 
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates build-essential curl
+
       - name: Setup Rust
         uses: https://github.com/actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: false
 
       - name: Setup Python
         uses: https://github.com/actions/setup-python@v6
