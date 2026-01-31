@@ -13,16 +13,11 @@ jobs:
       - name: Checkout
         uses: https://github.com/actions/checkout@v4
 
-      - name: Setup toolcache
+      - name: Install Kind
         run: |
-          mkdir -p /opt/hostedtoolcache
-          chown -R $(whoami) /opt/hostedtoolcache
-
-      - name: Setup Kind
-        uses: https://github.com/helm/kind-action@v1
-        with:
-          cluster_name: integration-test
-          wait: 60s
+          curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.26.0/kind-linux-amd64" --retry 5 --retry-connrefused --retry-max-time 60
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
 
       - name: Run Integration Tests
         run: ./integration-tests/run.sh
