@@ -15,7 +15,11 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          apt-get update
+          sed -i 's/deb.debian.org/ftp.us.debian.org/g' /etc/apt/sources.list
+          echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
+          echo 'Acquire::http::Timeout "20";' >> /etc/apt/apt.conf.d/80-retries
+          echo 'Acquire::ftp::Timeout "20";' >> /etc/apt/apt.conf.d/80-retries
+          apt-get update || apt-get update
           apt-get install -y ca-certificates build-essential curl
 
       - name: Setup Rust
