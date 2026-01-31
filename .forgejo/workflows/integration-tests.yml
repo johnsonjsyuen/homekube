@@ -13,6 +13,11 @@ jobs:
       - name: Checkout
         uses: https://github.com/actions/checkout@v4
 
+      - name: Setup toolcache
+        run: |
+          sudo mkdir -p /opt/hostedtoolcache
+          sudo chown -R $(whoami) /opt/hostedtoolcache
+
       - name: Setup Kind
         uses: https://github.com/helm/kind-action@v1
         with:
