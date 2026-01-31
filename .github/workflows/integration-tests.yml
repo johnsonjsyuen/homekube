@@ -1,0 +1,46 @@
+name: Integration Tests
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          if [ -f /etc/apt/sources.list ]; then
+            sed -i 's/deb.debian.org/ftp.us.debian.org/g' /etc/apt/sources.list
+          elif [ -f /etc/apt/sources.list.d/debian.sources ]; then
+            sed -i 's/deb.debian.org/ftp.us.debian.org/g' /etc/apt/sources.list.d/debian.sources
+          fi
+          echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
+          echo 'Acquire::http::Timeout "20";' >> /etc/apt/apt.conf.d/80-retries
+          echo 'Acquire::ftp::Timeout "20";' >> /etc/apt/apt.conf.d/80-retries
+          apt-get update || apt-get update
+          apt-get install -y ca-certificates build-essential curl
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Setup Kind
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: integration-test
+          wait: 60s
+
+      - name: Run Integration Tests
+        run: ./integration-tests/run.sh
