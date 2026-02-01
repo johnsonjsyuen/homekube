@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::Write;
 use reqwest::blocking::Client;
 use reqwest::blocking::multipart;
+use scopeguard::defer;
 
 const NETWORK_NAME: &str = "tts-integration-net-rust";
 const POSTGRES_CONTAINER: &str = "tts-postgres-test-rust";
@@ -16,8 +17,6 @@ fn run_command(cmd: &mut Command) {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         eprintln!("Command failed: {}", stderr);
-        // Don't panic here to allow cleanup, but maybe we should?
-        // For test setup, panic is fine.
         panic!("Command failed");
     }
 }
@@ -31,21 +30,15 @@ fn cleanup() {
 
 #[test]
 fn test_tts_integration() {
-    // Ensure cleanup happens even if we panic during setup (Rust tests don't support finally well without crates, so we do best effort at start/end)
+    // Initial cleanup in case of leftover state
     cleanup();
 
-    // Use a custom panic hook or just ensure we call cleanup at end.
-    // Ideally we'd use a Drop guard, but for simplicity:
-
-    let result = std::panic::catch_unwind(|| {
-        run_test_logic();
-    });
-
-    cleanup();
-
-    if let Err(e) = result {
-        std::panic::resume_unwind(e);
+    // Register deferred cleanup which will run when this function exits (returns or panics)
+    defer! {
+        cleanup();
     }
+
+    run_test_logic();
 }
 
 fn run_test_logic() {
@@ -63,6 +56,7 @@ fn run_test_logic() {
         "postgres:15-alpine"
     ]));
 
+    // Simple wait for DB startup
     thread::sleep(Duration::from_secs(5));
 
     println!("Building TTS Image...");
