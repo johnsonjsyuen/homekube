@@ -51,8 +51,10 @@ RUNNER_HOME="/home/${RUNNER_USER}"
 if ! id "${RUNNER_USER}" &>/dev/null; then
     echo -e "${INFO} Creating user ${RUNNER_USER}..."
     useradd -m -s /bin/bash "${RUNNER_USER}"
-    usermod -aG docker "${RUNNER_USER}"
 fi
+
+# Always ensure user is in docker group
+usermod -aG docker "${RUNNER_USER}"
 
 mkdir -p "${RUNNER_HOME}/.runner-data"
 chown -R "${RUNNER_USER}:${RUNNER_USER}" "${RUNNER_HOME}"
@@ -99,7 +101,8 @@ EOF
 # 8. Enable and Start Service
 echo -e "${INFO} Enabling and starting service..."
 systemctl daemon-reload
-systemctl enable --now forgejo-runner
+systemctl enable forgejo-runner
+systemctl restart forgejo-runner
 
 # 9. Verify Status
 systemctl status forgejo-runner --no-pager
