@@ -13,11 +13,14 @@ jobs:
       - name: Checkout
         uses: https://github.com/actions/checkout@v4
 
-      - name: Install Kind
+      - name: Install Dagger CLI
         run: |
-          curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.26.0/kind-linux-amd64" --retry 5 --retry-connrefused --retry-max-time 60
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
+          cd /usr/local
+          curl -L https://dl.dagger.io/dagger/install.sh | sh
+          echo "/usr/local/bin" >> $GITHUB_PATH
 
-      - name: Run Integration Tests
-        run: ./integration-tests/run.sh
+      - name: Install Python Dependencies
+        run: pip install dagger-io anyio
+
+      - name: Run Dagger Pipeline
+        run: python3 ci/main.py
