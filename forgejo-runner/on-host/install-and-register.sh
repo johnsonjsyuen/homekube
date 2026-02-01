@@ -94,28 +94,20 @@ fi
 if [ -f "${RUNNER_HOME}/config.yml" ]; then
     echo -e "${INFO} Ensuring config allows Docker socket mounting..."
     
-    # Check if header exists (it should), but we act based on content
-    if grep -q "valid_volumes: \[\]" "${RUNNER_HOME}/config.yml"; then
-        # Replace inline empty list
-        sed -i 's|valid_volumes: \[\]|valid_volumes: ["/var/run/docker.sock"]|' "${RUNNER_HOME}/config.yml"
-        echo -e "${INFO} Updated valid_volumes to include docker socket."
-    elif ! grep -q "/var/run/docker.sock" "${RUNNER_HOME}/config.yml"; then
-        # If not present and not empty list, append to list
-        sed -i '/valid_volumes:/a \    - /var/run/docker.sock' "${RUNNER_HOME}/config.yml"
-        echo -e "${INFO} Appended docker socket to valid_volumes."
-    else
-        echo -e "${INFO} Config already allows Docker socket mounting."
-    fi
+    # robustly replace valid_volumes line preserving indentation
+    # We use python if available for cleaner yaml editing, but fallback to sed
+    # Since we want to be minimal, we just force the line to what we want
     
-    # Also ensure it is in 'options' so it is mounted by default
-    # This fixes the Dagger connection issue without requiring workflow changes
-    if grep -q "options: \[\]" "${RUNNER_HOME}/config.yml"; then
-         sed -i 's|options: \[\]|options: ["-v /var/run/docker.sock:/var/run/docker.sock"]|' "${RUNNER_HOME}/config.yml"
-         echo -e "${INFO} Updated options to include docker socket."
-    elif ! grep -q "\-v /var/run/docker.sock:/var/run/docker.sock" "${RUNNER_HOME}/config.yml"; then
-         sed -i '/options:/a \        - -v /var/run/docker.sock:/var/run/docker.sock' "${RUNNER_HOME}/config.yml"
-         echo -e "${INFO} Appended docker socket to options."
-    fi
+    # 1. Update valid_volumes
+    # This regex matches 'spaces + valid_volumes:' and replaces the whole line
+    # We set it to a flow list with the docker socket
+    sed -i 's/^\(\s*\)valid_volumes:.*/\1valid_volumes: ["\/var\/run\/docker.sock"]/' "${RUNNER_HOME}/config.yml"
+    echo -e "${INFO} Updated valid_volumes."
+
+    # 2. Update options
+    # Similarly, force options to include the mount
+    sed -i 's/^\(\s*\)options:.*$/\1options: ["-v \/var\/run\/docker.sock:\/var\/run\/docker.sock"]/' "${RUNNER_HOME}/config.yml"
+    echo -e "${INFO} Updated options."
     
     # Ensure ownership is correct
     chown "${RUNNER_USER}:${RUNNER_USER}" "${RUNNER_HOME}/config.yml"
