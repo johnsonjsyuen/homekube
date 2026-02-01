@@ -60,6 +60,8 @@ spec:
               mountPath: /certs
             - name: data
               mountPath: /data
+            - name: docker-storage
+              mountPath: /var/lib/docker
       volumes:
         - name: config
           configMap:
@@ -71,3 +73,6 @@ spec:
           emptyDir: {}
         - name: data
           emptyDir: {}
+        - name: docker-storage
+          persistentVolumeClaim:
+            claimName: forgejo-runner-docker-storage
