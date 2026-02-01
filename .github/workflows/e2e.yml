@@ -39,4 +39,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run TTS Integration Test
-        run: python3 text-to-speech/integration_tests.py
+        run: |
+          cd text-to-speech
+          cargo test --test integration_test
