@@ -106,7 +106,8 @@ if [ -f "${RUNNER_HOME}/config.yml" ]; then
 
     # 2. Update options
     # options must be a string, not a list!
-    sed -i 's/^\(\s*\)options:.*$/\1options: "-v \/var\/run\/docker.sock:\/var\/run\/docker.sock"/' "${RUNNER_HOME}/config.yml"
+    # We also force running as root to avoid permission denied on the socket
+    sed -i 's/^\(\s*\)options:.*$/\1options: "-v \/var\/run\/docker.sock:\/var\/run\/docker.sock --user 0:0"/' "${RUNNER_HOME}/config.yml"
     echo -e "${INFO} Updated options."
     
     # Ensure ownership is correct
