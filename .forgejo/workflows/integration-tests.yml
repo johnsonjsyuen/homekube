@@ -16,6 +16,11 @@ jobs:
         image: docker:24.0-dind
         options: --privileged --shm-size=2g
     steps:
+      - name: Pre-install Node.js
+        run: |
+          apt-get update
+          apt-get install -y nodejs
+
       - name: Checkout
         uses: https://github.com/actions/checkout@v4
 
