@@ -15,9 +15,14 @@ fi
 echo -e "${INFO} Starting Forgejo Runner installation..."
 
 # 1. Install dependencies
-echo -e "${INFO} Installing dependencies..."
-apt-get update
-apt-get install -y curl git docker.io
+echo -e "${INFO} Checking dependencies..."
+if ! command -v docker &> /dev/null || ! command -v git &> /dev/null || ! command -v curl &> /dev/null; then
+    echo -e "${INFO} Installing dependencies..."
+    apt-get update
+    apt-get install -y curl git docker.io
+else
+    echo -e "${INFO} Dependencies already installed."
+fi
 
 # Ensure Docker is running
 systemctl enable --now docker
@@ -29,7 +34,11 @@ BINARY_URL="https://code.forgejo.org/forgejo/runner/releases/download/${RUNNER_V
 INSTALL_PATH="/usr/local/bin/forgejo-runner"
 
 echo -e "${INFO} Downloading Forgejo Runner ${RUNNER_VERSION} for ${ARCH}..."
-curl -L -o "${INSTALL_PATH}" "${BINARY_URL}"
+if [ -f "${INSTALL_PATH}" ]; then
+    echo -e "${INFO} Runner binary already exists at ${INSTALL_PATH}, skipping download."
+else
+    curl -L -o "${INSTALL_PATH}" "${BINARY_URL}"
+fi
 chmod +x "${INSTALL_PATH}"
 
 # verify installation
@@ -61,27 +70,63 @@ chown -R "${RUNNER_USER}:${RUNNER_USER}" "${RUNNER_HOME}"
 
 # 5. Register the Runner
 # We run the registration as the runner user to ensure permissions are correct in the home directory
-echo -e "${INFO} Registering runner..."
-cd "${RUNNER_HOME}"
-sudo -u "${RUNNER_USER}" "${INSTALL_PATH}" register --no-interactive \
-  --instance "${INSTANCE_URL}" \
-  --token "${TOKEN}" \
-  --name "${RUNNER_NAME}" \
-  --labels "${LABELS}"
+if [ -f "${RUNNER_HOME}/.runner" ]; then
+    echo -e "${INFO} Runner already registered, skipping registration."
+else
+    echo -e "${INFO} Registering runner..."
+    cd "${RUNNER_HOME}"
+    sudo -u "${RUNNER_USER}" "${INSTALL_PATH}" register --no-interactive \
+      --instance "${INSTANCE_URL}" \
+      --token "${TOKEN}" \
+      --name "${RUNNER_NAME}" \
+      --labels "${LABELS}"
+fi
 
 # 6. Generate Config
 # Generate a default config if it doesn't exist
 if [ ! -f "${RUNNER_HOME}/config.yml" ]; then
     echo -e "${INFO} Generating default config..."
     sudo -u "${RUNNER_USER}" bash -c "\"${INSTALL_PATH}\" generate-config > \"${RUNNER_HOME}/config.yml\""
+fi
+
+# ALWAYS ensure configuration allows mounting docker socket
+# This ensures that even if the config existed, we fix it for Dagger
+if [ -f "${RUNNER_HOME}/config.yml" ]; then
+    echo -e "${INFO} Ensuring config allows Docker socket mounting..."
     
-    # Optional: Customize config here using sed or similar
-    # For example, ensure it connects to the docker daemon correctly
+    # Check if header exists (it should), but we act based on content
+    if grep -q "valid_volumes: \[\]" "${RUNNER_HOME}/config.yml"; then
+        # Replace inline empty list
+        sed -i 's|valid_volumes: \[\]|valid_volumes: ["/var/run/docker.sock"]|' "${RUNNER_HOME}/config.yml"
+        echo -e "${INFO} Updated valid_volumes to include docker socket."
+    elif ! grep -q "/var/run/docker.sock" "${RUNNER_HOME}/config.yml"; then
+        # If not present and not empty list, append to list
+        sed -i '/valid_volumes:/a \    - /var/run/docker.sock' "${RUNNER_HOME}/config.yml"
+        echo -e "${INFO} Appended docker socket to valid_volumes."
+    else
+        echo -e "${INFO} Config already allows Docker socket mounting."
+    fi
+    
+    # Also ensure it is in 'options' so it is mounted by default
+    # This fixes the Dagger connection issue without requiring workflow changes
+    if grep -q "options: \[\]" "${RUNNER_HOME}/config.yml"; then
+         sed -i 's|options: \[\]|options: ["-v /var/run/docker.sock:/var/run/docker.sock"]|' "${RUNNER_HOME}/config.yml"
+         echo -e "${INFO} Updated options to include docker socket."
+    elif ! grep -q "\-v /var/run/docker.sock:/var/run/docker.sock" "${RUNNER_HOME}/config.yml"; then
+         sed -i '/options:/a \        - -v /var/run/docker.sock:/var/run/docker.sock' "${RUNNER_HOME}/config.yml"
+         echo -e "${INFO} Appended docker socket to options."
+    fi
+    
+    # Ensure ownership is correct
+    chown "${RUNNER_USER}:${RUNNER_USER}" "${RUNNER_HOME}/config.yml"
 fi
 
 # 7. Create Systemd Service
-echo -e "${INFO} Creating systemd service..."
-cat <<EOF > /etc/systemd/system/forgejo-runner.service
+if [ -f "/etc/systemd/system/forgejo-runner.service" ]; then
+    echo -e "${INFO} Systemd service already exists, skipping creation."
+else
+    echo -e "${INFO} Creating systemd service..."
+    cat <<EOF > /etc/systemd/system/forgejo-runner.service
 [Unit]
 Description=Forgejo Runner
 After=network.target docker.service
@@ -97,6 +142,7 @@ Environment=HOME=${RUNNER_HOME}
 [Install]
 WantedBy=multi-user.target
 EOF
+fi
 
 # 8. Enable and Start Service
 echo -e "${INFO} Enabling and starting service..."
