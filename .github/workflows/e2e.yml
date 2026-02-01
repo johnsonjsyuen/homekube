@@ -31,3 +31,12 @@ jobs:
           npm run dev &
           npx wait-on http://localhost:5173 --timeout 60000
           npm run cy:run
+
+  tts-integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run TTS Integration Test
+        run: python3 text-to-speech/integration_tests.py
