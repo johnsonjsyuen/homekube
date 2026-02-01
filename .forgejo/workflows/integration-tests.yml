@@ -1,0 +1,36 @@
+name: Integration Tests
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: https://github.com/actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14.2'
+
+      - name: Install Dagger CLI
+        run: |
+          cd /usr/local
+          curl -L https://dl.dagger.io/dagger/install.sh | sh
+          echo "/usr/local/bin" >> $GITHUB_PATH
+
+      - name: Network Diagnostics
+        run: |
+          ip addr
+          curl -v -I https://pypi.org || true
+
+      - name: Install Python Dependencies
+        run: pip install --no-cache-dir -vvv --default-timeout=300 dagger-io anyio
+
+      - name: Run Dagger Pipeline
+        run: python3 ci/main.py
