@@ -60,6 +60,7 @@ chown -R "${RUNNER_USER}:${RUNNER_USER}" "${RUNNER_HOME}"
 # 5. Register the Runner
 # We run the registration as the runner user to ensure permissions are correct in the home directory
 echo -e "${INFO} Registering runner..."
+cd "${RUNNER_HOME}"
 sudo -u "${RUNNER_USER}" "${INSTALL_PATH}" register --no-interactive \
   --instance "${INSTANCE_URL}" \
   --token "${TOKEN}" \
@@ -70,7 +71,7 @@ sudo -u "${RUNNER_USER}" "${INSTALL_PATH}" register --no-interactive \
 # Generate a default config if it doesn't exist
 if [ ! -f "${RUNNER_HOME}/config.yml" ]; then
     echo -e "${INFO} Generating default config..."
-    sudo -u "${RUNNER_USER}" "${INSTALL_PATH}" generate-config > "${RUNNER_HOME}/config.yml"
+    sudo -u "${RUNNER_USER}" bash -c "\"${INSTALL_PATH}\" generate-config > \"${RUNNER_HOME}/config.yml\""
     
     # Optional: Customize config here using sed or similar
     # For example, ensure it connects to the docker daemon correctly
