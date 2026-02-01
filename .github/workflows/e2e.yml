@@ -1,0 +1,33 @@
+name: End-to-End Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  cypress-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: homepage/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd homepage
+          npm ci
+
+      - name: Start server and run tests
+        run: |
+          cd homepage
+          npm run dev &
+          npx wait-on http://localhost:5173 --timeout 60000
+          npm run cy:run
