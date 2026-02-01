@@ -24,11 +24,11 @@ jobs:
           curl -L https://dl.dagger.io/dagger/install.sh | sh
           echo "/usr/local/bin" >> $GITHUB_PATH
 
-      - name: Network Diagnostics
+      - name: Configure Network & Diagnostics
         run: |
+          sudo ip link set dev eth0 mtu 1200
           ip addr
           curl -v -I https://pypi.org || true
-          curl -v -I -6 https://pypi.org || true
 
       - name: Install Python Dependencies
         run: pip install --no-cache-dir -vvv --default-timeout=300 dagger-io anyio
