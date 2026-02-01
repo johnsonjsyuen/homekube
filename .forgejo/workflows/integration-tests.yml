@@ -9,28 +9,53 @@ on:
 jobs:
   integration-test:
     runs-on: ubuntu-latest
+    container:
+      image: python:3.11-slim-bookworm
+    services:
+      docker:
+        image: docker:24.0-dind
+        options: --privileged --shm-size=2g
     steps:
       - name: Checkout
         uses: https://github.com/actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.14.2'
-
-      - name: Install Dagger CLI
+      - name: Install Dependencies
         run: |
-          cd /usr/local
-          curl -L https://dl.dagger.io/dagger/install.sh | sh
-          echo "/usr/local/bin" >> $GITHUB_PATH
+          apt-get update
+          apt-get install -y curl docker.io git iputils-ping dnsutils netcat-openbsd
 
-      - name: Network Diagnostics
+      - name: Install Kubectl
         run: |
-          ip addr
-          curl -v -I https://pypi.org || true
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x ./kubectl
+          mv ./kubectl /usr/local/bin/kubectl
+          kubectl version --client
 
-      - name: Install Python Dependencies
-        run: pip install --no-cache-dir -vvv --default-timeout=300 dagger-io anyio
+      - name: Install Kind
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.26.0/kind-linux-amd64
+          chmod +x ./kind
+          mv ./kind /usr/local/bin/kind
+          kind --version
 
-      - name: Run Dagger Pipeline
-        run: python3 ci/main.py
+      - name: Wait for Docker
+        run: |
+          # Wait for Docker daemon to be ready
+          set -x
+          for i in $(seq 1 30); do
+            if docker info > /dev/null 2>&1; then
+              echo "Docker is ready."
+              exit 0
+            fi
+            echo "Waiting for Docker..."
+            sleep 1
+          done
+          echo "Docker failed to start."
+          exit 1
+        env:
+          DOCKER_HOST: tcp://docker:2375
+
+      - name: Run Integration Tests
+        run: python3 integration-tests/run.py
+        env:
+          DOCKER_HOST: tcp://docker:2375
