@@ -53,8 +53,6 @@ spec:
           env:
             - name: DOCKER_TLS_CERTDIR
               value: /certs
-          args:
-            - --mtu=1200
           securityContext:
             privileged: true
           volumeMounts:
@@ -64,6 +62,9 @@ spec:
               mountPath: /data
             - name: docker-storage
               mountPath: /var/lib/docker
+            - name: dind-config
+              mountPath: /etc/docker/daemon.json
+              subPath: daemon.json
       volumes:
         - name: config
           configMap:
@@ -78,3 +79,6 @@ spec:
         - name: docker-storage
           persistentVolumeClaim:
             claimName: forgejo-runner-docker-storage
+        - name: dind-config
+          configMap:
+            name: dind-config
