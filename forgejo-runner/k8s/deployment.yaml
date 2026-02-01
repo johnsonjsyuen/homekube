@@ -53,6 +53,8 @@ spec:
           env:
             - name: DOCKER_TLS_CERTDIR
               value: /certs
+          args:
+            - --mtu=1200
           securityContext:
             privileged: true
           volumeMounts:
