@@ -125,8 +125,8 @@ fn run_test_logic() {
                     break;
                 }
             }
-            Err(_) => {
-                println!("App not ready, retrying...");
+            Err(e) => {
+                println!("App not ready, retrying... Error: {}", e);
                 thread::sleep(Duration::from_secs(2));
             }
         }
