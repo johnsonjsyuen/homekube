@@ -107,6 +107,16 @@ fn run_test_logic() {
         }
     }
 
+    if !success {
+        println!("==================== APP LOGS ====================");
+        let _ = Command::new("docker").args(&["logs", APP_CONTAINER]).status();
+        println!("==================================================");
+
+        println!("================== DB LOGS ===================");
+        let _ = Command::new("docker").args(&["logs", POSTGRES_CONTAINER]).status();
+        println!("==============================================");
+    }
+
     assert!(success, "Failed to connect to app or get successful response");
 
     let json: serde_json::Value = serde_json::from_str(&response_text).expect("Failed to parse JSON");

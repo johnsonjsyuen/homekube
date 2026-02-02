@@ -8,3 +8,4 @@ speedtest/target
 text-to-speech/target
 __pycache__/
 *.py[cod]
+*.log
