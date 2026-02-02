@@ -49,7 +49,8 @@ fn wait_for_postgres() {
                 "exec",
                 POSTGRES_CONTAINER,
                 "pg_isready",
-                "-U", "user"
+                "-U", "user",
+                "-d", "tts"
             ])
             .status();
 
@@ -104,7 +105,7 @@ fn run_test_logic() {
     writeln!(file, "Hello from Rust integration test.").expect("Failed to write to file");
 
     let client = Client::new();
-    let url = "http://localhost:3002";
+    let url = "http://127.0.0.1:3002";
 
     // Retry logic for initial connection
     let mut response_text = String::new();
