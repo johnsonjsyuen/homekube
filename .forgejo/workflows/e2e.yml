@@ -28,9 +28,9 @@ jobs:
       - name: Start server and run tests
         run: |
           cd homepage
-          npm run dev &
-          npx wait-on http://localhost:5173 --timeout 60000
-          npm run cy:run
+          npm run dev -- --host 127.0.0.1 &
+          npx wait-on http://127.0.0.1:5173 --timeout 60000
+          CYPRESS_BASE_URL=http://127.0.0.1:5173 npm run cy:run
 
   tts-integration-test:
     runs-on: ubuntu-latest
