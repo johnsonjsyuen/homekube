@@ -105,31 +105,56 @@ fn run_test_logic() {
     writeln!(file, "Hello from Rust integration test.").expect("Failed to write to file");
 
     let client = Client::new();
-    let url = "http://127.0.0.1:3002";
+    let mut url = String::new();
+    let mut success = false;
 
     // Retry logic for initial connection
     let mut response_text = String::new();
-    let mut success = false;
 
-    for _ in 0..10 {
-        let form = multipart::Form::new()
-            .file("text_file", "test_tts_input.txt").expect("Failed to create part")
-            .text("voice", "af_heart")
-            .text("speed", "1.0");
+    for i in 0..10 {
+        // Try localhost first
+        let localhost_url = "http://127.0.0.1:3002".to_string();
+        
+        // Try container IP as fallback
+        let container_ip_url = if i > 0 { // Only fetch IP if we've failed once to avoid spamming docker inspect
+             get_container_ip(APP_CONTAINER).map(|ip| format!("http://{}:3000", ip))
+        } else {
+            None
+        };
 
-        match client.post(format!("{}/generate", url)).multipart(form).send() {
-            Ok(resp) => {
-                if resp.status().is_success() {
-                    response_text = resp.text().expect("Failed to read text");
-                    success = true;
-                    break;
+        let urls_to_try = if let Some(ip_url) = container_ip_url {
+            vec![localhost_url, ip_url]
+        } else {
+            vec![localhost_url]
+        };
+
+        for target_url in urls_to_try {
+            let form = multipart::Form::new()
+                .file("text_file", "test_tts_input.txt").expect("Failed to create part")
+                .text("voice", "af_heart")
+                .text("speed", "1.0");
+
+            match client.post(format!("{}/generate", target_url)).multipart(form).send() {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        response_text = resp.text().expect("Failed to read text");
+                        success = true;
+                        url = target_url; // Found working URL
+                        break;
+                    }
+                }
+                Err(e) => {
+                    println!("Failed to connect to {}: {}", target_url, e);
                 }
             }
-            Err(e) => {
-                println!("App not ready, retrying... Error: {}", e);
-                thread::sleep(Duration::from_secs(2));
-            }
         }
+        
+        if success {
+            break;
+        }
+
+        println!("App not ready, retrying...");
+        thread::sleep(Duration::from_secs(2));
     }
 
     if !success {
@@ -144,6 +169,8 @@ fn run_test_logic() {
 
     assert!(success, "Failed to connect to app or get successful response");
 
+    println!("Connected successfully to {}", url);
+
     let json: serde_json::Value = serde_json::from_str(&response_text).expect("Failed to parse JSON");
     let job_id = json["id"].as_str().expect("No id in response");
     println!("Job ID: {}", job_id);
@@ -153,6 +180,7 @@ fn run_test_logic() {
     let mut completed = false;
 
     while start_time.elapsed() < Duration::from_secs(60) {
+        // Use the confirmed working URL
         let resp = client.get(format!("{}/status/{}", url, job_id)).send().expect("Failed to get status");
 
         let content_type = resp.headers().get("content-type").and_then(|h| h.to_str().ok()).unwrap_or("");
@@ -174,4 +202,24 @@ fn run_test_logic() {
 
     assert!(completed, "Timed out waiting for TTS completion");
     println!("Integration Test Passed!");
+}
+
+fn get_container_ip(container_name: &str) -> Option<String> {
+    let output = Command::new("docker")
+        .args(&[
+            "inspect",
+            "-f",
+            "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+            container_name
+        ])
+        .output()
+        .ok()?;
+    
+    if output.status.success() {
+        let ip = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !ip.is_empty() {
+            return Some(ip);
+        }
+    }
+    None
 }
