@@ -41,6 +41,29 @@ fn test_tts_integration() {
     run_test_logic();
 }
 
+fn wait_for_postgres() {
+    println!("Waiting for Postgres to be ready...");
+    for _ in 0..30 { // 30 retries * 1s = 30s max wait
+        let status = Command::new("docker")
+            .args(&[
+                "exec",
+                POSTGRES_CONTAINER,
+                "pg_isready",
+                "-U", "user"
+            ])
+            .status();
+
+        if let Ok(s) = status {
+            if s.success() {
+                println!("Postgres is ready!");
+                return;
+            }
+        }
+        thread::sleep(Duration::from_secs(1));
+    }
+    panic!("Postgres failed to start within 30 seconds");
+}
+
 fn run_test_logic() {
     println!("Creating Docker network...");
     run_command(Command::new("docker").args(&["network", "create", NETWORK_NAME]));
@@ -56,8 +79,9 @@ fn run_test_logic() {
         "postgres:15-alpine"
     ]));
 
-    // Simple wait for DB startup
-    thread::sleep(Duration::from_secs(5));
+    // Wait for DB startup
+    wait_for_postgres();
+
 
     println!("Building TTS Image...");
     run_command(Command::new("docker").args(&["build", "-t", IMAGE_NAME, "."]));
