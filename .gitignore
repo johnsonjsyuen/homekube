@@ -6,3 +6,5 @@ firecracker-vm/vm.log
 firecracker-vm/vm_config.json
 speedtest/target
 text-to-speech/target
+__pycache__/
+*.py[cod]
