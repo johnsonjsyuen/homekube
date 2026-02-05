@@ -2,21 +2,31 @@ import Keycloak from 'keycloak-js';
 
 // Determine Keycloak URL based on current hostname
 function getKeycloakUrl(): string {
-    // Check for explicit override first
-    if (import.meta.env.VITE_KEYCLOAK_URL) {
-        return import.meta.env.VITE_KEYCLOAK_URL;
+    if (typeof window === 'undefined') {
+        return 'https://auth.johnsonyuen.com'; // SSR fallback
+    }
+
+    // Check for explicit override first (at runtime)
+    const envUrl = import.meta.env.VITE_KEYCLOAK_URL;
+    if (envUrl) {
+        console.log('[Auth] Using VITE_KEYCLOAK_URL:', envUrl);
+        return envUrl;
     }
 
     // Production: use auth.johnsonyuen.com
-    return 'https://auth.johnsonyuen.com';
+    const url = 'https://auth.johnsonyuen.com';
+    console.log('[Auth] Using default Keycloak URL:', url);
+    return url;
 }
 
-// Keycloak configuration
-const keycloakConfig = {
-    url: getKeycloakUrl(),
-    realm: import.meta.env.VITE_KEYCLOAK_REALM || 'homekube',
-    clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'homepage'
-};
+// Keycloak configuration - evaluated lazily to ensure window is available
+function getKeycloakConfig() {
+    return {
+        url: getKeycloakUrl(),
+        realm: import.meta.env.VITE_KEYCLOAK_REALM || 'homekube',
+        clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'homepage'
+    };
+}
 
 let keycloak: Keycloak | null = null;
 let initialized = false;
@@ -75,14 +85,21 @@ export async function initKeycloak(): Promise<AuthState> {
         return authState;
     }
 
-    keycloak = new Keycloak(keycloakConfig);
+    const config = getKeycloakConfig();
+    console.log('[Auth] Initializing Keycloak with config:', config);
+    keycloak = new Keycloak(config);
 
     try {
+        console.log('[Auth] Starting Keycloak init...');
         const authenticated = await keycloak.init({
             onLoad: 'check-sso',
             silentCheckSsoRedirectUri: window.location.origin + '/silent-check-sso.html',
             pkceMethod: 'S256'
         });
+
+        console.log('[Auth] Keycloak init complete. Authenticated:', authenticated);
+        console.log('[Auth] Token:', keycloak.token ? 'present' : 'missing');
+        console.log('[Auth] Token parsed:', keycloak.tokenParsed);
 
         initialized = true;
         updateAuthState(keycloak);
@@ -104,7 +121,7 @@ export async function initKeycloak(): Promise<AuthState> {
 
         return authState;
     } catch (error) {
-        console.error('Keycloak init failed:', error);
+        console.error('[Auth] Keycloak init failed:', error);
         initialized = true; // Mark as initialized even on failure to prevent retries
         return authState;
     }
