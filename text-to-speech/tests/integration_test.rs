@@ -88,14 +88,34 @@ fn run_test_logic() {
     run_command(Command::new("docker").args(&["build", "-t", IMAGE_NAME, "."]));
 
     println!("Starting TTS App...");
-    run_command(Command::new("docker").args(&[
-        "run", "-d",
-        "--name", APP_CONTAINER,
-        "--network", NETWORK_NAME,
-        "-p", "3002:3000",
-        "-e", "DATABASE_URL=postgres://user:password@tts-postgres-test-rust/tts",
-        IMAGE_NAME
-    ]));
+    // Use --network host to avoid Docker-in-Docker networking issues in CI
+    // When running in CI (DinD), port mappings don't work as expected
+    let use_host_network = std::env::var("CI").is_ok();
+
+    if use_host_network {
+        println!("CI environment detected, using host network mode...");
+        // In host network mode, we need postgres to also be accessible
+        // Get postgres container IP for the app to connect to
+        let postgres_ip = get_container_ip(POSTGRES_CONTAINER)
+            .expect("Failed to get postgres container IP");
+
+        run_command(Command::new("docker").args(&[
+            "run", "-d",
+            "--name", APP_CONTAINER,
+            "--network", NETWORK_NAME,
+            "-e", &format!("DATABASE_URL=postgres://user:password@{}/tts", postgres_ip),
+            IMAGE_NAME
+        ]));
+    } else {
+        run_command(Command::new("docker").args(&[
+            "run", "-d",
+            "--name", APP_CONTAINER,
+            "--network", NETWORK_NAME,
+            "-p", "3002:3000",
+            "-e", "DATABASE_URL=postgres://user:password@tts-postgres-test-rust/tts",
+            IMAGE_NAME
+        ]));
+    }
 
     println!("Waiting for App to be ready...");
     thread::sleep(Duration::from_secs(5));
@@ -111,21 +131,31 @@ fn run_test_logic() {
     // Retry logic for initial connection
     let mut response_text = String::new();
 
-    for i in 0..10 {
-        // Try localhost first
-        let localhost_url = "http://127.0.0.1:3002".to_string();
-        
-        // Try container IP as fallback
-        let container_ip_url = if i > 0 { // Only fetch IP if we've failed once to avoid spamming docker inspect
-             get_container_ip(APP_CONTAINER).map(|ip| format!("http://{}:3000", ip))
-        } else {
-            None
-        };
+    // In CI, port mappings don't work due to Docker-in-Docker, so use container IP directly
+    let use_container_ip_first = std::env::var("CI").is_ok();
 
-        let urls_to_try = if let Some(ip_url) = container_ip_url {
-            vec![localhost_url, ip_url]
+    for i in 0..10 {
+        // Get container IP
+        let container_ip_url = get_container_ip(APP_CONTAINER)
+            .map(|ip| format!("http://{}:3000", ip));
+
+        // Build list of URLs to try
+        let urls_to_try = if use_container_ip_first {
+            // In CI, try container IP first (or only)
+            if let Some(ip_url) = container_ip_url {
+                vec![ip_url]
+            } else {
+                println!("Warning: Could not get container IP, falling back to localhost");
+                vec!["http://127.0.0.1:3002".to_string()]
+            }
         } else {
-            vec![localhost_url]
+            // Locally, try localhost first, then container IP as fallback
+            let localhost_url = "http://127.0.0.1:3002".to_string();
+            if let Some(ip_url) = container_ip_url {
+                vec![localhost_url, ip_url]
+            } else {
+                vec![localhost_url]
+            }
         };
 
         for target_url in urls_to_try {
@@ -159,12 +189,25 @@ fn run_test_logic() {
 
     if !success {
         println!("==================== APP LOGS ====================");
-        let _ = Command::new("docker").args(&["logs", APP_CONTAINER]).status();
+        if let Ok(output) = Command::new("docker").args(&["logs", APP_CONTAINER]).output() {
+            println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
+            println!("STDERR:\n{}", String::from_utf8_lossy(&output.stderr));
+        }
         println!("==================================================");
 
         println!("================== DB LOGS ===================");
-        let _ = Command::new("docker").args(&["logs", POSTGRES_CONTAINER]).status();
+        if let Ok(output) = Command::new("docker").args(&["logs", POSTGRES_CONTAINER]).output() {
+            println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
+            println!("STDERR:\n{}", String::from_utf8_lossy(&output.stderr));
+        }
         println!("==============================================");
+
+        // Also print container status for debugging
+        println!("================== CONTAINER STATUS ===================");
+        if let Ok(output) = Command::new("docker").args(&["ps", "-a", "--filter", &format!("name={}", APP_CONTAINER)]).output() {
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+        }
+        println!("========================================================");
     }
 
     assert!(success, "Failed to connect to app or get successful response");

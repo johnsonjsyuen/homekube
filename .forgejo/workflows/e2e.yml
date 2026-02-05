@@ -38,7 +38,122 @@ jobs:
       - name: Checkout
         uses: https://github.com/actions/checkout@v4
 
-      - name: Run TTS Integration Test
+      - name: Setup Docker network
+        run: |
+          docker network create tts-test-network || true
+
+      - name: Start Postgres
+        run: |
+          docker run -d \
+            --name tts-postgres \
+            --network tts-test-network \
+            -e POSTGRES_PASSWORD=password \
+            -e POSTGRES_USER=user \
+            -e POSTGRES_DB=tts \
+            postgres:15-alpine
+
+          # Wait for postgres to be ready
+          for i in {1..30}; do
+            if docker exec tts-postgres pg_isready -U user -d tts; then
+              echo "Postgres is ready!"
+              break
+            fi
+            echo "Waiting for postgres..."
+            sleep 1
+          done
+
+      - name: Build TTS image
         run: |
           cd text-to-speech
-          cargo test --test integration_test
+          docker build -t tts-app-test .
+
+      - name: Start TTS App
+        run: |
+          docker run -d \
+            --name tts-app \
+            --network tts-test-network \
+            -e DATABASE_URL=postgres://user:password@tts-postgres/tts \
+            tts-app-test
+
+          # Wait for app to be ready (with retries)
+          echo "Waiting for TTS app to be ready..."
+          for i in {1..30}; do
+            if docker run --rm --network tts-test-network curlimages/curl:latest -s -f http://tts-app:3000/status/00000000-0000-0000-0000-000000000000 > /dev/null 2>&1 || \
+               docker run --rm --network tts-test-network curlimages/curl:latest -s http://tts-app:3000/status/00000000-0000-0000-0000-000000000000 2>&1 | grep -q "Not Found"; then
+              echo "TTS app is ready!"
+              break
+            fi
+            echo "Waiting for TTS app... (attempt $i/30)"
+            sleep 2
+          done
+
+          # Show app logs for debugging
+          echo "TTS App initial logs:"
+          docker logs tts-app 2>&1 | tail -20
+
+      - name: Run integration test
+        run: |
+          # Create test file
+          echo "Hello from CI integration test." > /tmp/test_input.txt
+
+          # Run test from inside the Docker network using a curl container
+          # This avoids Docker-in-Docker networking issues where the CI job
+          # can't directly reach containers on a custom Docker network
+          docker run --rm \
+            --network tts-test-network \
+            -v /tmp/test_input.txt:/test_input.txt:ro \
+            curlimages/curl:latest \
+            -s -X POST "http://tts-app:3000/generate" \
+            -F "text_file=@/test_input.txt" \
+            -F "voice=af_heart" \
+            -F "speed=1.0" \
+            -o /dev/stdout > /tmp/response.json
+
+          echo "Response: $(cat /tmp/response.json)"
+          JOB_ID=$(cat /tmp/response.json | jq -r '.id')
+          echo "Job ID: $JOB_ID"
+
+          if [ -z "$JOB_ID" ] || [ "$JOB_ID" = "null" ]; then
+            echo "Failed to get job ID"
+            docker logs tts-app
+            exit 1
+          fi
+
+          # Poll for completion using container in the network
+          echo "Polling for completion..."
+          for i in {1..60}; do
+            # Get status via container in the network
+            docker run --rm \
+              --network tts-test-network \
+              curlimages/curl:latest \
+              -s -w "\n%{content_type}" "http://tts-app:3000/status/${JOB_ID}" \
+              > /tmp/status_response.txt 2>&1
+
+            CONTENT_TYPE=$(tail -1 /tmp/status_response.txt)
+            BODY=$(head -n -1 /tmp/status_response.txt)
+
+            if echo "$CONTENT_TYPE" | grep -q "audio/mpeg"; then
+              echo "Job completed! Audio is ready."
+              exit 0
+            fi
+
+            STATUS=$(echo "$BODY" | jq -r '.status // empty')
+            if [ "$STATUS" = "error" ]; then
+              echo "Job failed: $BODY"
+              docker logs tts-app
+              exit 1
+            fi
+
+            echo "Status: $STATUS (attempt $i/60)"
+            sleep 2
+          done
+
+          echo "Timeout waiting for job completion"
+          docker logs tts-app
+          exit 1
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f tts-app tts-postgres || true
+          docker network rm tts-test-network || true
