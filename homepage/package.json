@@ -30,6 +30,7 @@
 	"dependencies": {
 		"chart.js": "^4.4.1",
 		"fast-xml-parser": "^5.3.3",
+		"keycloak-js": "^26.2.3",
 		"pg": "^8.11.3"
 	}
 }
