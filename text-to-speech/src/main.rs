@@ -187,6 +187,8 @@ fn process_tts(
         .tempfile()
         .map_err(|e| format!("Failed to create temp text file: {}", e))?;
     text_file.write_all(&text_bytes).map_err(|e| format!("Failed to write text file: {}", e))?;
+    // Flush to ensure all data is written to disk before external process reads it
+    text_file.flush().map_err(|e| format!("Failed to flush text file: {}", e))?;
     let text_path = text_file.path().to_str().ok_or("Invalid path")?.to_string();
 
     let output_dir = std::path::Path::new(&storage_path);
@@ -194,6 +196,13 @@ fn process_tts(
     let wav_path = format!("/tmp/{}.wav", job_id); 
     let mp3_filename = format!("{}.mp3", job_id);
     let mp3_path = output_dir.join(&mp3_filename);
+
+    // Debug: log file path and contents
+    eprintln!("TTS Input file: {}", text_path);
+    eprintln!("TTS Input size: {} bytes", text_bytes.len());
+    if let Ok(content) = std::fs::read_to_string(&text_path) {
+        eprintln!("TTS Input content (first 200 chars): {:?}", &content.chars().take(200).collect::<String>());
+    }
 
     // kokoro-tts requires model files (kokoro-v1.0.onnx, voices-v1.0.bin)
     // to be in the current working directory

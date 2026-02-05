@@ -69,10 +69,19 @@ jobs:
 
       - name: Start TTS App
         run: |
+          # Check kokoro-tts installation and version
+          docker run --rm tts-app-test pip show kokoro-tts
+          docker run --rm tts-app-test ls -la /app/
+
+          # Test kokoro-tts directly to verify it works
+          echo "Testing kokoro-tts directly..."
+          docker run --rm -v /tmp:/tmp tts-app-test bash -c "cd /app && echo 'Hello world. This is a test.' > /tmp/direct_test.txt && kokoro-tts /tmp/direct_test.txt /tmp/direct_test.wav --voice af_heart && ls -la /tmp/direct_test.wav"
+
           docker run -d \
             --name tts-app \
             --network tts-test-network \
             -e DATABASE_URL=postgres://user:password@tts-postgres/tts \
+            -e RUST_LOG=debug \
             tts-app-test
 
           # Wait for app to be ready (with retries)
@@ -93,8 +102,9 @@ jobs:
 
       - name: Run integration test
         run: |
-          # Create test file
-          echo "Hello from CI integration test." > /tmp/test_input.txt
+          # Create test file with multiple sentences to ensure proper chunking
+          # kokoro-tts splits text on periods, so we need proper sentences
+          echo "This is a test of the text to speech system. It contains multiple sentences to ensure proper processing. The quick brown fox jumps over the lazy dog. This should be enough text to generate some audio output." > /tmp/test_input.txt
 
           # Run test from inside the Docker network using a curl container
           # This avoids Docker-in-Docker networking issues where the CI job
