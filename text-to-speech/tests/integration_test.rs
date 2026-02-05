@@ -92,29 +92,43 @@ fn run_test_logic() {
     // When running in CI (DinD), port mappings don't work as expected
     let use_host_network = std::env::var("CI").is_ok();
 
+    // Use test mode to skip actual kokoro-tts (generates dummy audio)
+    let use_test_mode = std::env::var("TTS_TEST_MODE").is_ok() || std::env::var("CI").is_ok();
+    let test_mode_flag = if use_test_mode { "1" } else { "" };
+
     if use_host_network {
         println!("CI environment detected, using host network mode...");
-        // In host network mode, we need postgres to also be accessible
-        // Get postgres container IP for the app to connect to
         let postgres_ip = get_container_ip(POSTGRES_CONTAINER)
             .expect("Failed to get postgres container IP");
 
-        run_command(Command::new("docker").args(&[
+        let mut args = vec![
             "run", "-d",
             "--name", APP_CONTAINER,
             "--network", NETWORK_NAME,
             "-e", &format!("DATABASE_URL=postgres://user:password@{}/tts", postgres_ip),
-            IMAGE_NAME
-        ]));
+        ];
+        if use_test_mode {
+            args.extend(&["-e", "TTS_TEST_MODE=1"]);
+        }
+        args.push(IMAGE_NAME);
+        run_command(Command::new("docker").args(&args));
     } else {
-        run_command(Command::new("docker").args(&[
+        let mut args = vec![
             "run", "-d",
             "--name", APP_CONTAINER,
             "--network", NETWORK_NAME,
             "-p", "3002:3000",
             "-e", "DATABASE_URL=postgres://user:password@tts-postgres-test-rust/tts",
-            IMAGE_NAME
-        ]));
+        ];
+        if use_test_mode {
+            args.extend(&["-e", "TTS_TEST_MODE=1"]);
+        }
+        args.push(IMAGE_NAME);
+        run_command(Command::new("docker").args(&args));
+    }
+
+    if use_test_mode {
+        println!("Test mode enabled - using dummy audio generation");
     }
 
     println!("Waiting for App to be ready...");

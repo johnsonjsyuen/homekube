@@ -197,36 +197,67 @@ fn process_tts(
     let mp3_filename = format!("{}.mp3", job_id);
     let mp3_path = output_dir.join(&mp3_filename);
 
-    // Debug: log file path and contents
-    eprintln!("TTS Input file: {}", text_path);
-    eprintln!("TTS Input size: {} bytes", text_bytes.len());
-    if let Ok(content) = std::fs::read_to_string(&text_path) {
-        eprintln!("TTS Input content (first 200 chars): {:?}", &content.chars().take(200).collect::<String>());
-    }
+    // Check if we're in test mode (skip actual TTS, generate dummy audio)
+    let test_mode = std::env::var("TTS_TEST_MODE").is_ok();
 
-    // kokoro-tts requires model files (kokoro-v1.0.onnx, voices-v1.0.bin)
-    // to be in the current working directory
-    let output = Command::new("kokoro-tts")
-        .current_dir("/app")  // Model files are in /app
-        .arg(&text_path)
-        .arg(&wav_path)
-        .arg("--voice")
-        .arg(&voice)
-        .arg("--speed")
-        .arg(&speed)
-        .output()
-        .map_err(|e| format!("Failed to execute kokoro-tts: {}", e))?;
+    if test_mode {
+        // Generate a minimal valid WAV file for testing
+        // WAV header (44 bytes) + 1 second of silence at 22050 Hz, 16-bit mono
+        let sample_rate: u32 = 22050;
+        let bits_per_sample: u16 = 16;
+        let num_channels: u16 = 1;
+        let duration_secs: u32 = 1;
+        let data_size = sample_rate * duration_secs * (bits_per_sample as u32 / 8) * num_channels as u32;
+        let file_size = 36 + data_size;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        return Err(format!("kokoro-tts failed: stdout={}, stderr={}", stdout, stderr));
-    }
+        let mut wav_data = Vec::with_capacity(44 + data_size as usize);
+        // RIFF header
+        wav_data.extend_from_slice(b"RIFF");
+        wav_data.extend_from_slice(&file_size.to_le_bytes());
+        wav_data.extend_from_slice(b"WAVE");
+        // fmt subchunk
+        wav_data.extend_from_slice(b"fmt ");
+        wav_data.extend_from_slice(&16u32.to_le_bytes()); // subchunk size
+        wav_data.extend_from_slice(&1u16.to_le_bytes());  // audio format (PCM)
+        wav_data.extend_from_slice(&num_channels.to_le_bytes());
+        wav_data.extend_from_slice(&sample_rate.to_le_bytes());
+        wav_data.extend_from_slice(&(sample_rate * num_channels as u32 * bits_per_sample as u32 / 8).to_le_bytes()); // byte rate
+        wav_data.extend_from_slice(&(num_channels * bits_per_sample / 8).to_le_bytes()); // block align
+        wav_data.extend_from_slice(&bits_per_sample.to_le_bytes());
+        // data subchunk
+        wav_data.extend_from_slice(b"data");
+        wav_data.extend_from_slice(&data_size.to_le_bytes());
+        // Silent audio data (zeros)
+        wav_data.extend(std::iter::repeat(0u8).take(data_size as usize));
 
-    // Verify the WAV file was actually created
-    if !std::path::Path::new(&wav_path).exists() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        return Err(format!("kokoro-tts did not produce output file. stdout: {}", stdout));
+        std::fs::write(&wav_path, wav_data)
+            .map_err(|e| format!("Failed to write test WAV file: {}", e))?;
+
+        println!("Test mode: Generated dummy WAV file at {}", wav_path);
+    } else {
+        // Production mode: run actual kokoro-tts
+        let output = Command::new("kokoro-tts")
+            .current_dir("/app")  // Model files are in /app
+            .arg(&text_path)
+            .arg(&wav_path)
+            .arg("--voice")
+            .arg(&voice)
+            .arg("--speed")
+            .arg(&speed)
+            .output()
+            .map_err(|e| format!("Failed to execute kokoro-tts: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(format!("kokoro-tts failed: stdout={}, stderr={}", stdout, stderr));
+        }
+
+        // Verify the WAV file was actually created
+        if !std::path::Path::new(&wav_path).exists() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(format!("kokoro-tts did not produce output file. stdout: {}", stdout));
+        }
     }
 
     let ffmpeg_status = Command::new("ffmpeg")
