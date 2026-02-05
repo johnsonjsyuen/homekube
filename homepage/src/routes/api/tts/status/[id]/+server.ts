@@ -1,10 +1,23 @@
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, request }) => {
     const { id } = params;
 
+    // Check for Authorization header
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized: Missing or invalid token' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
+
     try {
-        const response = await fetch(`http://text-to-speech/status/${id}`);
+        const response = await fetch(`http://text-to-speech/status/${id}`, {
+            headers: {
+                'Authorization': authHeader
+            }
+        });
 
         // Construct new response with body stream and headers from upstream
         const newHeaders = new Headers(response.headers);

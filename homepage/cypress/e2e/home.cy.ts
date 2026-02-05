@@ -3,6 +3,51 @@ describe('Homepage', () => {
     cy.visit('/');
   });
 
+  describe('Location Selector', () => {
+    it('should change location to Sydney', () => {
+      cy.get('.location-select').select('sydney');
+      cy.url().should('include', 'location=sydney');
+      cy.get('.location').should('contain', 'Sydney');
+    });
+
+    it('should change location to Hong Kong', () => {
+      cy.get('.location-select').select('hong_kong');
+      cy.url().should('include', 'location=hong_kong');
+      cy.get('.location').should('contain', 'Hong Kong');
+    });
+
+    it('should request geolocation when "Current Location" selected', () => {
+      cy.window().then((win) => {
+        cy.stub(win.navigator.geolocation, 'getCurrentPosition').callsFake((success) => {
+          success({
+            coords: {
+              latitude: -37.8136,
+              longitude: 144.9631
+            }
+          });
+        });
+      });
+
+      cy.get('.location-select').select('current_location');
+      cy.url().should('include', 'lat=');
+      cy.url().should('include', 'lon=');
+    });
+
+    it('should handle geolocation permission denied', () => {
+      cy.window().then((win) => {
+        cy.stub(win.navigator.geolocation, 'getCurrentPosition').callsFake((success, error) => {
+          error({ code: 1, message: 'User denied Geolocation' });
+        });
+        cy.stub(win, 'alert');
+      });
+
+      cy.get('.location-select').select('current_location');
+      cy.window().its('alert').should('be.called');
+      // Should revert to previous location
+      cy.get('.location-select').should('have.value', 'port_melbourne');
+    });
+  });
+
   describe('Weather Tab', () => {
     it('should display weather information by default', () => {
       // Verify weather tab is active
@@ -34,12 +79,76 @@ describe('Homepage', () => {
   });
 
   describe('Text to Speech Tab', () => {
-    it('should switch to TTS tab and generate speech', () => {
-      // Switch to TTS tab
+    beforeEach(() => {
       cy.wait(1000); // Wait for hydration
       cy.contains('.tab-btn', 'Text to Speech').click();
       cy.contains('.tab-btn.active', 'Text to Speech').should('be.visible');
+    });
 
+    it('should show alert when generating without file', () => {
+      cy.window().then((win) => {
+        cy.stub(win, 'alert').as('alertStub');
+      });
+
+      cy.get('.generate-btn').click();
+      cy.get('@alertStub').should('be.calledWith', 'Please select a text file.');
+    });
+
+    it('should handle API error response', () => {
+      cy.intercept('POST', '/api/tts/generate', {
+        statusCode: 500,
+        body: 'Internal server error'
+      }).as('generateError');
+
+      cy.get('#tts-file').selectFile('cypress/fixtures/sample.txt');
+      cy.get('.generate-btn').click();
+
+      cy.wait('@generateError');
+      cy.get('.error-msg').should('be.visible');
+      cy.get('.error-msg').should('contain', 'Internal server error');
+    });
+
+    it('should handle status polling error', () => {
+      cy.intercept('POST', '/api/tts/generate', {
+        statusCode: 200,
+        body: { id: 'test-job-id' }
+      }).as('generateSpeech');
+
+      cy.intercept('GET', '/api/tts/status/test-job-id', {
+        statusCode: 200,
+        headers: { 'content-type': 'application/json' },
+        body: { status: 'error', message: 'TTS processing failed' }
+      }).as('pollError');
+
+      cy.get('#tts-file').selectFile('cypress/fixtures/sample.txt');
+      cy.get('.generate-btn').click();
+
+      cy.wait('@pollError');
+      cy.get('.error-msg').should('be.visible');
+      cy.get('.error-msg').should('contain', 'TTS processing failed');
+    });
+
+    it('should disable button during processing', () => {
+      cy.intercept('POST', '/api/tts/generate', {
+        statusCode: 200,
+        body: { id: 'test-job-id' },
+        delay: 1000
+      }).as('generateSpeech');
+
+      cy.intercept('GET', '/api/tts/status/test-job-id', {
+        statusCode: 200,
+        headers: { 'content-type': 'application/json' },
+        body: { status: 'processing' }
+      }).as('pollStatus');
+
+      cy.get('#tts-file').selectFile('cypress/fixtures/sample.txt');
+      cy.get('.generate-btn').click();
+
+      cy.get('.generate-btn').should('be.disabled');
+      cy.get('.generate-btn').should('contain', 'Processing...');
+    });
+
+    it('should switch to TTS tab and generate speech', () => {
       // Verify TTS elements
       cy.get('.tts-card').should('be.visible');
       cy.get('#tts-file').should('exist');

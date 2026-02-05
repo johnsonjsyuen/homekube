@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: forgejo-runner-config
+  labels:
+    app: forgejo-runner
+data:
+  config.yaml: |-
+    log:
+      level: debug
+      job_level: debug
+
+    runner:
+      file: /data/.runner
+      capacity: 1
+      envs:
+        DOCKER_HOST: tcp://localhost:2376
+        DOCKER_TLS_VERIFY: 0
+        DOCKER_CERT_PATH: /certs/client
+      env_file: .env
+      timeout: 3h
+      shutdown_timeout: 5m
+      insecure: false
+      fetch_timeout: 5s
+      fetch_interval: 2s
+      report_interval: 1s
+      labels: []
+
+    cache:
+      enabled: true
+      dir: ""
+      host: ""
+      port: 3000
+      external_server: ""
+
+    container:
+      network: ""
+      enable_ipv6: false
+      privileged: false
+      options:
+        -v /certs/client:/certs/client
+      workdir_parent:
+      valid_volumes:
+          - /certs/client
+      docker_host: "-"
+      force_pull: false
+      force_rebuild: false
+
+    host:
+      workdir_parent: /data

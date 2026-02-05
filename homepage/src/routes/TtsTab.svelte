@@ -1,4 +1,7 @@
 <script lang="ts">
+    import { onMount } from 'svelte';
+    import { initKeycloak, login, logout, onAuthStateChange, getToken, type AuthState } from '$lib/auth';
+
     let ttsFile = $state<FileList | null>(null);
     let ttsVoice = $state("af_heart");
     let ttsSpeed = $state("1.0");
@@ -8,7 +11,43 @@
     let ttsJobId = $state("");
     let ttsError = $state("");
 
+    // Auth state
+    let authState = $state<AuthState>({
+        authenticated: false,
+        token: null,
+        username: null,
+        roles: []
+    });
+    let authInitialized = $state(false);
+
+    onMount(() => {
+        // Initialize Keycloak and subscribe to auth state changes
+        initKeycloak().then(() => {
+            authInitialized = true;
+        });
+
+        const unsubscribe = onAuthStateChange((state) => {
+            authState = state;
+        });
+
+        return unsubscribe;
+    });
+
+    async function handleLogin() {
+        // Redirect back to the TTS tab after login
+        await login('/?tab=tts');
+    }
+
+    async function handleLogout() {
+        await logout();
+    }
+
     async function generateSpeech() {
+        if (!authState.authenticated) {
+            alert("Please log in to use text-to-speech.");
+            return;
+        }
+
         if (!ttsFile || ttsFile.length === 0) {
             alert("Please select a text file.");
             return;
@@ -24,9 +63,13 @@
         formData.append("speed", ttsSpeed);
 
         try {
+            const token = getToken();
             const res = await fetch("/api/tts/generate", {
                 method: "POST",
                 body: formData,
+                headers: token ? {
+                    'Authorization': `Bearer ${token}`
+                } : {}
             });
 
             if (!res.ok) {
@@ -51,7 +94,12 @@
 
         console.log(`[TTS] Polling status for job ${id}...`);
         try {
-            const res = await fetch(`/api/tts/status/${id}`);
+            const token = getToken();
+            const res = await fetch(`/api/tts/status/${id}`, {
+                headers: token ? {
+                    'Authorization': `Bearer ${token}`
+                } : {}
+            });
             const contentType = res.headers.get("content-type");
 
             if (contentType && contentType.includes("application/json")) {
@@ -82,72 +130,91 @@
 <div class="tts-container">
     <div class="tts-card">
         <h3>Generate Speech</h3>
-        <div class="form-group">
-            <label for="tts-file">Text File</label>
-            <input
-                type="file"
-                id="tts-file"
-                accept=".txt"
-                onchange={(e) => (ttsFile = e.currentTarget.files)}
-            />
-        </div>
-        <div class="form-row">
-            <div class="form-group">
-                <label for="tts-voice">Voice</label>
-                <select id="tts-voice" bind:value={ttsVoice}>
-                    <option value="af_heart">Heart (Female)</option>
-                    <option value="af_bella">Bella (Female)</option>
-                    <option value="af_nicole">Nicole (Female)</option>
-                    <option value="af_sky">Sky (Female)</option>
-                    <option value="bm_daniel">Daniel (Male)</option>
-                    <option value="bm_george">George (Male)</option>
-                    <option value="bm_lewis">Lewis (Male)</option>
-                </select>
+
+        {#if !authInitialized}
+            <div class="auth-loading">
+                <span class="spinner">...</span> Loading authentication...
             </div>
+        {:else if !authState.authenticated}
+            <div class="auth-required">
+                <p>Please log in to use the text-to-speech feature.</p>
+                <button class="login-btn" onclick={handleLogin}>
+                    Log In
+                </button>
+            </div>
+        {:else}
+            <div class="user-info">
+                <span>Logged in as: <strong>{authState.username}</strong></span>
+                <button class="logout-btn" onclick={handleLogout}>Log Out</button>
+            </div>
+
             <div class="form-group">
-                <label for="tts-speed">Speed (0.5 - 2.0)</label>
+                <label for="tts-file">Text File</label>
                 <input
-                    type="number"
-                    id="tts-speed"
-                    bind:value={ttsSpeed}
-                    step="0.1"
-                    min="0.5"
-                    max="2.0"
+                    type="file"
+                    id="tts-file"
+                    accept=".txt"
+                    onchange={(e) => (ttsFile = e.currentTarget.files)}
                 />
             </div>
-        </div>
-
-        <button
-            class="generate-btn"
-            onclick={generateSpeech}
-            disabled={ttsStatus === "processing"}
-        >
-            {ttsStatus === "processing" ? "Processing..." : "Generate Audio"}
-        </button>
-
-        {#if ttsStatus === "processing"}
-            <div class="status-msg">
-                <span class="spinner">⏳</span> Processing your request...
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="tts-voice">Voice</label>
+                    <select id="tts-voice" bind:value={ttsVoice}>
+                        <option value="af_heart">Heart (Female)</option>
+                        <option value="af_bella">Bella (Female)</option>
+                        <option value="af_nicole">Nicole (Female)</option>
+                        <option value="af_sky">Sky (Female)</option>
+                        <option value="bm_daniel">Daniel (Male)</option>
+                        <option value="bm_george">George (Male)</option>
+                        <option value="bm_lewis">Lewis (Male)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="tts-speed">Speed (0.5 - 2.0)</label>
+                    <input
+                        type="number"
+                        id="tts-speed"
+                        bind:value={ttsSpeed}
+                        step="0.1"
+                        min="0.5"
+                        max="2.0"
+                    />
+                </div>
             </div>
-        {/if}
 
-        {#if ttsStatus === "completed"}
-            <div class="success-msg">
-                <p>✅ Audio generated successfully!</p>
-                <a
-                    href="/api/tts/status/{ttsJobId}"
-                    class="download-btn"
-                    download
-                >
-                    Download MP3
-                </a>
-            </div>
-        {/if}
+            <button
+                class="generate-btn"
+                onclick={generateSpeech}
+                disabled={ttsStatus === "processing"}
+            >
+                {ttsStatus === "processing" ? "Processing..." : "Generate Audio"}
+            </button>
 
-        {#if ttsStatus === "error"}
-            <div class="error-msg">
-                Error: {ttsError}
-            </div>
+            {#if ttsStatus === "processing"}
+                <div class="status-msg">
+                    <span class="spinner">...</span> Processing your request...
+                </div>
+            {/if}
+
+            {#if ttsStatus === "completed"}
+                <div class="success-msg">
+                    <p>Audio generated successfully!</p>
+                    <a
+                        href="/api/tts/status/{ttsJobId}"
+                        class="download-btn"
+                        download
+                    >
+                        Download MP3
+                    </a>
+                </div>
+            {/if}
+
+            {#if ttsStatus === "error"}
+                <div class="error-msg">
+                    Error: {ttsError}
+                </div>
+            {/if}
         {/if}
     </div>
 </div>
@@ -172,6 +239,73 @@
         margin-bottom: 20px;
         text-align: center;
         color: #fff;
+    }
+
+    .auth-loading {
+        text-align: center;
+        color: #aaa;
+        padding: 20px;
+    }
+
+    .auth-required {
+        text-align: center;
+        padding: 20px;
+    }
+
+    .auth-required p {
+        color: #aaa;
+        margin-bottom: 20px;
+    }
+
+    .login-btn {
+        background: #4a90e2;
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .login-btn:hover {
+        background: #357abd;
+    }
+
+    .user-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding: 10px 15px;
+        background: #333;
+        border-radius: 8px;
+        font-size: 0.9rem;
+    }
+
+    .user-info span {
+        color: #aaa;
+    }
+
+    .user-info strong {
+        color: #fff;
+    }
+
+    .logout-btn {
+        background: transparent;
+        color: #f87171;
+        border: 1px solid #f87171;
+        padding: 5px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+    }
+
+    .logout-btn:hover {
+        background: #f87171;
+        color: #000;
     }
 
     .form-group {
@@ -244,6 +378,16 @@
         margin-top: 20px;
         text-align: center;
         color: #aaa;
+    }
+
+    .spinner {
+        display: inline-block;
+        animation: pulse 1s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
     }
 
     .success-msg {

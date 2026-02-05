@@ -1,0 +1,153 @@
+name: End-to-End Tests
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+jobs:
+  cypress-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: https://github.com/actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: https://github.com/actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: homepage/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd homepage
+          npm ci
+
+      - name: Start server and run tests
+        run: |
+          cd homepage
+          npm run dev -- --host 127.0.0.1 &
+          npx wait-on http://127.0.0.1:5173 --timeout 60000
+          CYPRESS_BASE_URL=http://127.0.0.1:5173 npm run cy:run
+
+  tts-integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: https://github.com/actions/checkout@v4
+
+      - name: Setup Docker network
+        run: |
+          docker network create tts-test-network || true
+
+      - name: Start Postgres
+        run: |
+          docker run -d \
+            --name tts-postgres \
+            --network tts-test-network \
+            -e POSTGRES_PASSWORD=password \
+            -e POSTGRES_USER=user \
+            -e POSTGRES_DB=tts \
+            postgres:15-alpine
+
+          # Wait for postgres to be ready
+          for i in {1..30}; do
+            if docker exec tts-postgres pg_isready -U user -d tts; then
+              echo "Postgres is ready!"
+              break
+            fi
+            echo "Waiting for postgres..."
+            sleep 1
+          done
+
+      - name: Build TTS image
+        run: |
+          cd text-to-speech
+          docker build -t tts-app-test .
+
+      - name: Start TTS App
+        run: |
+          # Start app in TEST MODE - skips actual kokoro-tts, uses dummy audio
+          docker run -d \
+            --name tts-app \
+            --network tts-test-network \
+            -e DATABASE_URL=postgres://user:password@tts-postgres/tts \
+            -e TTS_TEST_MODE=1 \
+            tts-app-test
+
+          # Wait for app to be ready
+          echo "Waiting for TTS app to be ready..."
+          for i in {1..20}; do
+            if docker run --rm --network tts-test-network curlimages/curl:latest -s http://tts-app:3000/status/00000000-0000-0000-0000-000000000000 2>&1 | grep -q "Not Found"; then
+              echo "TTS app is ready!"
+              break
+            fi
+            echo "Waiting for TTS app... (attempt $i/20)"
+            sleep 1
+          done
+
+      - name: Run integration test
+        run: |
+          # Create test file
+          echo "Hello world. This is a test." > /tmp/test_input.txt
+
+          # Submit TTS job
+          docker run --rm \
+            --network tts-test-network \
+            -v /tmp/test_input.txt:/test_input.txt:ro \
+            curlimages/curl:latest \
+            -s -X POST "http://tts-app:3000/generate" \
+            -F "text_file=@/test_input.txt" \
+            -F "voice=af_heart" \
+            -F "speed=1.0" > /tmp/response.json
+
+          echo "Response: $(cat /tmp/response.json)"
+          JOB_ID=$(jq -r '.id' /tmp/response.json)
+          echo "Job ID: $JOB_ID"
+
+          if [ -z "$JOB_ID" ] || [ "$JOB_ID" = "null" ]; then
+            echo "Failed to get job ID"
+            docker logs tts-app
+            exit 1
+          fi
+
+          # Poll for completion (test mode should complete quickly)
+          echo "Polling for completion..."
+          for i in {1..30}; do
+            docker run --rm \
+              --network tts-test-network \
+              curlimages/curl:latest \
+              -s -o /tmp/status_body.txt -w "%{content_type}" "http://tts-app:3000/status/${JOB_ID}" > /tmp/content_type.txt
+
+            CONTENT_TYPE=$(cat /tmp/content_type.txt)
+
+            if echo "$CONTENT_TYPE" | grep -q "audio/mpeg"; then
+              echo "Job completed! Audio file received."
+              echo "Integration test PASSED"
+              exit 0
+            fi
+
+            BODY=$(cat /tmp/status_body.txt)
+            STATUS=$(echo "$BODY" | jq -r '.status // empty' 2>/dev/null || echo "unknown")
+
+            if [ "$STATUS" = "error" ]; then
+              echo "Job failed: $BODY"
+              docker logs tts-app
+              exit 1
+            fi
+
+            echo "Status: $STATUS (attempt $i/30)"
+            sleep 1
+          done
+
+          echo "Timeout waiting for job completion"
+          docker logs tts-app
+          exit 1
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f tts-app tts-postgres || true
+          docker network rm tts-test-network || true
