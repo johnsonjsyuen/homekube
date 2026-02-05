@@ -195,18 +195,29 @@ fn process_tts(
     let mp3_filename = format!("{}.mp3", job_id);
     let mp3_path = output_dir.join(&mp3_filename);
 
-    let status = Command::new("kokoro-tts")
+    // kokoro-tts requires model files (kokoro-v1.0.onnx, voices-v1.0.bin)
+    // to be in the current working directory
+    let output = Command::new("kokoro-tts")
+        .current_dir("/app")  // Model files are in /app
         .arg(&text_path)
         .arg(&wav_path)
         .arg("--voice")
         .arg(&voice)
         .arg("--speed")
         .arg(&speed)
-        .status()
+        .output()
         .map_err(|e| format!("Failed to execute kokoro-tts: {}", e))?;
 
-    if !status.success() {
-        return Err("kokoro-tts failed execution".to_string());
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!("kokoro-tts failed: stdout={}, stderr={}", stdout, stderr));
+    }
+
+    // Verify the WAV file was actually created
+    if !std::path::Path::new(&wav_path).exists() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!("kokoro-tts did not produce output file. stdout: {}", stdout));
     }
 
     let ffmpeg_status = Command::new("ffmpeg")
