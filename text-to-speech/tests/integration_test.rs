@@ -40,7 +40,7 @@ fn test_tts_integration() {
         cleanup();
     }
 
-    run_test_logic();
+    run_all_tests();
 }
 
 fn wait_for_postgres() {
@@ -70,7 +70,103 @@ fn wait_for_postgres() {
     panic!("Postgres failed to start within 30 seconds");
 }
 
-fn run_test_logic() {
+/// Wait for the app to be ready and return the working URL
+fn wait_for_app_ready(client: &Client) -> String {
+    println!("Waiting for App to be ready...");
+    thread::sleep(Duration::from_secs(5));
+
+    let use_container_ip_first = std::env::var("CI").is_ok();
+
+    for attempt in 0..10 {
+        let container_ip_url =
+            get_container_ip(APP_CONTAINER).map(|ip| format!("http://{}:3000", ip));
+
+        let urls_to_try = if use_container_ip_first {
+            if let Some(ip_url) = container_ip_url {
+                vec![ip_url]
+            } else {
+                println!("Warning: Could not get container IP, falling back to localhost");
+                vec!["http://127.0.0.1:3002".to_string()]
+            }
+        } else {
+            let localhost_url = "http://127.0.0.1:3002".to_string();
+            if let Some(ip_url) = container_ip_url {
+                vec![localhost_url, ip_url]
+            } else {
+                vec![localhost_url]
+            }
+        };
+
+        for target_url in urls_to_try {
+            // Try a simple request to check if app is up
+            let form = multipart::Form::new()
+                .file("text_file", "tests/resources/test_tts_input.txt")
+                .expect("Failed to create part")
+                .text("voice", "af_heart")
+                .text("speed", "1.0");
+
+            match client
+                .post(format!("{}/generate", target_url))
+                .multipart(form)
+                .send()
+            {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        println!("App is ready at {}", target_url);
+                        return target_url;
+                    }
+                }
+                Err(e) => {
+                    println!(
+                        "Attempt {}: Failed to connect to {}: {}",
+                        attempt + 1,
+                        target_url,
+                        e
+                    );
+                }
+            }
+        }
+
+        println!("App not ready, retrying...");
+        thread::sleep(Duration::from_secs(2));
+    }
+
+    print_debug_logs();
+    panic!("Failed to connect to app after 10 attempts");
+}
+
+fn print_debug_logs() {
+    println!("==================== APP LOGS ====================");
+    if let Ok(output) = Command::new("docker")
+        .args(&["logs", APP_CONTAINER])
+        .output()
+    {
+        println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
+        println!("STDERR:\n{}", String::from_utf8_lossy(&output.stderr));
+    }
+    println!("==================================================");
+
+    println!("================== DB LOGS ===================");
+    if let Ok(output) = Command::new("docker")
+        .args(&["logs", POSTGRES_CONTAINER])
+        .output()
+    {
+        println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
+        println!("STDERR:\n{}", String::from_utf8_lossy(&output.stderr));
+    }
+    println!("==============================================");
+
+    println!("================== CONTAINER STATUS ===================");
+    if let Ok(output) = Command::new("docker")
+        .args(&["ps", "-a", "--filter", &format!("name={}", APP_CONTAINER)])
+        .output()
+    {
+        println!("{}", String::from_utf8_lossy(&output.stdout));
+    }
+    println!("========================================================");
+}
+
+fn setup_docker_environment() {
     println!("Creating Docker network...");
     run_command(Command::new("docker").args(&["network", "create", NETWORK_NAME]));
 
@@ -98,11 +194,7 @@ fn run_test_logic() {
     run_command(Command::new("docker").args(&["build", "-t", IMAGE_NAME, "."]));
 
     println!("Starting TTS App...");
-    // Use --network host to avoid Docker-in-Docker networking issues in CI
-    // When running in CI (DinD), port mappings don't work as expected
     let use_host_network = std::env::var("CI").is_ok();
-
-    // Use test mode to skip actual kokoro-tts (generates dummy audio)
     let use_test_mode = std::env::var("TTS_TEST_MODE").is_ok() || std::env::var("CI").is_ok();
 
     if use_host_network {
@@ -150,130 +242,78 @@ fn run_test_logic() {
     if use_test_mode {
         println!("Test mode enabled - using dummy audio generation");
     }
+}
 
-    println!("Waiting for App to be ready...");
-    thread::sleep(Duration::from_secs(5));
+/// Run all tests in a single Docker environment for efficiency
+fn run_all_tests() {
+    setup_docker_environment();
 
     let client = Client::new();
-    let mut url = String::new();
-    let mut success = false;
+    let base_url = wait_for_app_ready(&client);
 
-    // Retry logic for initial connection
-    let mut response_text = String::new();
+    println!("\n========== Running Test Suite ==========\n");
 
-    // In CI, port mappings don't work due to Docker-in-Docker, so use container IP directly
-    let use_container_ip_first = std::env::var("CI").is_ok();
+    // Test 1: Happy path - generate speech and poll until complete
+    test_happy_path_generate_and_complete(&client, &base_url);
 
-    for _ in 0..10 {
-        // Get container IP
-        let container_ip_url =
-            get_container_ip(APP_CONTAINER).map(|ip| format!("http://{}:3000", ip));
+    // Test 2: Missing text file
+    test_generate_missing_text_file(&client, &base_url);
 
-        // Build list of URLs to try
-        let urls_to_try = if use_container_ip_first {
-            // In CI, try container IP first (or only)
-            if let Some(ip_url) = container_ip_url {
-                vec![ip_url]
-            } else {
-                println!("Warning: Could not get container IP, falling back to localhost");
-                vec!["http://127.0.0.1:3002".to_string()]
-            }
-        } else {
-            // Locally, try localhost first, then container IP as fallback
-            let localhost_url = "http://127.0.0.1:3002".to_string();
-            if let Some(ip_url) = container_ip_url {
-                vec![localhost_url, ip_url]
-            } else {
-                vec![localhost_url]
-            }
-        };
+    // Test 3: Invalid speed parameter
+    test_generate_invalid_speed(&client, &base_url);
 
-        for target_url in urls_to_try {
-            let form = multipart::Form::new()
-                .file("text_file", "tests/resources/test_tts_input.txt")
-                .expect("Failed to create part")
-                .text("voice", "af_heart")
-                .text("speed", "1.0");
+    // Test 4: Invalid UUID for status
+    test_status_invalid_uuid(&client, &base_url);
 
-            match client
-                .post(format!("{}/generate", target_url))
-                .multipart(form)
-                .send()
-            {
-                Ok(resp) => {
-                    if resp.status().is_success() {
-                        response_text = resp.text().expect("Failed to read text");
-                        success = true;
-                        url = target_url; // Found working URL
-                        break;
-                    }
-                }
-                Err(e) => {
-                    println!("Failed to connect to {}: {}", target_url, e);
-                }
-            }
-        }
+    // Test 5: Non-existent job ID
+    test_status_nonexistent_job(&client, &base_url);
 
-        if success {
-            break;
-        }
+    // Test 6: Empty text file
+    test_generate_empty_text_file(&client, &base_url);
 
-        println!("App not ready, retrying...");
-        thread::sleep(Duration::from_secs(2));
-    }
+    // Test 7: Different voice options
+    test_generate_different_voices(&client, &base_url);
 
-    if !success {
-        println!("==================== APP LOGS ====================");
-        if let Ok(output) = Command::new("docker")
-            .args(&["logs", APP_CONTAINER])
-            .output()
-        {
-            println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
-            println!("STDERR:\n{}", String::from_utf8_lossy(&output.stderr));
-        }
-        println!("==================================================");
+    // Test 8: Speed boundary values
+    test_generate_speed_boundaries(&client, &base_url);
 
-        println!("================== DB LOGS ===================");
-        if let Ok(output) = Command::new("docker")
-            .args(&["logs", POSTGRES_CONTAINER])
-            .output()
-        {
-            println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
-            println!("STDERR:\n{}", String::from_utf8_lossy(&output.stderr));
-        }
-        println!("==============================================");
+    println!("\n========== All Tests Passed! ==========\n");
+}
 
-        // Also print container status for debugging
-        println!("================== CONTAINER STATUS ===================");
-        if let Ok(output) = Command::new("docker")
-            .args(&["ps", "-a", "--filter", &format!("name={}", APP_CONTAINER)])
-            .output()
-        {
-            println!("{}", String::from_utf8_lossy(&output.stdout));
-        }
-        println!("========================================================");
-    }
+//=============================================================================
+// TEST 1: Happy Path - Generate Speech and Poll Until Complete
+//=============================================================================
+fn test_happy_path_generate_and_complete(client: &Client, base_url: &str) {
+    println!("\n--- Test: Happy Path Generate and Complete ---");
+
+    let form = multipart::Form::new()
+        .file("text_file", "tests/resources/test_tts_input.txt")
+        .expect("Failed to create part")
+        .text("voice", "af_heart")
+        .text("speed", "1.0");
+
+    let resp = client
+        .post(format!("{}/generate", base_url))
+        .multipart(form)
+        .send()
+        .expect("Failed to send request");
 
     assert!(
-        success,
-        "Failed to connect to app or get successful response"
+        resp.status().is_success(),
+        "Generate request should succeed"
     );
 
-    println!("Connected successfully to {}", url);
-
-    let json: serde_json::Value =
-        serde_json::from_str(&response_text).expect("Failed to parse JSON");
+    let json: serde_json::Value = resp.json().expect("Failed to parse JSON");
     let job_id = json["id"].as_str().expect("No id in response");
     println!("Job ID: {}", job_id);
 
-    println!("Polling Status...");
+    // Poll until complete
     let start_time = Instant::now();
     let mut completed = false;
 
     while start_time.elapsed() < Duration::from_secs(60) {
-        // Use the confirmed working URL
         let resp = client
-            .get(format!("{}/status/{}", url, job_id))
+            .get(format!("{}/status/{}", base_url, job_id))
             .send()
             .expect("Failed to get status");
 
@@ -285,6 +325,11 @@ fn run_test_logic() {
 
         if content_type.contains("audio/mpeg") {
             println!("Job Completed! Audio is ready.");
+
+            // Verify we got actual content
+            let bytes = resp.bytes().expect("Failed to read audio bytes");
+            assert!(!bytes.is_empty(), "Audio response should not be empty");
+
             completed = true;
             break;
         }
@@ -299,7 +344,295 @@ fn run_test_logic() {
     }
 
     assert!(completed, "Timed out waiting for TTS completion");
-    println!("Integration Test Passed!");
+    println!("✓ Happy path test passed!");
+}
+
+//=============================================================================
+// TEST 2: Missing Text File
+//=============================================================================
+fn test_generate_missing_text_file(client: &Client, base_url: &str) {
+    println!("\n--- Test: Missing Text File ---");
+
+    // Send form without text_file field
+    let form = multipart::Form::new()
+        .text("voice", "af_heart")
+        .text("speed", "1.0");
+
+    let resp = client
+        .post(format!("{}/generate", base_url))
+        .multipart(form)
+        .send()
+        .expect("Failed to send request");
+
+    assert_eq!(
+        resp.status().as_u16(),
+        400,
+        "Should return 400 Bad Request when text_file is missing"
+    );
+
+    let error_text = resp.text().unwrap_or_default();
+    println!("Error response: {}", error_text);
+    assert!(
+        error_text.contains("Missing text_file") || error_text.contains("text_file"),
+        "Error message should mention missing text_file"
+    );
+
+    println!("✓ Missing text file test passed!");
+}
+
+//=============================================================================
+// TEST 3: Invalid Speed Parameter
+//=============================================================================
+fn test_generate_invalid_speed(client: &Client, base_url: &str) {
+    println!("\n--- Test: Invalid Speed Parameter ---");
+
+    // Test with non-numeric speed
+    let form = multipart::Form::new()
+        .file("text_file", "tests/resources/test_tts_input.txt")
+        .expect("Failed to create part")
+        .text("voice", "af_heart")
+        .text("speed", "not_a_number");
+
+    let resp = client
+        .post(format!("{}/generate", base_url))
+        .multipart(form)
+        .send()
+        .expect("Failed to send request");
+
+    assert_eq!(
+        resp.status().as_u16(),
+        400,
+        "Should return 400 Bad Request for non-numeric speed"
+    );
+
+    let error_text = resp.text().unwrap_or_default();
+    println!("Error response: {}", error_text);
+    assert!(
+        error_text.contains("Invalid speed") || error_text.to_lowercase().contains("speed"),
+        "Error message should mention invalid speed"
+    );
+
+    println!("✓ Invalid speed parameter test passed!");
+}
+
+//=============================================================================
+// TEST 4: Invalid UUID for Status
+//=============================================================================
+fn test_status_invalid_uuid(client: &Client, base_url: &str) {
+    println!("\n--- Test: Invalid UUID for Status ---");
+
+    let resp = client
+        .get(format!("{}/status/not-a-valid-uuid", base_url))
+        .send()
+        .expect("Failed to send request");
+
+    assert_eq!(
+        resp.status().as_u16(),
+        400,
+        "Should return 400 Bad Request for invalid UUID"
+    );
+
+    let error_text = resp.text().unwrap_or_default();
+    println!("Error response: {}", error_text);
+    assert!(
+        error_text.contains("Invalid UUID") || error_text.to_lowercase().contains("uuid"),
+        "Error message should mention invalid UUID"
+    );
+
+    println!("✓ Invalid UUID test passed!");
+}
+
+//=============================================================================
+// TEST 5: Non-existent Job ID
+//=============================================================================
+fn test_status_nonexistent_job(client: &Client, base_url: &str) {
+    println!("\n--- Test: Non-existent Job ID ---");
+
+    // Valid UUID format but doesn't exist
+    let fake_uuid = "00000000-0000-0000-0000-000000000000";
+
+    let resp = client
+        .get(format!("{}/status/{}", base_url, fake_uuid))
+        .send()
+        .expect("Failed to send request");
+
+    assert_eq!(
+        resp.status().as_u16(),
+        404,
+        "Should return 404 Not Found for non-existent job"
+    );
+
+    let error_text = resp.text().unwrap_or_default();
+    println!("Error response: {}", error_text);
+    assert!(
+        error_text.contains("not found")
+            || error_text.contains("Not Found")
+            || error_text.to_lowercase().contains("job"),
+        "Error message should indicate job not found"
+    );
+
+    println!("✓ Non-existent job ID test passed!");
+}
+
+//=============================================================================
+// TEST 6: Empty Text File
+//=============================================================================
+fn test_generate_empty_text_file(client: &Client, base_url: &str) {
+    println!("\n--- Test: Empty Text File ---");
+
+    // Create an empty file bytes
+    let empty_bytes: Vec<u8> = Vec::new();
+    let part = multipart::Part::bytes(empty_bytes)
+        .file_name("empty.txt")
+        .mime_str("text/plain")
+        .expect("Failed to set mime type");
+
+    let form = multipart::Form::new()
+        .part("text_file", part)
+        .text("voice", "af_heart")
+        .text("speed", "1.0");
+
+    let resp = client
+        .post(format!("{}/generate", base_url))
+        .multipart(form)
+        .send()
+        .expect("Failed to send request");
+
+    // Empty file should either:
+    // 1. Return success (generates silent/minimal audio)
+    // 2. Return an error (explicit rejection)
+    // Both are valid behaviors - we just verify it doesn't crash
+
+    let status = resp.status();
+    println!("Status for empty file: {}", status);
+
+    if status.is_success() {
+        let json: serde_json::Value = resp.json().expect("Failed to parse JSON");
+        assert!(
+            json["id"].is_string(),
+            "Should return job ID even for empty file"
+        );
+        println!("Empty file accepted - job ID: {}", json["id"]);
+    } else {
+        let error_text = resp.text().unwrap_or_default();
+        println!("Empty file rejected with: {}", error_text);
+        assert!(
+            status.as_u16() == 400 || status.as_u16() == 422,
+            "Should return 400 or 422 for empty file rejection"
+        );
+    }
+
+    println!("✓ Empty text file test passed!");
+}
+
+//=============================================================================
+// TEST 7: Different Voice Options
+//=============================================================================
+fn test_generate_different_voices(client: &Client, base_url: &str) {
+    println!("\n--- Test: Different Voice Options ---");
+
+    let voices = vec!["af_heart", "af_bella", "bm_daniel"];
+
+    for voice in voices {
+        println!("Testing voice: {}", voice);
+
+        let form = multipart::Form::new()
+            .file("text_file", "tests/resources/test_tts_input.txt")
+            .expect("Failed to create part")
+            .text("voice", voice)
+            .text("speed", "1.0");
+
+        let resp = client
+            .post(format!("{}/generate", base_url))
+            .multipart(form)
+            .send()
+            .expect("Failed to send request");
+
+        assert!(
+            resp.status().is_success(),
+            "Generate request should succeed for voice: {}",
+            voice
+        );
+
+        let json: serde_json::Value = resp.json().expect("Failed to parse JSON");
+        assert!(
+            json["id"].is_string(),
+            "Should return job ID for voice: {}",
+            voice
+        );
+        println!("  Job created for voice {}: {}", voice, json["id"]);
+    }
+
+    println!("✓ Different voices test passed!");
+}
+
+//=============================================================================
+// TEST 8: Speed Boundary Values
+//=============================================================================
+fn test_generate_speed_boundaries(client: &Client, base_url: &str) {
+    println!("\n--- Test: Speed Boundary Values ---");
+
+    // Test valid speed values
+    let valid_speeds = vec!["0.5", "1.0", "1.5", "2.0"];
+
+    for speed in valid_speeds {
+        println!("Testing speed: {}", speed);
+
+        let form = multipart::Form::new()
+            .file("text_file", "tests/resources/test_tts_input.txt")
+            .expect("Failed to create part")
+            .text("voice", "af_heart")
+            .text("speed", speed);
+
+        let resp = client
+            .post(format!("{}/generate", base_url))
+            .multipart(form)
+            .send()
+            .expect("Failed to send request");
+
+        assert!(
+            resp.status().is_success(),
+            "Generate request should succeed for speed: {}",
+            speed
+        );
+
+        let json: serde_json::Value = resp.json().expect("Failed to parse JSON");
+        assert!(
+            json["id"].is_string(),
+            "Should return job ID for speed: {}",
+            speed
+        );
+        println!("  Job created for speed {}: {}", speed, json["id"]);
+    }
+
+    // Test extreme speed values (these should still parse as valid floats)
+    let extreme_speeds = vec!["0.1", "5.0"];
+    for speed in extreme_speeds {
+        println!("Testing extreme speed: {}", speed);
+
+        let form = multipart::Form::new()
+            .file("text_file", "tests/resources/test_tts_input.txt")
+            .expect("Failed to create part")
+            .text("voice", "af_heart")
+            .text("speed", speed);
+
+        let resp = client
+            .post(format!("{}/generate", base_url))
+            .multipart(form)
+            .send()
+            .expect("Failed to send request");
+
+        // Extreme values should either succeed or fail gracefully
+        let status = resp.status();
+        println!("  Extreme speed {} returned status: {}", speed, status);
+        assert!(
+            status.as_u16() == 200 || status.as_u16() == 400 || status.as_u16() == 422,
+            "Extreme speed should return 200, 400, or 422, got: {}",
+            status
+        );
+    }
+
+    println!("✓ Speed boundary values test passed!");
 }
 
 fn get_container_ip(container_name: &str) -> Option<String> {
