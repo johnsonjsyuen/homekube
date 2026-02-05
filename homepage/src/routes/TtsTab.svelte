@@ -34,7 +34,8 @@
     });
 
     async function handleLogin() {
-        await login();
+        // Redirect back to the TTS tab after login
+        await login('/?tab=tts');
     }
 
     async function handleLogout() {

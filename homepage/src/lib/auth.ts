@@ -165,14 +165,16 @@ export async function initKeycloak(): Promise<AuthState> {
     }
 }
 
-export async function login(): Promise<void> {
+export async function login(redirectPath?: string): Promise<void> {
     if (!keycloak) {
         await initKeycloak();
     }
     if (keycloak && !keycloak.authenticated) {
-        await keycloak.login({
-            redirectUri: window.location.origin + window.location.pathname
-        });
+        // Use provided redirect path or current URL
+        const redirectUri = redirectPath
+            ? window.location.origin + redirectPath
+            : window.location.href;
+        await keycloak.login({ redirectUri });
     }
 }
 

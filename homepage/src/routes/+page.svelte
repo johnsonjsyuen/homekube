@@ -8,7 +8,8 @@
 
     let { data } = $props();
 
-    let activeTab = $state("weather");
+    // Initialize active tab from URL query parameter
+    let activeTab = $state(page.url.searchParams.get("tab") || "weather");
 
     let currentSelectValue = $derived.by(() => {
         const lat = page.url.searchParams.get("lat");
