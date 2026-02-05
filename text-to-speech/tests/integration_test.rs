@@ -1,11 +1,10 @@
-use std::process::Command;
-use std::thread;
-use std::time::{Duration, Instant};
-use std::fs::File;
-use std::io::Write;
 use reqwest::blocking::Client;
 use reqwest::blocking::multipart;
 use scopeguard::defer;
+
+use std::process::Command;
+use std::thread;
+use std::time::{Duration, Instant};
 
 const NETWORK_NAME: &str = "tts-integration-net-rust";
 const POSTGRES_CONTAINER: &str = "tts-postgres-test-rust";
@@ -23,9 +22,12 @@ fn run_command(cmd: &mut Command) {
 
 fn cleanup() {
     println!("Cleaning up...");
-    let _ = Command::new("docker").args(&["rm", "-f", POSTGRES_CONTAINER, APP_CONTAINER]).output();
-    let _ = Command::new("docker").args(&["network", "rm", NETWORK_NAME]).output();
-    let _ = std::fs::remove_file("test_tts_input.txt");
+    let _ = Command::new("docker")
+        .args(&["rm", "-f", POSTGRES_CONTAINER, APP_CONTAINER])
+        .output();
+    let _ = Command::new("docker")
+        .args(&["network", "rm", NETWORK_NAME])
+        .output();
 }
 
 #[test]
@@ -43,14 +45,17 @@ fn test_tts_integration() {
 
 fn wait_for_postgres() {
     println!("Waiting for Postgres to be ready...");
-    for _ in 0..30 { // 30 retries * 1s = 30s max wait
+    for _ in 0..30 {
+        // 30 retries * 1s = 30s max wait
         let status = Command::new("docker")
             .args(&[
                 "exec",
                 POSTGRES_CONTAINER,
                 "pg_isready",
-                "-U", "user",
-                "-d", "tts"
+                "-U",
+                "user",
+                "-d",
+                "tts",
             ])
             .status();
 
@@ -71,18 +76,23 @@ fn run_test_logic() {
 
     println!("Starting Postgres...");
     run_command(Command::new("docker").args(&[
-        "run", "-d",
-        "--name", POSTGRES_CONTAINER,
-        "--network", NETWORK_NAME,
-        "-e", "POSTGRES_PASSWORD=password",
-        "-e", "POSTGRES_USER=user",
-        "-e", "POSTGRES_DB=tts",
-        "postgres:15-alpine"
+        "run",
+        "-d",
+        "--name",
+        POSTGRES_CONTAINER,
+        "--network",
+        NETWORK_NAME,
+        "-e",
+        "POSTGRES_PASSWORD=password",
+        "-e",
+        "POSTGRES_USER=user",
+        "-e",
+        "POSTGRES_DB=tts",
+        "postgres:15-alpine",
     ]));
 
     // Wait for DB startup
     wait_for_postgres();
-
 
     println!("Building TTS Image...");
     run_command(Command::new("docker").args(&["build", "-t", IMAGE_NAME, "."]));
@@ -94,18 +104,23 @@ fn run_test_logic() {
 
     // Use test mode to skip actual kokoro-tts (generates dummy audio)
     let use_test_mode = std::env::var("TTS_TEST_MODE").is_ok() || std::env::var("CI").is_ok();
-    let test_mode_flag = if use_test_mode { "1" } else { "" };
 
     if use_host_network {
         println!("CI environment detected, using host network mode...");
-        let postgres_ip = get_container_ip(POSTGRES_CONTAINER)
-            .expect("Failed to get postgres container IP");
+        let postgres_ip =
+            get_container_ip(POSTGRES_CONTAINER).expect("Failed to get postgres container IP");
+
+        let db_url = format!("DATABASE_URL=postgres://user:password@{}/tts", postgres_ip);
 
         let mut args = vec![
-            "run", "-d",
-            "--name", APP_CONTAINER,
-            "--network", NETWORK_NAME,
-            "-e", &format!("DATABASE_URL=postgres://user:password@{}/tts", postgres_ip),
+            "run",
+            "-d",
+            "--name",
+            APP_CONTAINER,
+            "--network",
+            NETWORK_NAME,
+            "-e",
+            &db_url,
         ];
         if use_test_mode {
             args.extend(&["-e", "TTS_TEST_MODE=1"]);
@@ -114,11 +129,16 @@ fn run_test_logic() {
         run_command(Command::new("docker").args(&args));
     } else {
         let mut args = vec![
-            "run", "-d",
-            "--name", APP_CONTAINER,
-            "--network", NETWORK_NAME,
-            "-p", "3002:3000",
-            "-e", "DATABASE_URL=postgres://user:password@tts-postgres-test-rust/tts",
+            "run",
+            "-d",
+            "--name",
+            APP_CONTAINER,
+            "--network",
+            NETWORK_NAME,
+            "-p",
+            "3002:3000",
+            "-e",
+            "DATABASE_URL=postgres://user:password@tts-postgres-test-rust/tts",
         ];
         if use_test_mode {
             args.extend(&["-e", "TTS_TEST_MODE=1"]);
@@ -134,12 +154,6 @@ fn run_test_logic() {
     println!("Waiting for App to be ready...");
     thread::sleep(Duration::from_secs(5));
 
-    println!("Creating test file...");
-    let mut file = File::create("test_tts_input.txt").expect("Failed to create test file");
-    writeln!(file, "Chapter 1").expect("Failed to write to file");
-    writeln!(file, "Hello from Rust integration test.").expect("Failed to write to file");
-    writeln!(file, "This is a second line to ensure the text is long enough to be processed.").expect("Failed to write to file");
-
     let client = Client::new();
     let mut url = String::new();
     let mut success = false;
@@ -150,10 +164,10 @@ fn run_test_logic() {
     // In CI, port mappings don't work due to Docker-in-Docker, so use container IP directly
     let use_container_ip_first = std::env::var("CI").is_ok();
 
-    for i in 0..10 {
+    for _ in 0..10 {
         // Get container IP
-        let container_ip_url = get_container_ip(APP_CONTAINER)
-            .map(|ip| format!("http://{}:3000", ip));
+        let container_ip_url =
+            get_container_ip(APP_CONTAINER).map(|ip| format!("http://{}:3000", ip));
 
         // Build list of URLs to try
         let urls_to_try = if use_container_ip_first {
@@ -176,11 +190,16 @@ fn run_test_logic() {
 
         for target_url in urls_to_try {
             let form = multipart::Form::new()
-                .file("text_file", "test_tts_input.txt").expect("Failed to create part")
+                .file("text_file", "tests/resources/test_tts_input.txt")
+                .expect("Failed to create part")
                 .text("voice", "af_heart")
                 .text("speed", "1.0");
 
-            match client.post(format!("{}/generate", target_url)).multipart(form).send() {
+            match client
+                .post(format!("{}/generate", target_url))
+                .multipart(form)
+                .send()
+            {
                 Ok(resp) => {
                     if resp.status().is_success() {
                         response_text = resp.text().expect("Failed to read text");
@@ -194,7 +213,7 @@ fn run_test_logic() {
                 }
             }
         }
-        
+
         if success {
             break;
         }
@@ -205,14 +224,20 @@ fn run_test_logic() {
 
     if !success {
         println!("==================== APP LOGS ====================");
-        if let Ok(output) = Command::new("docker").args(&["logs", APP_CONTAINER]).output() {
+        if let Ok(output) = Command::new("docker")
+            .args(&["logs", APP_CONTAINER])
+            .output()
+        {
             println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
             println!("STDERR:\n{}", String::from_utf8_lossy(&output.stderr));
         }
         println!("==================================================");
 
         println!("================== DB LOGS ===================");
-        if let Ok(output) = Command::new("docker").args(&["logs", POSTGRES_CONTAINER]).output() {
+        if let Ok(output) = Command::new("docker")
+            .args(&["logs", POSTGRES_CONTAINER])
+            .output()
+        {
             println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
             println!("STDERR:\n{}", String::from_utf8_lossy(&output.stderr));
         }
@@ -220,17 +245,24 @@ fn run_test_logic() {
 
         // Also print container status for debugging
         println!("================== CONTAINER STATUS ===================");
-        if let Ok(output) = Command::new("docker").args(&["ps", "-a", "--filter", &format!("name={}", APP_CONTAINER)]).output() {
+        if let Ok(output) = Command::new("docker")
+            .args(&["ps", "-a", "--filter", &format!("name={}", APP_CONTAINER)])
+            .output()
+        {
             println!("{}", String::from_utf8_lossy(&output.stdout));
         }
         println!("========================================================");
     }
 
-    assert!(success, "Failed to connect to app or get successful response");
+    assert!(
+        success,
+        "Failed to connect to app or get successful response"
+    );
 
     println!("Connected successfully to {}", url);
 
-    let json: serde_json::Value = serde_json::from_str(&response_text).expect("Failed to parse JSON");
+    let json: serde_json::Value =
+        serde_json::from_str(&response_text).expect("Failed to parse JSON");
     let job_id = json["id"].as_str().expect("No id in response");
     println!("Job ID: {}", job_id);
 
@@ -240,9 +272,16 @@ fn run_test_logic() {
 
     while start_time.elapsed() < Duration::from_secs(60) {
         // Use the confirmed working URL
-        let resp = client.get(format!("{}/status/{}", url, job_id)).send().expect("Failed to get status");
+        let resp = client
+            .get(format!("{}/status/{}", url, job_id))
+            .send()
+            .expect("Failed to get status");
 
-        let content_type = resp.headers().get("content-type").and_then(|h| h.to_str().ok()).unwrap_or("");
+        let content_type = resp
+            .headers()
+            .get("content-type")
+            .and_then(|h| h.to_str().ok())
+            .unwrap_or("");
 
         if content_type.contains("audio/mpeg") {
             println!("Job Completed! Audio is ready.");
@@ -269,11 +308,11 @@ fn get_container_ip(container_name: &str) -> Option<String> {
             "inspect",
             "-f",
             "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
-            container_name
+            container_name,
         ])
         .output()
         .ok()?;
-    
+
     if output.status.success() {
         let ip = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if !ip.is_empty() {
