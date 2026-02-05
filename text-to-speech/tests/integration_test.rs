@@ -122,7 +122,9 @@ fn run_test_logic() {
 
     println!("Creating test file...");
     let mut file = File::create("test_tts_input.txt").expect("Failed to create test file");
+    writeln!(file, "Chapter 1").expect("Failed to write to file");
     writeln!(file, "Hello from Rust integration test.").expect("Failed to write to file");
+    writeln!(file, "This is a second line to ensure the text is long enough to be processed.").expect("Failed to write to file");
 
     let client = Client::new();
     let mut url = String::new();
