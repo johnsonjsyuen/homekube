@@ -19,9 +19,8 @@ spec:
       - name: keycloak
         image: quay.io/keycloak/keycloak:24.0
         args:
-        - start
+        - start-dev
         - --hostname-strict=false
-        - --http-enabled=true
         env:
         - name: KEYCLOAK_ADMIN
           valueFrom:
@@ -58,18 +57,20 @@ spec:
           httpGet:
             path: /realms/master
             port: 8080
-          initialDelaySeconds: 30
+          initialDelaySeconds: 120
           periodSeconds: 10
+          failureThreshold: 10
         livenessProbe:
           httpGet:
             path: /realms/master
             port: 8080
-          initialDelaySeconds: 60
+          initialDelaySeconds: 180
           periodSeconds: 30
+          failureThreshold: 5
         resources:
           requests:
-            memory: "512Mi"
-            cpu: "250m"
-          limits:
             memory: "1Gi"
             cpu: "1"
+          limits:
+            memory: "2Gi"
+            cpu: "2"
