@@ -1,8 +1,29 @@
 import Keycloak from 'keycloak-js';
 
-// Keycloak configuration - these can be overridden by environment variables
+// Determine Keycloak URL based on current hostname
+function getKeycloakUrl(): string {
+    if (typeof window === 'undefined') {
+        return 'http://localhost:8080'; // SSR fallback
+    }
+
+    // Check for explicit override first
+    if (import.meta.env.VITE_KEYCLOAK_URL) {
+        return import.meta.env.VITE_KEYCLOAK_URL;
+    }
+
+    // Auto-detect based on hostname
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'http://localhost:8080';
+    }
+
+    // Production: use auth.johnsonyuen.com
+    return 'https://auth.johnsonyuen.com';
+}
+
+// Keycloak configuration
 const keycloakConfig = {
-    url: import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8080',
+    url: getKeycloakUrl(),
     realm: import.meta.env.VITE_KEYCLOAK_REALM || 'homekube',
     clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'homepage'
 };
