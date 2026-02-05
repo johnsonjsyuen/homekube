@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { initKeycloak, login, logout, onAuthStateChange, getToken, type AuthState } from '$lib/auth';
+    import { initKeycloak, login, logout, manageAccount, onAuthStateChange, getToken, type AuthState } from '$lib/auth';
 
     let ttsFile = $state<FileList | null>(null);
     let ttsVoice = $state("af_heart");
@@ -13,10 +13,7 @@
 
     // Auth state
     let authState = $state<AuthState>({
-        authenticated: false,
-        token: null,
-        username: null,
-        roles: []
+        authenticated: false
     });
     let authInitialized = $state(false);
 
@@ -145,7 +142,10 @@
         {:else}
             <div class="user-info">
                 <span>Logged in as: <strong>{authState.username}</strong></span>
-                <button class="logout-btn" onclick={handleLogout}>Log Out</button>
+                <div class="user-actions">
+                    <button class="account-btn" onclick={manageAccount}>Account</button>
+                    <button class="logout-btn" onclick={handleLogout}>Log Out</button>
+                </div>
             </div>
 
             <div class="form-group">
@@ -289,6 +289,27 @@
     }
 
     .user-info strong {
+        color: #fff;
+    }
+
+    .user-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .account-btn {
+        background: transparent;
+        color: #4a90e2;
+        border: 1px solid #4a90e2;
+        padding: 5px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+    }
+
+    .account-btn:hover {
+        background: #4a90e2;
         color: #fff;
     }
 

@@ -184,6 +184,12 @@ export async function logout(): Promise<void> {
     }
 }
 
+export async function manageAccount(): Promise<void> {
+    if (keycloak?.authenticated) {
+        await keycloak.accountManagement();
+    }
+}
+
 export function getToken(): string | null {
     return authState.token;
 }

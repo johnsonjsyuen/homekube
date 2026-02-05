@@ -66,6 +66,46 @@ Click "Save"
 8. Set "Temporary" to **OFF** (so you don't have to change it on first login)
 9. Click "Save"
 
+## 4. Enable Passkey (WebAuthn) Support
+
+To allow users to log in with Passkeys (TouchID, FaceID, YubiKey), you need to configure the WebAuthn authentication flow.
+
+### Configure WebAuthn Policy (Optional)
+
+1. Go to **Authentication** in the left menu.
+2. Click on the **Policies** tab.
+3. Click on **WebAuthn Policy** (or **WebAuthn Passwordless Policy**).
+4. Adjust settings if needed (e.g., User Verification Requirement).
+   - **User Verification Requirement**: `preferred` is usually best for broad compatibility.
+5. Click "Save".
+
+### Configure Authentication Flow
+
+1. Go to **Authentication** in the left menu.
+2. Locate the `browser` flow.
+3. Click the three dots on the right -> **Duplicate**.
+4. Name it `browser-passkeys`.
+5. Click on the new `browser-passkeys` flow to edit it.
+6. Find the step containing "Username Password Form" (usually inside a "Browser Forms" sub-flow).
+7. Click **Add step** (or **Add execution**).
+8. Select **WebAuthn Authenticator**.
+9. Ensure both **Username Password Form** and **WebAuthn Authenticator** are set to **Alternative**.
+   - This allows the user to choose between entering a password or using a passkey.
+10. Go back to the **Flows** list.
+11. Find `browser-passkeys`.
+12. Click the three dots -> **Bind flow**.
+13. Select **Browser flow** and click **Save**.
+
+### User Registration of Passkeys
+
+Users can register Passkeys via the Account Console.
+
+1. Log in to the application.
+2. Click the **Account** button (added in the homepage).
+3. Navigate to **Account security** -> **Signing in**.
+4. Look for **Security keys** or **Passwordless**.
+5. Click **Add security key** and follow the browser prompts.
+
 ## Summary of Key Settings
 
 ```
