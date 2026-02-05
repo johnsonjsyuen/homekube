@@ -91,10 +91,17 @@ export async function initKeycloak(): Promise<AuthState> {
 
     try {
         console.log('[Auth] Starting Keycloak init...');
+        console.log('[Auth] Current URL:', window.location.href);
+
+        // Check if we're returning from a login redirect (URL has code parameter)
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasAuthCode = urlParams.has('code') && urlParams.has('state');
+        console.log('[Auth] Has auth code in URL:', hasAuthCode);
+
         const authenticated = await keycloak.init({
-            onLoad: 'check-sso',
-            silentCheckSsoRedirectUri: window.location.origin + '/silent-check-sso.html',
-            pkceMethod: 'S256'
+            onLoad: hasAuthCode ? 'login-required' : 'check-sso',
+            pkceMethod: 'S256',
+            checkLoginIframe: false  // Disable iframe check which can cause CORS issues
         });
 
         console.log('[Auth] Keycloak init complete. Authenticated:', authenticated);
