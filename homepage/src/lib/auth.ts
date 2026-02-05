@@ -28,6 +28,33 @@ function getKeycloakConfig() {
     };
 }
 
+// Intercept fetch calls to Keycloak token endpoint and proxy through our backend
+function setupTokenProxy() {
+    if (typeof window === 'undefined') return;
+
+    const originalFetch = window.fetch;
+    window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+
+        // Check if this is a token request to Keycloak
+        if (url.includes('auth.johnsonyuen.com') && url.includes('/token')) {
+            console.log('[Auth] Intercepting token request, proxying through backend');
+
+            // Proxy through our backend
+            return originalFetch('/api/auth/token', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: init?.body,
+            });
+        }
+
+        // Pass through all other requests
+        return originalFetch(input, init);
+    };
+}
+
 let keycloak: Keycloak | null = null;
 let initialized = false;
 
@@ -85,6 +112,9 @@ export async function initKeycloak(): Promise<AuthState> {
         return authState;
     }
 
+    // Setup fetch proxy to avoid CORS issues with token endpoint
+    setupTokenProxy();
+
     const config = getKeycloakConfig();
     console.log('[Auth] Initializing Keycloak with config:', config);
     keycloak = new Keycloak(config);
@@ -99,9 +129,10 @@ export async function initKeycloak(): Promise<AuthState> {
         console.log('[Auth] Has auth code in URL:', hasAuthCode);
 
         const authenticated = await keycloak.init({
-            onLoad: hasAuthCode ? 'login-required' : 'check-sso',
+            onLoad: 'check-sso',
             pkceMethod: 'S256',
-            checkLoginIframe: false  // Disable iframe check which can cause CORS issues
+            checkLoginIframe: false,  // Disable iframe check which can cause CORS issues
+            responseMode: 'query'     // Use query params instead of fragment for better compatibility
         });
 
         console.log('[Auth] Keycloak init complete. Authenticated:', authenticated);
@@ -139,7 +170,9 @@ export async function login(): Promise<void> {
         await initKeycloak();
     }
     if (keycloak && !keycloak.authenticated) {
-        await keycloak.login();
+        await keycloak.login({
+            redirectUri: window.location.origin + window.location.pathname
+        });
     }
 }
 
