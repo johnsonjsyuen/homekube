@@ -1,6 +1,14 @@
 <script lang="ts">
     import { goto } from "$app/navigation";
     import { page } from "$app/state";
+    import { onMount } from "svelte";
+    import {
+        initKeycloak,
+        login,
+        logout,
+        onAuthStateChange,
+        type AuthState,
+    } from "$lib/auth";
     import type { PageData } from "./$types";
     import WeatherTab from "./WeatherTab.svelte";
     // import SpeedtestTab from "./SpeedtestTab.svelte";
@@ -10,6 +18,36 @@
 
     // Initialize active tab from URL query parameter
     let activeTab = $state(page.url.searchParams.get("tab") || "weather");
+
+    // Auth state
+    let authState = $state<AuthState>({
+        authenticated: false,
+        token: null,
+        username: null,
+        roles: [],
+    });
+    let authInitialized = $state(false);
+
+    onMount(() => {
+        // Initialize Keycloak and subscribe to auth state changes
+        initKeycloak().then(() => {
+            authInitialized = true;
+        });
+
+        const unsubscribe = onAuthStateChange((state) => {
+            authState = state;
+        });
+
+        return unsubscribe;
+    });
+
+    async function handleLogin() {
+        await login();
+    }
+
+    async function handleLogout() {
+        await logout();
+    }
 
     let currentSelectValue = $derived.by(() => {
         const lat = page.url.searchParams.get("lat");
@@ -88,22 +126,41 @@
                 </select>
             </div>
         {/if}
-        <div class="datetime-container">
-            <div class="datetime">{data.localTime}</div>
-            {#if data.fetchedAt}
-                <div class="fetched-at">
-                    Last updated: {new Date(
-                        data.fetchedAt,
-                    ).toLocaleTimeString()}
-                </div>
-            {/if}
+        <div class="right-section">
+            <div class="datetime-container">
+                <div class="datetime">{data.localTime}</div>
+                {#if data.fetchedAt}
+                    <div class="fetched-at">
+                        Last updated: {new Date(
+                            data.fetchedAt,
+                        ).toLocaleTimeString()}
+                    </div>
+                {/if}
+            </div>
+
+            <div class="auth-container">
+                {#if !authInitialized}
+                    <span class="auth-loading">Loading...</span>
+                {:else if !authState.authenticated}
+                    <button class="login-btn-header" onclick={handleLogin}
+                        >Log In</button
+                    >
+                {:else}
+                    <div class="user-info-header">
+                        <span class="username">{authState.username}</span>
+                        <button class="logout-btn-header" onclick={handleLogout}
+                            >Log Out</button
+                        >
+                    </div>
+                {/if}
+            </div>
         </div>
     </header>
 
     {#if activeTab === "weather"}
         <WeatherTab {data} />
     {:else if activeTab === "tts"}
-        <TtsTab />
+        <TtsTab {authState} {authInitialized} />
     {/if}
 </div>
 
@@ -171,6 +228,12 @@
         font-size: 0.9rem;
     }
 
+    .right-section {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+    }
+
     .datetime-container {
         text-align: right;
     }
@@ -184,5 +247,57 @@
         font-size: 0.75rem;
         color: #666;
         margin-top: 2px;
+    }
+
+    .auth-container {
+        display: flex;
+        align-items: center;
+    }
+
+    .login-btn-header {
+        background: #4a90e2;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .login-btn-header:hover {
+        background: #357abd;
+    }
+
+    .user-info-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #333;
+        padding: 5px 10px;
+        border-radius: 6px;
+    }
+
+    .username {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #fff;
+    }
+
+    .logout-btn-header {
+        background: transparent;
+        color: #f87171;
+        border: 1px solid #f87171;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        transition: all 0.2s;
+    }
+
+    .logout-btn-header:hover {
+        background: #f87171;
+        color: #000;
     }
 </style>
