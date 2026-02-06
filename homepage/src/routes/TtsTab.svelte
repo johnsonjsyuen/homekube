@@ -1,6 +1,13 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
-    import { initKeycloak, login, logout, onAuthStateChange, getToken, type AuthState } from '$lib/auth';
+    import { onMount } from "svelte";
+    import {
+        initKeycloak,
+        login,
+        logout,
+        onAuthStateChange,
+        getToken,
+        type AuthState,
+    } from "$lib/auth";
 
     let ttsFile = $state<FileList | null>(null);
     let ttsVoice = $state("af_heart");
@@ -16,9 +23,22 @@
         authenticated: false,
         token: null,
         username: null,
-        roles: []
+        roles: [],
     });
     let authInitialized = $state(false);
+
+    // Job history state
+    interface Job {
+        id: string;
+        status: string;
+        error_message?: string;
+        voice?: string;
+        speed?: string;
+        created_at: string;
+    }
+    let jobs = $state<Job[]>([]);
+    let jobsLoading = $state(false);
+    let jobsError = $state("");
 
     onMount(() => {
         // Initialize Keycloak and subscribe to auth state changes
@@ -28,14 +48,99 @@
 
         const unsubscribe = onAuthStateChange((state) => {
             authState = state;
+            // Fetch jobs when user becomes authenticated
+            if (state.authenticated) {
+                fetchJobs();
+            } else {
+                jobs = [];
+            }
         });
 
         return unsubscribe;
     });
 
+    async function fetchJobs() {
+        jobsLoading = true;
+        jobsError = "";
+        try {
+            const token = getToken();
+            const res = await fetch("/api/tts/jobs", {
+                headers: token
+                    ? {
+                          Authorization: `Bearer ${token}`,
+                      }
+                    : {},
+            });
+
+            if (!res.ok) {
+                throw new Error(await res.text());
+            }
+
+            jobs = await res.json();
+        } catch (e: any) {
+            console.error("[TTS] Failed to fetch jobs:", e);
+            jobsError = e.message;
+        } finally {
+            jobsLoading = false;
+        }
+    }
+
+    function formatDate(dateStr: string): string {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString("en-AU", {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    }
+
+    function getVoiceDisplayName(voice: string | undefined): string {
+        const voiceMap: Record<string, string> = {
+            af_heart: "Heart",
+            af_bella: "Bella",
+            af_nicole: "Nicole",
+            af_sky: "Sky",
+            bm_daniel: "Daniel",
+            bm_george: "George",
+            bm_lewis: "Lewis",
+        };
+        return voice ? voiceMap[voice] || voice : "Unknown";
+    }
+
+    async function downloadJob(jobId: string) {
+        try {
+            const token = getToken();
+            const res = await fetch(`/api/tts/status/${jobId}`, {
+                headers: token
+                    ? {
+                          Authorization: `Bearer ${token}`,
+                      }
+                    : {},
+            });
+
+            if (!res.ok) {
+                throw new Error("Failed to download");
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${jobId}.mp3`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (e: any) {
+            console.error("[TTS] Download failed:", e);
+            alert(`Download failed: ${e.message}`);
+        }
+    }
+
     async function handleLogin() {
         // Redirect back to the TTS tab after login
-        await login('/?tab=tts');
+        await login("/?tab=tts");
     }
 
     async function handleLogout() {
@@ -67,9 +172,11 @@
             const res = await fetch("/api/tts/generate", {
                 method: "POST",
                 body: formData,
-                headers: token ? {
-                    'Authorization': `Bearer ${token}`
-                } : {}
+                headers: token
+                    ? {
+                          Authorization: `Bearer ${token}`,
+                      }
+                    : {},
             });
 
             if (!res.ok) {
@@ -86,6 +193,15 @@
         }
     }
 
+    // When a new job completes, refresh the job list
+    $effect(() => {
+        if (ttsStatus === "completed" && authState.authenticated) {
+            fetchJobs();
+        }
+    });
+
+    let ttsDownloadUrl = $state("");
+
     async function pollStatus(id: string) {
         if (ttsStatus !== "processing") {
             console.log("[TTS] Polling stopped. Status:", ttsStatus);
@@ -96,9 +212,11 @@
         try {
             const token = getToken();
             const res = await fetch(`/api/tts/status/${id}`, {
-                headers: token ? {
-                    'Authorization': `Bearer ${token}`
-                } : {}
+                headers: token
+                    ? {
+                          Authorization: `Bearer ${token}`,
+                      }
+                    : {},
             });
             const contentType = res.headers.get("content-type");
 
@@ -110,13 +228,15 @@
                     ttsError = data.message;
                 } else if (data.status === "processing") {
                     console.log("[TTS] Still processing. Next poll in 3s.");
-                    setTimeout(() => pollStatus(id), 3*1000);
+                    setTimeout(() => pollStatus(id), 3 * 1000);
                 }
             } else {
                 console.log(
                     "[TTS] Response is not JSON (likely audio). Task completed.",
                 );
-                // Audio file is ready (stream)
+                // Create a blob URL from the authenticated response for download
+                const blob = await res.blob();
+                ttsDownloadUrl = URL.createObjectURL(blob);
                 ttsStatus = "completed";
             }
         } catch (e: any) {
@@ -145,7 +265,9 @@
         {:else}
             <div class="user-info">
                 <span>Logged in as: <strong>{authState.username}</strong></span>
-                <button class="logout-btn" onclick={handleLogout}>Log Out</button>
+                <button class="logout-btn" onclick={handleLogout}
+                    >Log Out</button
+                >
             </div>
 
             <div class="form-group">
@@ -188,7 +310,9 @@
                 onclick={generateSpeech}
                 disabled={ttsStatus === "processing"}
             >
-                {ttsStatus === "processing" ? "Processing..." : "Generate Audio"}
+                {ttsStatus === "processing"
+                    ? "Processing..."
+                    : "Generate Audio"}
             </button>
 
             {#if ttsStatus === "processing"}
@@ -201,9 +325,9 @@
                 <div class="success-msg">
                     <p>Audio generated successfully!</p>
                     <a
-                        href="/api/tts/status/{ttsJobId}"
+                        href={ttsDownloadUrl}
                         class="download-btn"
-                        download
+                        download="{ttsJobId}.mp3"
                     >
                         Download MP3
                     </a>
@@ -215,6 +339,103 @@
                     Error: {ttsError}
                 </div>
             {/if}
+
+            <!-- Job History Section -->
+            <div class="job-history">
+                <div class="job-history-header">
+                    <h4>Job History</h4>
+                    <button
+                        class="refresh-btn"
+                        onclick={fetchJobs}
+                        disabled={jobsLoading}
+                    >
+                        {jobsLoading ? "⟳" : "🔄"} Refresh
+                    </button>
+                </div>
+
+                {#if jobsLoading && jobs.length === 0}
+                    <div class="jobs-loading">
+                        <span class="spinner">...</span> Loading jobs...
+                    </div>
+                {:else if jobsError}
+                    <div class="jobs-error">
+                        Failed to load jobs: {jobsError}
+                    </div>
+                {:else if jobs.length === 0}
+                    <div class="jobs-empty">
+                        No jobs yet. Generate your first audio above!
+                    </div>
+                {:else}
+                    <div class="jobs-table-container">
+                        <table class="jobs-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Voice</th>
+                                    <th>Speed</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {#each jobs as job}
+                                    <tr>
+                                        <td>{formatDate(job.created_at)}</td>
+                                        <td>{getVoiceDisplayName(job.voice)}</td
+                                        >
+                                        <td>{job.speed || "1.0"}x</td>
+                                        <td>
+                                            {#if job.status === "completed"}
+                                                <span
+                                                    class="status-badge status-completed"
+                                                    >✓ Done</span
+                                                >
+                                            {:else if job.status === "processing"}
+                                                <span
+                                                    class="status-badge status-processing"
+                                                    >⟳ Processing</span
+                                                >
+                                            {:else if job.status === "error"}
+                                                <span
+                                                    class="status-badge status-error"
+                                                    title={job.error_message}
+                                                    >✗ Error</span
+                                                >
+                                            {:else}
+                                                <span class="status-badge"
+                                                    >{job.status}</span
+                                                >
+                                            {/if}
+                                        </td>
+                                        <td>
+                                            {#if job.status === "completed"}
+                                                <button
+                                                    class="download-job-btn"
+                                                    onclick={() =>
+                                                        downloadJob(job.id)}
+                                                >
+                                                    ⬇ Download
+                                                </button>
+                                            {:else if job.status === "error"}
+                                                <span
+                                                    class="job-error-hint"
+                                                    title={job.error_message}
+                                                >
+                                                    ⓘ
+                                                </span>
+                                            {:else}
+                                                <span class="job-pending"
+                                                    >-</span
+                                                >
+                                            {/if}
+                                        </td>
+                                    </tr>
+                                {/each}
+                            </tbody>
+                        </table>
+                    </div>
+                {/if}
+            </div>
         {/if}
     </div>
 </div>
@@ -386,8 +607,13 @@
     }
 
     @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
+        0%,
+        100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.5;
+        }
     }
 
     .success-msg {
@@ -418,5 +644,142 @@
         border-radius: 8px;
         text-align: center;
         border: 1px solid rgba(248, 113, 113, 0.3);
+    }
+
+    /* Job History Styles */
+    .job-history {
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #444;
+    }
+
+    .job-history-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .job-history-header h4 {
+        margin: 0;
+        color: #fff;
+        font-size: 1rem;
+    }
+
+    .refresh-btn {
+        background: transparent;
+        color: #4a90e2;
+        border: 1px solid #4a90e2;
+        padding: 5px 12px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        transition: all 0.2s;
+    }
+
+    .refresh-btn:hover {
+        background: #4a90e2;
+        color: #fff;
+    }
+
+    .refresh-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .jobs-loading,
+    .jobs-error,
+    .jobs-empty {
+        text-align: center;
+        padding: 20px;
+        color: #aaa;
+        font-size: 0.9rem;
+    }
+
+    .jobs-error {
+        color: #f87171;
+    }
+
+    .jobs-table-container {
+        overflow-x: auto;
+    }
+
+    .jobs-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+    }
+
+    .jobs-table th,
+    .jobs-table td {
+        padding: 10px 8px;
+        text-align: left;
+        border-bottom: 1px solid #3a3a3a;
+    }
+
+    .jobs-table th {
+        color: #888;
+        font-weight: 500;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .jobs-table td {
+        color: #ccc;
+    }
+
+    .jobs-table tbody tr:hover {
+        background: #333;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+
+    .status-completed {
+        background: rgba(74, 222, 128, 0.2);
+        color: #4ade80;
+    }
+
+    .status-processing {
+        background: rgba(251, 191, 36, 0.2);
+        color: #fbbf24;
+    }
+
+    .status-error {
+        background: rgba(248, 113, 113, 0.2);
+        color: #f87171;
+        cursor: help;
+    }
+
+    .download-job-btn {
+        background: #4ade80;
+        color: #000;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.75rem;
+        font-weight: 600;
+        transition: opacity 0.2s;
+    }
+
+    .download-job-btn:hover {
+        opacity: 0.8;
+    }
+
+    .job-error-hint {
+        color: #f87171;
+        cursor: help;
+        font-size: 1rem;
+    }
+
+    .job-pending {
+        color: #666;
     }
 </style>

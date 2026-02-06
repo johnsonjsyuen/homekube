@@ -1,13 +1,20 @@
 use crate::state::AppState;
 use axum::{
     extract::{Request, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     middleware::Next,
     response::Response,
 };
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use serde::Deserialize;
 use std::collections::HashMap;
+
+/// Represents an authenticated user extracted from the JWT token.
+/// This is added to request extensions by the auth middleware.
+#[derive(Debug, Clone)]
+pub struct AuthenticatedUser {
+    pub username: String,
+}
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
@@ -128,11 +135,14 @@ async fn validate_token(state: &AppState, token: &str) -> Result<KeycloakClaims,
 
 pub async fn auth_middleware(
     State(state): State<AppState>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Result<Response, (StatusCode, String)> {
-    // Skip auth in test mode
+    // Skip auth in test mode - use a default test user
     if std::env::var("TTS_TEST_MODE").is_ok() {
+        request.extensions_mut().insert(AuthenticatedUser {
+            username: "test_user".to_string(),
+        });
         return Ok(next.run(request).await);
     }
 
@@ -153,7 +163,16 @@ pub async fn auth_middleware(
 
     match validate_token(&state, token).await {
         Ok(claims) => {
-            tracing::info!("Authenticated user: {:?}", claims.preferred_username);
+            let username = claims
+                .preferred_username
+                .unwrap_or_else(|| claims.sub.clone());
+            tracing::info!("Authenticated user: {}", username);
+
+            // Store authenticated user in request extensions
+            request
+                .extensions_mut()
+                .insert(AuthenticatedUser { username });
+
             Ok(next.run(request).await)
         }
         Err(e) => {

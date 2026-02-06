@@ -6,8 +6,7 @@ mod state;
 use state::{AppState, JwksCache};
 
 use axum::{
-    Router,
-    middleware,
+    Router, middleware,
     routing::{get, post},
 };
 use sqlx::postgres::PgPoolOptions;
@@ -44,13 +43,30 @@ async fn main() {
             error_message TEXT,
             file_path TEXT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            username TEXT,
+            voice TEXT,
+            speed TEXT
         );
         "#,
     )
     .execute(&pool)
     .await
     .expect("Failed to create table");
+
+    // Migration: Add new columns if they don't exist (for existing deployments)
+    sqlx::query("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS username TEXT")
+        .execute(&pool)
+        .await
+        .ok(); // Ignore error if column already exists
+    sqlx::query("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS voice TEXT")
+        .execute(&pool)
+        .await
+        .ok();
+    sqlx::query("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS speed TEXT")
+        .execute(&pool)
+        .await
+        .ok();
 
     let state = AppState {
         pool: pool.clone(),
@@ -78,6 +94,7 @@ async fn main() {
     let app = Router::new()
         .route("/generate", post(handlers::generate_speech))
         .route("/status/:id", get(handlers::check_status))
+        .route("/jobs", get(handlers::list_jobs))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_middleware,

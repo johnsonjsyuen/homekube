@@ -1,10 +1,12 @@
+use crate::auth::AuthenticatedUser;
 use crate::state::AppState;
 use axum::{
     body::Body,
-    extract::{Multipart, Path, State},
-    http::{header, StatusCode},
+    extract::{Extension, Multipart, Path, State},
+    http::{StatusCode, header},
     response::{IntoResponse, Json, Response},
 };
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::{Pool, Postgres, Row};
 use std::io::Write;
@@ -22,10 +24,11 @@ enum JobStatusResponse {
 }
 
 pub async fn generate_speech(
+    Extension(user): Extension<AuthenticatedUser>,
     State(state): State<AppState>,
     mut multipart: Multipart,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    tracing::info!("Received generate_speech request");
+    tracing::info!(username = %user.username, "Received generate_speech request");
 
     let mut text_content = None;
     let mut speed = "1.0".to_string();
@@ -80,10 +83,15 @@ pub async fn generate_speech(
 
     let job_id = Uuid::new_v4();
 
-    // Insert into DB
-    tracing::info!(job_id = %job_id, "Creating job in database");
-    sqlx::query("INSERT INTO jobs (id, status) VALUES ($1, 'processing')")
+    // Insert into DB with user info
+    tracing::info!(job_id = %job_id, username = %user.username, "Creating job in database");
+    sqlx::query(
+        "INSERT INTO jobs (id, status, username, voice, speed) VALUES ($1, 'processing', $2, $3, $4)"
+    )
         .bind(job_id)
+        .bind(&user.username)
+        .bind(&voice)
+        .bind(&speed)
         .execute(&state.pool)
         .await
         .map_err(|e| {
@@ -270,7 +278,9 @@ fn process_tts(
             collected
         });
 
-        let status = child.wait().map_err(|e| format!("Failed to wait on kokoro-tts: {}", e))?;
+        let status = child
+            .wait()
+            .map_err(|e| format!("Failed to wait on kokoro-tts: {}", e))?;
         let stdout_output = stdout_handle.join().unwrap_or_default();
         let stderr_output = stderr_handle.join().unwrap_or_default();
 
@@ -429,4 +439,61 @@ pub async fn check_status(Path(id_str): Path<String>, State(state): State<AppSta
             (StatusCode::INTERNAL_SERVER_ERROR, "Unknown status").into_response()
         }
     }
+}
+
+/// Response structure for a single job in the list
+#[derive(Serialize)]
+pub struct JobListItem {
+    pub id: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub voice: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub speed: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// List all jobs for the authenticated user
+pub async fn list_jobs(
+    Extension(user): Extension<AuthenticatedUser>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<JobListItem>>, (StatusCode, String)> {
+    tracing::info!(username = %user.username, "Listing jobs for user");
+
+    let rows = sqlx::query(
+        r#"
+        SELECT id, status, error_message, voice, speed, created_at
+        FROM jobs
+        WHERE username = $1
+        ORDER BY created_at DESC
+        LIMIT 50
+        "#,
+    )
+    .bind(&user.username)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, "Failed to fetch jobs from database");
+        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    })?;
+
+    let jobs: Vec<JobListItem> = rows
+        .iter()
+        .map(|row| {
+            let id: Uuid = row.get("id");
+            JobListItem {
+                id: id.to_string(),
+                status: row.get("status"),
+                error_message: row.get("error_message"),
+                voice: row.get("voice"),
+                speed: row.get("speed"),
+                created_at: row.get("created_at"),
+            }
+        })
+        .collect();
+
+    tracing::info!(username = %user.username, count = jobs.len(), "Jobs retrieved");
+    Ok(Json(jobs))
 }
