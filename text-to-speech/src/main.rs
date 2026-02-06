@@ -193,7 +193,7 @@ async fn main() {
     let storage_path = std::env::var("STORAGE_PATH").unwrap_or_else(|_| "/app/storage".to_string());
     let keycloak_url = std::env::var("KEYCLOAK_URL").unwrap_or_else(|_| "http://keycloak.keycloak.svc.cluster.local".to_string());
     let keycloak_realm = std::env::var("KEYCLOAK_REALM").unwrap_or_else(|_| "homekube".to_string());
-    let keycloak_audience = std::env::var("KEYCLOAK_AUDIENCE").unwrap_or_else(|_| "account".to_string());
+    let keycloak_audience = std::env::var("KEYCLOAK_AUDIENCE").unwrap_or_else(|_| "tts".to_string());
 
     // Ensure storage directory exists
     tokio::fs::create_dir_all(&storage_path).await.unwrap();

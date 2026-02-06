@@ -42,6 +42,8 @@ spec:
           value: "http://keycloak.keycloak.svc.cluster.local"
         - name: KEYCLOAK_REALM
           value: "homekube"
+        - name: KEYCLOAK_AUDIENCE
+          value: "tts"
         volumeMounts:
         - name: storage
           mountPath: /app/storage
