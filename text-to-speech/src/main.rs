@@ -25,6 +25,7 @@ struct AppState {
     jwks_cache: Arc<RwLock<JwksCache>>,
     keycloak_url: String,
     keycloak_realm: String,
+    keycloak_audience: String,
 }
 
 #[derive(Default)]
@@ -144,7 +145,7 @@ async fn validate_token(state: &AppState, token: &str) -> Result<KeycloakClaims,
     // Validate token
     let mut validation = Validation::new(Algorithm::RS256);
     validation.validate_exp = true;
-    validation.validate_aud = false;
+    validation.set_audience(&[&state.keycloak_audience]);
 
     let token_data = decode::<KeycloakClaims>(token, &decoding_key, &validation)
         .map_err(|e| format!("Token validation failed: {}", e))?;
@@ -192,6 +193,7 @@ async fn main() {
     let storage_path = std::env::var("STORAGE_PATH").unwrap_or_else(|_| "/app/storage".to_string());
     let keycloak_url = std::env::var("KEYCLOAK_URL").unwrap_or_else(|_| "http://keycloak.keycloak.svc.cluster.local".to_string());
     let keycloak_realm = std::env::var("KEYCLOAK_REALM").unwrap_or_else(|_| "homekube".to_string());
+    let keycloak_audience = std::env::var("KEYCLOAK_AUDIENCE").unwrap_or_else(|_| "account".to_string());
 
     // Ensure storage directory exists
     tokio::fs::create_dir_all(&storage_path).await.unwrap();
@@ -225,6 +227,7 @@ async fn main() {
         jwks_cache: Arc::new(RwLock::new(JwksCache::default())),
         keycloak_url,
         keycloak_realm,
+        keycloak_audience,
     };
 
     // Spawn cleanup task
