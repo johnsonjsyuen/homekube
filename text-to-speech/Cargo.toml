@@ -11,11 +11,14 @@ anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 uuid = { version = "1.8", features = ["v4"] }
-sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-native-tls", "uuid", "time"] }
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-native-tls", "uuid", "time", "chrono"] }
 chrono = { version = "0.4", features = ["serde"] }
 tempfile = "3.10"
 tracing = "0.1"
 tracing-subscriber = "0.3"
+jsonwebtoken = "9"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tower-http = { version = "0.5", features = ["cors"] }
 
 [dev-dependencies]
 reqwest = { version = "0.12", features = ["blocking", "json", "multipart"] }

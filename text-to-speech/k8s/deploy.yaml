@@ -38,15 +38,21 @@ spec:
           value: "text_to_speech"
         - name: DATABASE_URL
           value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):5432/$(DB_NAME)"
+        - name: KEYCLOAK_URL
+          value: "http://keycloak.keycloak.svc.cluster.local"
+        - name: KEYCLOAK_REALM
+          value: "homekube"
+        - name: KEYCLOAK_AUDIENCE
+          value: "tts"
         volumeMounts:
         - name: storage
           mountPath: /app/storage
         resources:
           requests:
-            memory: "512Mi"
+            memory: "1Gi"
             cpu: "250m"
           limits:
-            memory: "2Gi"
+            memory: "4Gi"
       volumes:
       - name: storage
         persistentVolumeClaim:
