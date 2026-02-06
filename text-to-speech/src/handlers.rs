@@ -393,8 +393,12 @@ fn process_tts(
     Ok(())
 }
 
-pub async fn check_status(Path(id_str): Path<String>, State(state): State<AppState>) -> Response {
-    tracing::debug!(job_id = %id_str, "Checking job status");
+pub async fn check_status(
+    Extension(user): Extension<AuthenticatedUser>,
+    Path(id_str): Path<String>,
+    State(state): State<AppState>,
+) -> Response {
+    tracing::debug!(job_id = %id_str, username = %user.username, "Checking job status");
     let id = match Uuid::parse_str(&id_str) {
         Ok(u) => u,
         Err(_) => {
@@ -403,14 +407,17 @@ pub async fn check_status(Path(id_str): Path<String>, State(state): State<AppSta
         }
     };
 
-    let row = match sqlx::query("SELECT status, error_message, file_path FROM jobs WHERE id = $1")
-        .bind(id)
-        .fetch_optional(&state.pool)
-        .await
+    let row = match sqlx::query(
+        "SELECT status, error_message, file_path FROM jobs WHERE id = $1 AND username = $2",
+    )
+    .bind(id)
+    .bind(&user.username)
+    .fetch_optional(&state.pool)
+    .await
     {
         Ok(Some(r)) => r,
         Ok(None) => {
-            tracing::debug!(job_id = %id, "Job not found");
+            tracing::debug!(job_id = %id, username = %user.username, "Job not found");
             return (StatusCode::NOT_FOUND, "Job not found").into_response();
         }
         Err(e) => {
