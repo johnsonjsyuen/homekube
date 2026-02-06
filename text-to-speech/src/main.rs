@@ -34,51 +34,11 @@ async fn main() {
         .await
         .expect("Failed to connect to Postgres");
 
-    // Initialize Schema
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS jobs (
-            id UUID PRIMARY KEY,
-            status TEXT NOT NULL, -- 'processing', 'completed', 'error'
-            error_message TEXT,
-            file_path TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            username TEXT,
-            voice TEXT,
-            speed TEXT
-        );
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("Failed to create table");
-
-    // Migration: Add new columns if they don't exist (for existing deployments)
-    sqlx::query("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS username TEXT")
-        .execute(&pool)
+    // Run database migrations
+    sqlx::migrate!()
+        .run(&pool)
         .await
-        .ok(); // Ignore error if column already exists
-    sqlx::query("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS voice TEXT")
-        .execute(&pool)
-        .await
-        .ok();
-    sqlx::query("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS speed TEXT")
-        .execute(&pool)
-        .await
-        .ok();
-    sqlx::query("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS input_filename TEXT")
-        .execute(&pool)
-        .await
-        .ok();
-    sqlx::query("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS duration_secs REAL")
-        .execute(&pool)
-        .await
-        .ok();
-    sqlx::query("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS output_file_size BIGINT")
-        .execute(&pool)
-        .await
-        .ok();
+        .expect("Failed to run migrations");
 
     let state = AppState {
         pool: pool.clone(),
