@@ -54,7 +54,9 @@
         }
 
         // Production: connect to speech-to-text service
-        return `${protocol}//stt.${window.location.hostname}/transcribe`;
+        // Strip www. prefix to avoid stt.www.domain.com
+        const hostname = window.location.hostname.replace(/^www\./, "");
+        return `${protocol}//stt.${hostname}/transcribe`;
     }
 
     onMount(() => {
