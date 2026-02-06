@@ -144,6 +144,7 @@ async fn validate_token(state: &AppState, token: &str) -> Result<KeycloakClaims,
     // Validate token
     let mut validation = Validation::new(Algorithm::RS256);
     validation.validate_exp = true;
+    validation.validate_aud = false;
 
     let token_data = decode::<KeycloakClaims>(token, &decoding_key, &validation)
         .map_err(|e| format!("Token validation failed: {}", e))?;
