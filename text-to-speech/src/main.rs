@@ -67,6 +67,18 @@ async fn main() {
         .execute(&pool)
         .await
         .ok();
+    sqlx::query("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS input_filename TEXT")
+        .execute(&pool)
+        .await
+        .ok();
+    sqlx::query("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS duration_secs REAL")
+        .execute(&pool)
+        .await
+        .ok();
+    sqlx::query("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS output_file_size BIGINT")
+        .execute(&pool)
+        .await
+        .ok();
 
     let state = AppState {
         pool: pool.clone(),

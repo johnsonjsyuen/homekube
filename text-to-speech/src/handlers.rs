@@ -33,6 +33,7 @@ pub async fn generate_speech(
     let mut text_content = None;
     let mut speed = "1.0".to_string();
     let mut voice = "af_heart".to_string();
+    let mut input_filename = None;
 
     while let Some(field) = multipart.next_field().await.map_err(|e| {
         tracing::error!(error = %e, "Failed to parse multipart field");
@@ -42,6 +43,7 @@ pub async fn generate_speech(
         tracing::debug!(field_name = %name, "Processing multipart field");
 
         if name == "text_file" {
+            input_filename = field.file_name().map(|s| s.to_string());
             let data = field.bytes().await.map_err(|e| {
                 tracing::error!(error = %e, "Failed to read text_file bytes");
                 (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
@@ -86,12 +88,13 @@ pub async fn generate_speech(
     // Insert into DB with user info
     tracing::info!(job_id = %job_id, username = %user.username, "Creating job in database");
     sqlx::query(
-        "INSERT INTO jobs (id, status, username, voice, speed) VALUES ($1, 'processing', $2, $3, $4)"
+        "INSERT INTO jobs (id, status, username, voice, speed, input_filename) VALUES ($1, 'processing', $2, $3, $4, $5)"
     )
         .bind(job_id)
         .bind(&user.username)
         .bind(&voice)
         .bind(&speed)
+        .bind(&input_filename)
         .execute(&state.pool)
         .await
         .map_err(|e| {
@@ -349,10 +352,39 @@ fn process_tts(
     // Cleanup wav file
     let _ = std::fs::remove_file(wav_path);
 
+    // Get duration using ffprobe
+    let duration_secs: Option<f64> = Command::new("ffprobe")
+        .arg("-v")
+        .arg("error")
+        .arg("-show_entries")
+        .arg("format=duration")
+        .arg("-of")
+        .arg("default=noprint_wrappers=1:nokey=1")
+        .arg(mp3_path_str)
+        .output()
+        .ok()
+        .and_then(|out| {
+            String::from_utf8_lossy(&out.stdout)
+                .trim()
+                .parse::<f64>()
+                .ok()
+        });
+    tracing::info!(job_id = %job_id, duration_secs = ?duration_secs, "Got audio duration");
+
+    // Get output file size
+    let output_file_size: Option<i64> = std::fs::metadata(mp3_path_str)
+        .ok()
+        .map(|m| m.len() as i64);
+    tracing::info!(job_id = %job_id, output_file_size = ?output_file_size, "Got output file size");
+
     // Update DB
     rt.block_on(async {
-        let _ = sqlx::query("UPDATE jobs SET status = 'completed', file_path = $1 WHERE id = $2")
+        let _ = sqlx::query(
+            "UPDATE jobs SET status = 'completed', file_path = $1, duration_secs = $2, output_file_size = $3 WHERE id = $4",
+        )
             .bind(mp3_path_str)
+            .bind(duration_secs)
+            .bind(output_file_size)
             .bind(job_id)
             .execute(&pool)
             .await;
@@ -452,6 +484,12 @@ pub struct JobListItem {
     pub voice: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub speed: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_filename: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_secs: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_file_size: Option<i64>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -464,7 +502,7 @@ pub async fn list_jobs(
 
     let rows = sqlx::query(
         r#"
-        SELECT id, status, error_message, voice, speed, created_at
+        SELECT id, status, error_message, voice, speed, input_filename, duration_secs, output_file_size, created_at
         FROM jobs
         WHERE username = $1
         ORDER BY created_at DESC
@@ -489,6 +527,9 @@ pub async fn list_jobs(
                 error_message: row.get("error_message"),
                 voice: row.get("voice"),
                 speed: row.get("speed"),
+                input_filename: row.get("input_filename"),
+                duration_secs: row.get::<Option<f32>, _>("duration_secs").map(|v| v as f64),
+                output_file_size: row.get("output_file_size"),
                 created_at: row.get("created_at"),
             }
         })

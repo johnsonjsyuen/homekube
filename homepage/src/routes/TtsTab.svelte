@@ -34,6 +34,9 @@
         error_message?: string;
         voice?: string;
         speed?: string;
+        input_filename?: string;
+        duration_secs?: number;
+        output_file_size?: number;
         created_at: string;
     }
     let jobs = $state<Job[]>([]);
@@ -93,6 +96,20 @@
             hour: "2-digit",
             minute: "2-digit",
         });
+    }
+
+    function formatDuration(secs: number | undefined): string {
+        if (secs == null) return "-";
+        const mins = Math.floor(secs / 60);
+        const remainSecs = Math.round(secs % 60);
+        return `${mins}:${remainSecs.toString().padStart(2, "0")}`;
+    }
+
+    function formatFileSize(bytes: number | undefined): string {
+        if (bytes == null) return "-";
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
 
     function getVoiceDisplayName(voice: string | undefined): string {
@@ -371,8 +388,11 @@
                             <thead>
                                 <tr>
                                     <th>Date</th>
+                                    <th>File</th>
                                     <th>Voice</th>
                                     <th>Speed</th>
+                                    <th>Duration</th>
+                                    <th>Size</th>
                                     <th>Status</th>
                                     <th>Action</th>
                                 </tr>
@@ -381,9 +401,12 @@
                                 {#each jobs as job}
                                     <tr>
                                         <td>{formatDate(job.created_at)}</td>
+                                        <td class="filename-cell" title={job.input_filename || "-"}>{job.input_filename || "-"}</td>
                                         <td>{getVoiceDisplayName(job.voice)}</td
                                         >
                                         <td>{job.speed || "1.0"}x</td>
+                                        <td>{formatDuration(job.duration_secs)}</td>
+                                        <td>{formatFileSize(job.output_file_size)}</td>
                                         <td>
                                             {#if job.status === "completed"}
                                                 <span
@@ -451,7 +474,7 @@
         padding: 30px;
         border-radius: 20px;
         width: 100%;
-        max-width: 500px;
+        max-width: 700px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
     }
 
@@ -777,6 +800,13 @@
         color: #f87171;
         cursor: help;
         font-size: 1rem;
+    }
+
+    .filename-cell {
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .job-pending {
