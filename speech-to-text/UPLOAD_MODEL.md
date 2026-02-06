@@ -1,26 +1,34 @@
-# Uploading Model Files to PVC
+# Uploading Model Files (SFTP/Rsync Method)
 
-## Step 1: Create the PVC
+For reliable transfer of large files (like the 9GB model), we'll spin up a temporary SFTP server attached to the PVC.
+
+## Step 1: Start SFTP Server Pod
+
+We use `atmoz/sftp` which is pre-configured for easy SFTP access.
 
 ```bash
+# Create the PVC if you haven't already
 kubectl apply -f k8s/pvc.yaml
-```
 
-## Step 2: Create a temporary pod to copy files
-
-```bash
-kubectl run model-uploader --image=busybox --restart=Never \
+# Run SFTP server
+# Credentials: user=upload, pass=upload
+kubectl run model-uploader --image=atmoz/sftp:latest --restart=Never \
+  --port=22 \
   --overrides='
 {
   "spec": {
     "containers": [{
       "name": "model-uploader",
-      "image": "busybox",
-      "command": ["sleep", "3600"],
+      "image": "atmoz/sftp:latest",
+      "args": ["upload:upload:1001:1001:upload"],
+      "ports": [{"containerPort": 22}],
       "volumeMounts": [{
         "name": "model",
-        "mountPath": "/model"
-      }]
+        "mountPath": "/home/upload/upload"
+      }],
+      "securityContext": {
+        "privileged": true
+      }
     }],
     "volumes": [{
       "name": "model",
@@ -32,44 +40,50 @@ kubectl run model-uploader --image=busybox --restart=Never \
 }'
 ```
 
-Wait for the pod to be ready:
+Wait for it to be ready:
 ```bash
 kubectl wait --for=condition=Ready pod/model-uploader --timeout=60s
 ```
 
-## Step 3: Copy model files
+## Step 2: Port Forward
 
-From your local `speech-to-text/` directory:
-
-```bash
-kubectl cp consolidated.safetensors model-uploader:/model/
-kubectl cp params.json model-uploader:/model/
-kubectl cp tekken.json model-uploader:/model/
-```
-
-> **Note**: The `consolidated.safetensors` file is ~9GB. This may take several minutes.
-
-## Step 4: Verify files
+Forward local port 2222 to the pod's port 22:
 
 ```bash
-kubectl exec model-uploader -- ls -lh /model/
+kubectl port-forward pod/model-uploader 2222:22 &
+PID=$!
 ```
 
-You should see:
-```
-consolidated.safetensors   ~8.9G
-params.json                ~1.3K
-tekken.json                ~15M
-```
+## Step 3: Upload with SFTP
 
-## Step 5: Clean up temporary pod
 
 ```bash
+sftp -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null upload@localhost
+```
+
+Enter password: `upload`
+
+Inside the `sftp>` prompt:
+
+```bash
+cd upload
+put consolidated.safetensors
+put params.json
+put tekken.json
+bye
+```
+
+> **Note**: This will take some time for the 9GB file. The progress bar will show the speed.
+
+## Step 4: Cleanup
+
+```bash
+# Kill port-forward
+kill $PID
+
+# Delete pod
 kubectl delete pod model-uploader
-```
 
-## Step 6: Deploy the application
-
-```bash
+# Deploy app
 kubectl apply -f k8s/
 ```
