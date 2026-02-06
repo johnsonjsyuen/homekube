@@ -66,6 +66,34 @@ Click "Save"
 8. Set "Temporary" to **OFF** (so you don't have to change it on first login)
 9. Click "Save"
 
+## 4. Configure Token Audiences
+
+Your services (like the TTS backend) might require a specific "Audience" (`aud` claim) in the JWT token for security.
+
+### 4.1 Create Client Scope
+1. Go to **Client scopes** in the left menu
+2. Click **Create client scope**
+3. Set **Name**: `tts`
+4. Set **Type**: `Default`
+5. Click **Save**
+
+### 4.2 Add Audience Mapper
+1. In the `tts` scope settings, go to the **Mappers** tab
+2. Click **Configure a new mapper**
+3. Select **Audience**
+4. Set **Name**: `tts-audience`
+5. Set **Included Custom Audience**: `tts`
+6. Set **Add to access token**: **ON**
+7. Click **Save**
+
+### 4.3 Assign to Client
+1. Go to **Clients** in the left menu
+2. Select your client (e.g., `homepage`)
+3. Go to the **Client scopes** tab
+4. Click **Add client scope**
+5. Select `tts`
+6. Click **Add** -> **Default**
+
 ## Summary of Key Settings
 
 ```
