@@ -71,7 +71,6 @@ spec:
             cpu: "2"
           limits:
             memory: "24Gi"
-            nvidia.com/gpu: "1"
         readinessProbe:
           httpGet:
             path: /health
@@ -90,11 +89,3 @@ spec:
       - name: model
         persistentVolumeClaim:
           claimName: voxtral-model
-      
-      nodeSelector:
-        kubernetes.io/gpu: "true"
-      
-      tolerations:
-      - key: "nvidia.com/gpu"
-        operator: "Exists"
-        effect: "NoSchedule"
