@@ -8,7 +8,7 @@ use axum::{
 use serde::Serialize;
 use sqlx::{Pool, Postgres, Row};
 use std::io::Write;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use tempfile::Builder;
 use uuid::Uuid;
 
@@ -207,7 +207,7 @@ fn process_tts(
             speed = %speed,
             "Executing kokoro-tts"
         );
-        let output = Command::new("kokoro-tts")
+        let mut child = Command::new("kokoro-tts")
             .current_dir("/app") // Model files are in /app
             .arg(&text_path)
             .arg(&wav_path)
@@ -215,53 +215,109 @@ fn process_tts(
             .arg(&voice)
             .arg("--speed")
             .arg(&speed)
-            .output()
-            .map_err(|e| format!("Failed to execute kokoro-tts: {}", e))?;
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to spawn kokoro-tts: {}", e))?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let exit_code = output.status.code();
+        // Stream stdout and stderr in separate threads so we get real-time logs
+        // even if the process is OOM-killed
+        let stdout = child.stdout.take();
+        let stderr = child.stderr.take();
+        let job_id_str = job_id.to_string();
+
+        let stdout_job_id = job_id_str.clone();
+        let stdout_handle = std::thread::spawn(move || {
+            use std::io::BufRead;
+            let mut collected = String::new();
+            if let Some(out) = stdout {
+                for line in std::io::BufReader::new(out).lines() {
+                    match line {
+                        Ok(l) => {
+                            tracing::info!(job_id = %stdout_job_id, line = %l, "kokoro-tts stdout");
+                            collected.push_str(&l);
+                            collected.push('\n');
+                        }
+                        Err(e) => {
+                            tracing::warn!(job_id = %stdout_job_id, error = %e, "Error reading kokoro-tts stdout");
+                            break;
+                        }
+                    }
+                }
+            }
+            collected
+        });
+
+        let stderr_job_id = job_id_str.clone();
+        let stderr_handle = std::thread::spawn(move || {
+            use std::io::BufRead;
+            let mut collected = String::new();
+            if let Some(err) = stderr {
+                for line in std::io::BufReader::new(err).lines() {
+                    match line {
+                        Ok(l) => {
+                            tracing::warn!(job_id = %stderr_job_id, line = %l, "kokoro-tts stderr");
+                            collected.push_str(&l);
+                            collected.push('\n');
+                        }
+                        Err(e) => {
+                            tracing::warn!(job_id = %stderr_job_id, error = %e, "Error reading kokoro-tts stderr");
+                            break;
+                        }
+                    }
+                }
+            }
+            collected
+        });
+
+        let status = child.wait().map_err(|e| format!("Failed to wait on kokoro-tts: {}", e))?;
+        let stdout_output = stdout_handle.join().unwrap_or_default();
+        let stderr_output = stderr_handle.join().unwrap_or_default();
+
+        let exit_code = status.code();
+        tracing::info!(job_id = %job_id, exit_code = ?exit_code, "kokoro-tts process exited");
+
+        if !status.success() {
             tracing::error!(
                 job_id = %job_id,
                 exit_code = ?exit_code,
-                stdout = %stdout,
-                stderr = %stderr,
                 "kokoro-tts failed"
             );
             return Err(format!(
                 "kokoro-tts failed (exit code {:?}): stdout={}, stderr={}",
-                exit_code, stdout, stderr
+                exit_code, stdout_output, stderr_output
             ));
         }
         tracing::info!(job_id = %job_id, "kokoro-tts completed successfully");
 
         // Verify the WAV file was actually created
         if !std::path::Path::new(&wav_path).exists() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            tracing::error!(job_id = %job_id, wav_path = %wav_path, stdout = %stdout, "kokoro-tts did not produce output file");
+            tracing::error!(job_id = %job_id, wav_path = %wav_path, "kokoro-tts did not produce output file");
             return Err(format!(
                 "kokoro-tts did not produce output file. stdout: {}",
-                stdout
+                stdout_output
             ));
         }
     }
 
-    tracing::info!(job_id = %job_id, wav_path = %wav_path, mp3_path = ?mp3_path, "Executing ffmpeg to convert WAV to MP3");
-    let ffmpeg_status = Command::new("ffmpeg")
+    let mp3_path_str = mp3_path.to_str().ok_or("Invalid MP3 path")?;
+    tracing::info!(job_id = %job_id, wav_path = %wav_path, mp3_path = %mp3_path_str, "Executing ffmpeg to convert WAV to MP3");
+    let ffmpeg_output = Command::new("ffmpeg")
         .arg("-i")
         .arg(&wav_path)
         .arg("-b:a")
         .arg("192k")
         .arg("-y")
-        .arg(mp3_path.to_str().unwrap())
+        .arg(mp3_path_str)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .output()
         .map_err(|e| format!("Failed to execute ffmpeg: {}", e))?;
 
-    if !ffmpeg_status.status.success() {
-        let stderr = String::from_utf8_lossy(&ffmpeg_status.stderr);
-        let stdout = String::from_utf8_lossy(&ffmpeg_status.stdout);
-        let exit_code = ffmpeg_status.status.code();
+    if !ffmpeg_output.status.success() {
+        let stderr = String::from_utf8_lossy(&ffmpeg_output.stderr);
+        let stdout = String::from_utf8_lossy(&ffmpeg_output.stdout);
+        let exit_code = ffmpeg_output.status.code();
         tracing::error!(
             job_id = %job_id,
             exit_code = ?exit_code,
@@ -274,7 +330,11 @@ fn process_tts(
             exit_code, stderr
         ));
     }
-    tracing::info!(job_id = %job_id, "ffmpeg conversion completed successfully");
+    tracing::info!(
+        job_id = %job_id,
+        stderr = %String::from_utf8_lossy(&ffmpeg_output.stderr),
+        "ffmpeg conversion completed successfully"
+    );
 
     // Cleanup wav file
     let _ = std::fs::remove_file(wav_path);
@@ -282,7 +342,7 @@ fn process_tts(
     // Update DB
     rt.block_on(async {
         let _ = sqlx::query("UPDATE jobs SET status = 'completed', file_path = $1 WHERE id = $2")
-            .bind(mp3_path.to_str().unwrap())
+            .bind(mp3_path_str)
             .bind(job_id)
             .execute(&pool)
             .await;
