@@ -1,0 +1,12 @@
+# Rust build artifacts
+target/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+
+# Model files (only for Dockerfile, not Dockerfile.vllm)
+# These are explicitly included in Dockerfile.vllm via COPY

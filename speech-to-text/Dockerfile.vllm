@@ -1,0 +1,11 @@
+# vLLM container for serving Voxtral model
+# Model files are mounted from PVC, not baked into image
+FROM vllm/vllm-openai:nightly
+
+EXPOSE 8000
+
+# Model will be mounted at /app/model via PVC
+CMD ["--model", "/app/model", \
+    "--served-model-name", "Voxtral-Mini-4B-Realtime-2602", \
+    "--host", "0.0.0.0", \
+    "--port", "8000"]

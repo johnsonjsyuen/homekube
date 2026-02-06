@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: speech-to-text
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: speech-to-text
+  template:
+    metadata:
+      labels:
+        app: speech-to-text
+    spec:
+      containers:
+      # Rust WebSocket proxy
+      - name: speech-to-text
+        image: localhost:5000/speech-to-text:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: ws
+        env:
+        - name: KEYCLOAK_URL
+          value: "http://keycloak.keycloak.svc.cluster.local"
+        - name: KEYCLOAK_REALM
+          value: "homekube"
+        - name: KEYCLOAK_AUDIENCE
+          value: "stt"
+        - name: VLLM_URL
+          value: "http://localhost:8000"
+        - name: RUST_LOG
+          value: "info"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      
+      # vLLM sidecar for Voxtral model
+      - name: vllm
+        image: localhost:5000/speech-to-text-vllm:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: vllm
+        env:
+        - name: VLLM_DISABLE_COMPILE_CACHE
+          value: "1"
+        volumeMounts:
+        - name: model
+          mountPath: /app/model
+          readOnly: true
+        resources:
+          requests:
+            memory: "16Gi"
+            cpu: "2"
+          limits:
+            memory: "24Gi"
+            nvidia.com/gpu: "1"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 120
+          periodSeconds: 10
+          failureThreshold: 30
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 180
+          periodSeconds: 30
+      
+      volumes:
+      - name: model
+        persistentVolumeClaim:
+          claimName: voxtral-model
+      
+      nodeSelector:
+        kubernetes.io/gpu: "true"
+      
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
