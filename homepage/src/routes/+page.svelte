@@ -5,6 +5,7 @@
     import WeatherTab from "./WeatherTab.svelte";
     // import SpeedtestTab from "./SpeedtestTab.svelte";
     import TtsTab from "./TtsTab.svelte";
+    import SttTab from "./SttTab.svelte";
 
     let { data } = $props();
 
@@ -71,6 +72,12 @@
             >
                 Text to Speech
             </button>
+            <button
+                class="tab-btn {activeTab === 'stt' ? 'active' : ''}"
+                onclick={() => (activeTab = "stt")}
+            >
+                Speech to Text
+            </button>
         </div>
 
         {#if activeTab === "weather"}
@@ -104,6 +111,8 @@
         <WeatherTab {data} />
     {:else if activeTab === "tts"}
         <TtsTab />
+    {:else if activeTab === "stt"}
+        <SttTab />
     {/if}
 </div>
 

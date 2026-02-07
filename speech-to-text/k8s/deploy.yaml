@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: speech-to-text
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: speech-to-text
+  template:
+    metadata:
+      labels:
+        app: speech-to-text
+    spec:
+      containers:
+      # Rust WebSocket proxy
+      - name: speech-to-text
+        image: localhost:5000/speech-to-text:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: ws
+        env:
+        - name: KEYCLOAK_URL
+          value: "http://keycloak.keycloak.svc.cluster.local"
+        - name: KEYCLOAK_REALM
+          value: "homekube"
+        - name: KEYCLOAK_AUDIENCE
+          value: "stt"
+        - name: WHISPER_URL
+          value: "http://localhost:8000"
+        - name: RUST_LOG
+          value: "info"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      
+      # Whisper sidecar for transcription
+      - name: whisper
+        image: localhost:5000/speech-to-text-whisper:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: CPU_THREADS
+          value: "4"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1"
+          limits:
+            memory: "4Gi"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30

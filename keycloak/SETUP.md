@@ -94,6 +94,20 @@ Your services (like the TTS backend) might require a specific "Audience" (`aud` 
 5. Select `tts`
 6. Click **Add** -> **Default**
 
+### 4.4 Add STT (Speech-to-Text) Audience
+
+Repeat the same process for the STT service:
+
+1. Go to **Client scopes** → **Create client scope**
+2. Set **Name**: `stt`, **Type**: `Default`, click **Save**
+3. Go to **Mappers** tab → **Configure a new mapper** → **Audience**
+4. Set **Name**: `stt-audience`
+5. Set **Included Custom Audience**: `stt`
+6. Set **Add to access token**: **ON**
+7. Click **Save**
+8. Go to **Clients** → `homepage` → **Client scopes** tab
+9. Click **Add client scope** → Select `stt` → **Add** -> **Default**
+
 ## Summary of Key Settings
 
 ```
