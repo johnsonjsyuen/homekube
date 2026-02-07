@@ -36,7 +36,7 @@
 
     // Track what text has been sent
     let sentLength = 0;
-    let sendTimer: ReturnType<typeof setInterval> | null = null;
+    let sendDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     // Word timing state
     interface WordTiming {
@@ -50,6 +50,34 @@
     let wordTimings: WordTiming[] = [];
     let audioStartTime = 0;
     let animationFrameId: number | null = null;
+
+    // Use $effect to reactively watch text changes and send new text
+    $effect(() => {
+        // Access text to create reactive dependency
+        const currentText = text;
+        if (!isActive || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+        if (currentText.length > sentLength) {
+            // Debounce: wait 500ms after last keystroke before sending
+            if (sendDebounceTimer) clearTimeout(sendDebounceTimer);
+            sendDebounceTimer = setTimeout(() => {
+                if (!ws || ws.readyState !== WebSocket.OPEN) return;
+                const newText = text.substring(sentLength);
+                if (newText.length === 0) return;
+                console.log("[LiveTTS] Sending new text:", newText);
+                ws.send(
+                    JSON.stringify({
+                        type: "synthesize_append",
+                        text: newText,
+                        voice,
+                        speed,
+                    }),
+                );
+                sentLength = text.length;
+                updateWordsDisplay();
+            }, 500);
+        }
+    });
 
     onMount(() => {
         initKeycloak().then(() => {
@@ -140,28 +168,9 @@
     }
 
     function stopSendTimer() {
-        if (sendTimer) {
-            clearInterval(sendTimer);
-            sendTimer = null;
-        }
-    }
-
-    function sendNewText() {
-        if (!ws || ws.readyState !== WebSocket.OPEN) return;
-
-        const currentText = text;
-        if (currentText.length > sentLength) {
-            const newText = currentText.substring(sentLength);
-            ws.send(
-                JSON.stringify({
-                    type: "synthesize_append",
-                    text: newText,
-                    voice,
-                    speed,
-                }),
-            );
-            sentLength = currentText.length;
-            updateWordsDisplay();
+        if (sendDebounceTimer) {
+            clearTimeout(sendDebounceTimer);
+            sendDebounceTimer = null;
         }
     }
 
@@ -258,12 +267,6 @@
                 connectionStatus = "connected";
                 isActive = true;
                 startKaraokeLoop();
-
-                // Start periodic sending of new text
-                sendTimer = setInterval(sendNewText, 500);
-
-                // Send any text that's already there
-                sendNewText();
                 break;
 
             case "auth_error":
