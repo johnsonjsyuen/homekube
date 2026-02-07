@@ -1,8 +1,6 @@
 #!/bin/bash
 set -e
 
-cd speech-to-text
-
 echo "=== Building speech-to-text images ==="
 
 # Build Rust backend
