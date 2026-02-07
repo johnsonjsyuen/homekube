@@ -1,27 +1,51 @@
 # Build Stage
-FROM rust:bookworm as builder
+FROM ubuntu:24.04 as builder
+
 WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 COPY . .
-RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+
 RUN cargo build --release
 
 # Runtime Stage
-FROM python:3.11-slim-bookworm
+FROM ubuntu:24.04
+
 WORKDIR /app
 
-# Install system dependencies
-# ffmpeg for audio conversion, espeak-ng for phonemization (common requirement for TTS)
-RUN apt-get update && \
-    apt-get install -y ffmpeg espeak-ng libportaudio2 wget && \
-    rm -rf /var/lib/apt/lists/*
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    ffmpeg \
+    espeak-ng \
+    libportaudio2 \
+    wget \
+    libssl-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a virtual environment for Python dependencies
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Download Kokoro models
 RUN wget -q https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/kokoro-v1.0.onnx && \
     wget -q https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/voices-v1.0.bin
 
 # Install kokoro-tts
-# Installing torch cpu version specifically often helps reduce size if GPU not needed/available
-# But sticking to default pip install for simplicity unless size is critical
 RUN pip install kokoro-tts soundfile
 
 # Create output directory
