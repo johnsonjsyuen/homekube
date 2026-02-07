@@ -22,7 +22,10 @@
     let text = $state("");
     let voice = $state("af_heart");
     let speed = $state(1.0);
-    let status = $state<"idle" | "connecting" | "speaking" | "error">("idle");
+    let isActive = $state(false);
+    let connectionStatus = $state<
+        "disconnected" | "connecting" | "connected" | "error"
+    >("disconnected");
     let errorMessage = $state("");
 
     // WebSocket and audio
@@ -30,6 +33,10 @@
     let audioContext: AudioContext | null = null;
     let nextPlayTime = 0;
     let scheduledSources: AudioBufferSourceNode[] = [];
+
+    // Track what text has been sent
+    let sentLength = 0;
+    let sendTimer: ReturnType<typeof setInterval> | null = null;
 
     // Word timing state
     interface WordTiming {
@@ -67,6 +74,7 @@
         if (animationFrameId) {
             cancelAnimationFrame(animationFrameId);
         }
+        stopSendTimer();
         stopPlayback();
     }
 
@@ -78,18 +86,13 @@
         await logout();
     }
 
-    function parseTextIntoWords(inputText: string) {
-        const wordList = inputText.split(/\s+/).filter((w) => w.length > 0);
-        words = wordList.map((w) => ({ text: w, status: "pending" as const }));
-    }
-
     function startKaraokeLoop() {
         if (animationFrameId) {
             cancelAnimationFrame(animationFrameId);
         }
 
         function updateKaraoke() {
-            if (!audioContext || status !== "speaking") {
+            if (!audioContext || !isActive) {
                 return;
             }
 
@@ -117,26 +120,75 @@
         animationFrameId = requestAnimationFrame(updateKaraoke);
     }
 
-    async function speak() {
+    function updateWordsDisplay() {
+        const currentText = text.trim();
+        if (!currentText) {
+            words = [];
+            return;
+        }
+        const wordList = currentText
+            .split(/\s+/)
+            .filter((w) => w.length > 0);
+        // Preserve status for existing words, add new ones as pending
+        const newWords = wordList.map((w, i) => {
+            if (i < words.length && words[i].text === w) {
+                return words[i];
+            }
+            return { text: w, status: "pending" as const };
+        });
+        words = newWords;
+    }
+
+    function stopSendTimer() {
+        if (sendTimer) {
+            clearInterval(sendTimer);
+            sendTimer = null;
+        }
+    }
+
+    function sendNewText() {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+        const currentText = text;
+        if (currentText.length > sentLength) {
+            const newText = currentText.substring(sentLength);
+            ws.send(
+                JSON.stringify({
+                    type: "synthesize_append",
+                    text: newText,
+                    voice,
+                    speed,
+                }),
+            );
+            sentLength = currentText.length;
+            updateWordsDisplay();
+        }
+    }
+
+    async function toggleActive() {
+        if (isActive) {
+            stop();
+        } else {
+            await start();
+        }
+    }
+
+    async function start() {
         if (!authState.authenticated) {
             alert("Please log in first.");
             return;
         }
 
-        if (!text.trim()) {
-            alert("Please enter some text.");
-            return;
-        }
-
-        status = "connecting";
+        connectionStatus = "connecting";
         errorMessage = "";
-        parseTextIntoWords(text);
+        sentLength = 0;
         wordTimings = [];
+        words = [];
 
         // Get a fresh token before connecting
         const token = await getFreshToken();
         if (!token) {
-            status = "error";
+            connectionStatus = "error";
             errorMessage = "Failed to get authentication token";
             return;
         }
@@ -160,7 +212,7 @@
 
         ws.onopen = () => {
             console.log("[LiveTTS] WebSocket connected");
-            // Send auth message with pre-refreshed token
+            // Send auth message
             ws!.send(
                 JSON.stringify({ type: "auth", token: `Bearer ${token}` }),
             );
@@ -168,15 +220,8 @@
 
         ws.onmessage = (event) => {
             if (event.data instanceof Blob) {
-                // Binary audio data
-                console.log(
-                    "[LiveTTS] Received audio chunk:",
-                    event.data.size,
-                    "bytes",
-                );
                 handleAudioData(event.data);
             } else {
-                // JSON message
                 const msg = JSON.parse(event.data);
                 console.log("[LiveTTS] Received message:", msg);
                 handleMessage(msg);
@@ -185,18 +230,24 @@
 
         ws.onerror = (event) => {
             console.error("[LiveTTS] WebSocket error:", event);
-            status = "error";
+            connectionStatus = "error";
             errorMessage = "WebSocket connection error";
+            isActive = false;
+            stopSendTimer();
         };
 
         ws.onclose = (event) => {
             console.log(
                 `[LiveTTS] WebSocket closed: code=${event.code} reason=${event.reason}`,
             );
-            if (status === "connecting") {
-                status = "error";
+            if (connectionStatus === "connecting") {
+                connectionStatus = "error";
                 errorMessage = `Connection closed unexpectedly (code: ${event.code})`;
+            } else {
+                connectionStatus = "disconnected";
             }
+            isActive = false;
+            stopSendTimer();
         };
     }
 
@@ -204,21 +255,19 @@
         switch (msg.type) {
             case "auth_ok":
                 console.log("[LiveTTS] Authenticated as:", msg.username);
-                status = "speaking";
+                connectionStatus = "connected";
+                isActive = true;
                 startKaraokeLoop();
-                // Send synthesize request
-                ws!.send(
-                    JSON.stringify({
-                        type: "synthesize",
-                        text,
-                        voice,
-                        speed,
-                    }),
-                );
+
+                // Start periodic sending of new text
+                sendTimer = setInterval(sendNewText, 500);
+
+                // Send any text that's already there
+                sendNewText();
                 break;
 
             case "auth_error":
-                status = "error";
+                connectionStatus = "error";
                 errorMessage = msg.message;
                 break;
 
@@ -238,27 +287,15 @@
                 break;
 
             case "done":
-                console.log("[LiveTTS] Synthesis complete");
-                // Wait for audio to finish playing
-                setTimeout(() => {
-                    if (status === "speaking") {
-                        status = "idle";
-                        // Mark all remaining words as past
-                        words = words.map((w) => ({
-                            ...w,
-                            status: "past" as const,
-                        }));
-                    }
-                }, 1000);
+                // Synthesis of current batch complete - server is ready for more
+                console.log("[LiveTTS] Synthesis batch complete");
                 break;
 
             case "error":
-                status = "error";
                 errorMessage = msg.message;
                 break;
 
             case "stopped":
-                status = "idle";
                 break;
         }
     }
@@ -300,12 +337,15 @@
     }
 
     function stop() {
+        stopSendTimer();
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: "stop" }));
             ws.close();
         }
         stopPlayback();
-        status = "idle";
+        isActive = false;
+        connectionStatus = "disconnected";
+        sentLength = 0;
     }
 
     function stopPlayback() {
@@ -354,9 +394,8 @@
                 <textarea
                     id="live-text"
                     bind:value={text}
-                    placeholder="Enter text to speak..."
+                    placeholder="Start typing and your text will be spoken as you type..."
                     rows="4"
-                    disabled={status === "speaking"}
                 ></textarea>
             </div>
 
@@ -366,7 +405,7 @@
                     <select
                         id="live-voice"
                         bind:value={voice}
-                        disabled={status === "speaking"}
+                        disabled={isActive}
                     >
                         <option value="af_heart">Heart (Female)</option>
                         <option value="af_bella">Bella (Female)</option>
@@ -386,28 +425,36 @@
                         min="0.5"
                         max="2.0"
                         step="0.1"
-                        disabled={status === "speaking"}
+                        disabled={isActive}
                     />
                 </div>
             </div>
 
             <div class="button-row">
-                {#if status === "idle" || status === "error"}
-                    <button class="speak-btn" onclick={speak}>
-                        🔊 Speak
-                    </button>
-                {:else}
-                    <button class="stop-btn" onclick={stop}> ⏹ Stop </button>
-                {/if}
+                <button
+                    class="toggle-btn"
+                    class:active={isActive}
+                    onclick={toggleActive}
+                    disabled={connectionStatus === "connecting"}
+                >
+                    {#if connectionStatus === "connecting"}
+                        <span class="spinner">...</span> Connecting...
+                    {:else if isActive}
+                        <span class="pulse-dot"></span> Active — Stop
+                    {:else}
+                        🔊 Start Live TTS
+                    {/if}
+                </button>
             </div>
 
-            {#if status === "connecting"}
-                <div class="status-msg">
-                    <span class="spinner">...</span> Connecting...
-                </div>
-            {/if}
+            <div class="connection-status">
+                Status:
+                <span class="status-badge status-{connectionStatus}">
+                    {connectionStatus}
+                </span>
+            </div>
 
-            {#if status === "error"}
+            {#if errorMessage}
                 <div class="error-msg">
                     Error: {errorMessage}
                 </div>
@@ -559,46 +606,88 @@
     .button-row {
         display: flex;
         gap: 10px;
+        margin-bottom: 15px;
     }
 
-    .speak-btn {
+    .toggle-btn {
         flex: 1;
-        background: #4a90e2;
-        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        background: linear-gradient(135deg, #4ade80, #22c55e);
+        color: #000;
         border: none;
-        padding: 12px;
-        border-radius: 8px;
-        font-size: 1rem;
+        padding: 15px;
+        border-radius: 50px;
+        font-size: 1.1rem;
         font-weight: 600;
         cursor: pointer;
-        transition: background 0.2s;
+        transition: all 0.2s;
     }
 
-    .speak-btn:hover {
-        background: #357abd;
+    .toggle-btn:hover:not(:disabled) {
+        transform: scale(1.02);
+        box-shadow: 0 4px 15px rgba(74, 222, 128, 0.4);
     }
 
-    .stop-btn {
-        flex: 1;
-        background: #f87171;
-        color: white;
-        border: none;
-        padding: 12px;
-        border-radius: 8px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s;
+    .toggle-btn.active {
+        background: linear-gradient(135deg, #f87171, #ef4444);
+        color: #fff;
     }
 
-    .stop-btn:hover {
-        background: #dc2626;
+    .toggle-btn.active:hover:not(:disabled) {
+        box-shadow: 0 4px 15px rgba(248, 113, 113, 0.4);
     }
 
-    .status-msg {
-        margin-top: 20px;
+    .toggle-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .pulse-dot {
+        width: 10px;
+        height: 10px;
+        background: #fff;
+        border-radius: 50%;
+        animation: pulse 1s ease-in-out infinite;
+    }
+
+    .connection-status {
         text-align: center;
-        color: #aaa;
+        font-size: 0.85rem;
+        color: #888;
+        margin-bottom: 10px;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: capitalize;
+    }
+
+    .status-disconnected {
+        background: rgba(156, 163, 175, 0.2);
+        color: #9ca3af;
+    }
+
+    .status-connecting {
+        background: rgba(251, 191, 36, 0.2);
+        color: #fbbf24;
+    }
+
+    .status-connected {
+        background: rgba(74, 222, 128, 0.2);
+        color: #4ade80;
+    }
+
+    .status-error {
+        background: rgba(248, 113, 113, 0.2);
+        color: #f87171;
     }
 
     .spinner {
@@ -609,10 +698,12 @@
     @keyframes pulse {
         0%,
         100% {
+            transform: scale(1);
             opacity: 1;
         }
         50% {
-            opacity: 0.5;
+            transform: scale(1.2);
+            opacity: 0.7;
         }
     }
 
@@ -627,7 +718,7 @@
     }
 
     .karaoke-display {
-        margin-top: 30px;
+        margin-top: 20px;
         padding: 20px;
         background: #222;
         border-radius: 12px;

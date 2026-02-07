@@ -31,6 +31,11 @@ enum ClientMessage {
         voice: String,
         speed: f32,
     },
+    SynthesizeAppend {
+        text: String,
+        voice: String,
+        speed: f32,
+    },
     Stop,
 }
 
@@ -98,6 +103,11 @@ async fn handle_connection(mut socket: WebSocket, state: AppState) {
     // Create stop signal channel
     let (stop_tx, _stop_rx) = watch::channel(false);
 
+    // Sentence counter persists across append messages
+    let mut sentence_counter: u32 = 0;
+    // Buffer for incomplete text (text that hasn't ended with sentence-ending punctuation)
+    let mut pending_text = String::new();
+
     // Main message loop
     loop {
         let msg = match socket.recv().await {
@@ -116,17 +126,76 @@ async fn handle_connection(mut socket: WebSocket, state: AppState) {
             Message::Text(text) => {
                 match serde_json::from_str::<ClientMessage>(&text) {
                     Ok(ClientMessage::Synthesize { text, voice, speed }) => {
+                        // Full synthesize: reset state and process entire text
+                        sentence_counter = 0;
+                        pending_text.clear();
                         let stop_rx = stop_tx.subscribe();
                         if let Err(e) =
-                            handle_synthesize(&mut socket, &state, &text, &voice, speed, stop_rx)
+                            handle_synthesize(&mut socket, &state, &text, &voice, speed, stop_rx, &mut sentence_counter)
                                 .await
                         {
                             let _ = send_message(&mut socket, &ServerMessage::Error { message: e })
                                 .await;
                         }
                     }
+                    Ok(ClientMessage::SynthesizeAppend { text, voice, speed }) => {
+                        // Append new text and synthesize only complete sentences
+                        pending_text.push_str(&text);
+
+                        // Split into sentences and keep the last fragment if incomplete
+                        let sentences = split_sentences(&pending_text);
+                        if sentences.is_empty() {
+                            continue;
+                        }
+
+                        // Check if the pending text ends with sentence-ending punctuation
+                        let trimmed = pending_text.trim_end();
+                        let ends_with_sentence = trimmed.ends_with('.')
+                            || trimmed.ends_with('!')
+                            || trimmed.ends_with('?')
+                            || trimmed.ends_with(':')
+                            || trimmed.ends_with(';');
+
+                        let (to_speak, leftover) = if ends_with_sentence {
+                            // All sentences are complete
+                            (sentences, String::new())
+                        } else if sentences.len() > 1 {
+                            // Last sentence is incomplete, speak all but the last
+                            let mut complete = sentences;
+                            let last = complete.pop().unwrap_or_default();
+                            (complete, last)
+                        } else {
+                            // Only one incomplete sentence, wait for more
+                            continue;
+                        };
+
+                        pending_text = leftover;
+
+                        if !to_speak.is_empty() {
+                            let stop_rx = stop_tx.subscribe();
+                            let combined = to_speak.join(" ");
+                            if let Err(e) = handle_synthesize(
+                                &mut socket,
+                                &state,
+                                &combined,
+                                &voice,
+                                speed,
+                                stop_rx,
+                                &mut sentence_counter,
+                            )
+                            .await
+                            {
+                                let _ = send_message(
+                                    &mut socket,
+                                    &ServerMessage::Error { message: e },
+                                )
+                                .await;
+                            }
+                        }
+                    }
                     Ok(ClientMessage::Stop) => {
                         let _ = stop_tx.send(true);
+                        pending_text.clear();
                         let _ = send_message(&mut socket, &ServerMessage::Stopped).await;
                     }
                     Ok(ClientMessage::Auth { .. }) => {
@@ -191,13 +260,17 @@ async fn handle_synthesize(
     voice: &str,
     speed: f32,
     stop_rx: watch::Receiver<bool>,
+    sentence_counter: &mut u32,
 ) -> Result<(), String> {
     let model = state.kokoro_model.as_ref().ok_or("TTS model not loaded")?;
 
     // Split text into sentences
     let sentences = split_sentences(text);
 
-    for (sentence_idx, sentence) in sentences.iter().enumerate() {
+    for sentence in sentences.iter() {
+        let sentence_idx = *sentence_counter;
+        *sentence_counter += 1;
+
         // Check for stop signal
         if *stop_rx.borrow() {
             return Ok(());
@@ -248,7 +321,7 @@ async fn handle_synthesize(
         send_message(
             socket,
             &ServerMessage::WordTiming {
-                sentence_index: sentence_idx as u32,
+                sentence_index: sentence_idx,
                 words,
             },
         )
@@ -283,13 +356,13 @@ async fn handle_synthesize(
         send_message(
             socket,
             &ServerMessage::SentenceDone {
-                sentence_index: sentence_idx as u32,
+                sentence_index: sentence_idx,
             },
         )
         .await?;
     }
 
-    // All done
+    // All done for this batch
     send_message(socket, &ServerMessage::Done).await?;
 
     Ok(())
