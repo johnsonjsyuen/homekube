@@ -16,21 +16,105 @@ use std::sync::{Arc, Mutex};
 /// Sample rate for Kokoro output audio
 pub const SAMPLE_RATE: u32 = 24000;
 
-/// Phoneme to token ID mapping (from kokoro tokenizer.json)
-/// This is a subset of IPA symbols used by the model
+/// Phoneme to token ID mapping from the Kokoro model's config.json.
+/// IDs are non-contiguous and must match exactly what the model expects.
 fn build_vocab() -> HashMap<char, i64> {
-    // Phoneme vocabulary - IPA symbols used by Kokoro model
-    // Using concat! to handle special characters cleanly
-    let vocab_chars: &str = concat!(
-        "$;:,.!?¡¿—…\"«»\" ",
-        "()[]{}",
-        "abcdefghijklmnopqrstuvwxyz",
-        "ɑɐɒæɓʙβɔɕçɗɖðʤəɘɚɛɜɝɞɟʄɡɠɢʛɦɧħɥʜɨɪʝɭɬɫɮʟɱɯɰŋɳɲɴøɵɸθœɶʘɹɺɾɻʀʁɽʂʃʈʧʉʊʋⱱʌɣɤʍχʎʏʑʐʒʔʡʕʢǀǁǂǃˈˌːˑʼʴʰʱʲʷˠˤ˞↓↑→↗↘'̈"
-    );
+    let entries: &[(char, i64)] = &[
+        // Punctuation
+        (';', 1), (':', 2), (',', 3), ('.', 4), ('!', 5), ('?', 6),
+        ('\u{2014}', 9), // — em dash
+        ('\u{2026}', 10), // … ellipsis
+        ('"', 11),
+        ('(', 12), (')', 13),
+        ('\u{201C}', 14), // " left double quote
+        ('\u{201D}', 15), // " right double quote
+        (' ', 16),
+        // Combining/modifier characters
+        ('\u{0303}', 17), // ̃ combining tilde
+        ('\u{02A3}', 18), // ʣ
+        ('\u{02A5}', 19), // ʥ
+        ('\u{02A6}', 20), // ʦ
+        ('\u{02A8}', 21), // ʨ
+        ('\u{1D5D}', 22), // ᵝ
+        ('\u{AB67}', 23), // ꭧ
+        // Uppercase letters (sparse)
+        ('A', 24), ('I', 25), ('O', 31), ('Q', 33), ('S', 35), ('T', 36),
+        ('W', 39), ('Y', 41),
+        ('\u{1D4A}', 42), // ᵊ
+        // Lowercase letters
+        ('a', 43), ('b', 44), ('c', 45), ('d', 46), ('e', 47), ('f', 48),
+        ('h', 50), ('i', 51), ('j', 52), ('k', 53), ('l', 54), ('m', 55),
+        ('n', 56), ('o', 57), ('p', 58), ('q', 59), ('r', 60), ('s', 61),
+        ('t', 62), ('u', 63), ('v', 64), ('w', 65), ('x', 66), ('y', 67),
+        ('z', 68),
+        // IPA vowels and consonants
+        ('\u{0251}', 69),  // ɑ
+        ('\u{0250}', 70),  // ɐ
+        ('\u{0252}', 71),  // ɒ
+        ('\u{00E6}', 72),  // æ
+        ('\u{03B2}', 75),  // β
+        ('\u{0254}', 76),  // ɔ
+        ('\u{0255}', 77),  // ɕ
+        ('\u{00E7}', 78),  // ç
+        ('\u{0256}', 80),  // ɖ
+        ('\u{00F0}', 81),  // ð
+        ('\u{02A4}', 82),  // ʤ
+        ('\u{0259}', 83),  // ə
+        ('\u{025A}', 85),  // ɚ
+        ('\u{025B}', 86),  // ɛ
+        ('\u{025C}', 87),  // ɜ
+        ('\u{025F}', 90),  // ɟ
+        ('\u{0261}', 92),  // ɡ
+        ('\u{0265}', 99),  // ɥ
+        ('\u{0268}', 101), // ɨ
+        ('\u{026A}', 102), // ɪ
+        ('\u{029D}', 103), // ʝ
+        ('\u{026F}', 110), // ɯ
+        ('\u{0270}', 111), // ɰ
+        ('\u{014B}', 112), // ŋ
+        ('\u{0273}', 113), // ɳ
+        ('\u{0272}', 114), // ɲ
+        ('\u{0274}', 115), // ɴ
+        ('\u{00F8}', 116), // ø
+        ('\u{0278}', 118), // ɸ
+        ('\u{03B8}', 119), // θ
+        ('\u{0153}', 120), // œ
+        ('\u{0279}', 123), // ɹ
+        ('\u{027E}', 125), // ɾ
+        ('\u{027B}', 126), // ɻ
+        ('\u{0281}', 128), // ʁ
+        ('\u{027D}', 129), // ɽ
+        ('\u{0282}', 130), // ʂ
+        ('\u{0283}', 131), // ʃ
+        ('\u{0288}', 132), // ʈ
+        ('\u{02A7}', 133), // ʧ
+        ('\u{028A}', 135), // ʊ
+        ('\u{028B}', 136), // ʋ
+        ('\u{028C}', 138), // ʌ
+        ('\u{0263}', 139), // ɣ
+        ('\u{0264}', 140), // ɤ
+        ('\u{03C7}', 142), // χ
+        ('\u{028E}', 143), // ʎ
+        ('\u{0292}', 147), // ʒ
+        ('\u{0294}', 148), // ʔ
+        // Prosodic markers
+        ('\u{02C8}', 156), // ˈ primary stress
+        ('\u{02CC}', 157), // ˌ secondary stress
+        ('\u{02D0}', 158), // ː length
+        ('\u{02B0}', 162), // ʰ aspiration
+        ('\u{02B2}', 164), // ʲ palatalization
+        // Tone markers
+        ('\u{2193}', 169), // ↓
+        ('\u{2192}', 171), // →
+        ('\u{2197}', 172), // ↗
+        ('\u{2198}', 173), // ↘
+        // Additional
+        ('\u{1D7B}', 177), // ᵻ
+    ];
 
     let mut vocab = HashMap::new();
-    for (i, c) in vocab_chars.chars().enumerate() {
-        vocab.insert(c, i as i64);
+    for &(c, id) in entries {
+        vocab.insert(c, id);
     }
     vocab
 }
@@ -268,10 +352,13 @@ mod tests {
     #[test]
     fn test_vocab_build() {
         let vocab = build_vocab();
-        // Should have the basic phonemes
-        assert!(vocab.contains_key(&'a'));
-        assert!(vocab.contains_key(&'ə')); // schwa
-        assert!(vocab.contains_key(&'$')); // start/end token
+        // Should have the basic phonemes with correct IDs
+        assert_eq!(vocab.get(&'a'), Some(&43));
+        assert_eq!(vocab.get(&'ə'), Some(&83)); // schwa
+        assert_eq!(vocab.get(&'ˈ'), Some(&156)); // primary stress
+        assert_eq!(vocab.get(&' '), Some(&16)); // space
+        // Start/end token (0) is not a vocab char, it's pushed directly
+        assert!(!vocab.contains_key(&'$'));
     }
 
     #[test]
@@ -399,7 +486,55 @@ mod tests {
         assert!(max_val > 0.001, "Audio appears to be silence (max={:.6})", max_val);
         assert!(max_val < 10.0, "Audio values out of range (max={:.6})", max_val);
 
+        // Write audio to WAV file for manual listening verification
+        let wav_path = "/tmp/test-kokoro-output.wav";
+        write_wav(wav_path, &audio, SAMPLE_RATE).expect("Failed to write WAV");
+        println!("Audio written to {}", wav_path);
+
         println!("Full synthesis test passed!");
+    }
+
+    /// Write PCM f32 samples to a 16-bit WAV file
+    fn write_wav(path: &str, samples: &[f32], sample_rate: u32) -> Result<(), String> {
+        use std::io::Write;
+
+        let num_samples = samples.len() as u32;
+        let num_channels: u16 = 1;
+        let bits_per_sample: u16 = 16;
+        let byte_rate = sample_rate * num_channels as u32 * bits_per_sample as u32 / 8;
+        let block_align = num_channels * bits_per_sample / 8;
+        let data_size = num_samples * bits_per_sample as u32 / 8;
+        let file_size = 36 + data_size;
+
+        let mut file = File::create(path).map_err(|e| format!("Failed to create WAV: {}", e))?;
+
+        // RIFF header
+        file.write_all(b"RIFF").map_err(|e| e.to_string())?;
+        file.write_all(&file_size.to_le_bytes()).map_err(|e| e.to_string())?;
+        file.write_all(b"WAVE").map_err(|e| e.to_string())?;
+
+        // fmt chunk
+        file.write_all(b"fmt ").map_err(|e| e.to_string())?;
+        file.write_all(&16u32.to_le_bytes()).map_err(|e| e.to_string())?;  // chunk size
+        file.write_all(&1u16.to_le_bytes()).map_err(|e| e.to_string())?;   // PCM format
+        file.write_all(&num_channels.to_le_bytes()).map_err(|e| e.to_string())?;
+        file.write_all(&sample_rate.to_le_bytes()).map_err(|e| e.to_string())?;
+        file.write_all(&byte_rate.to_le_bytes()).map_err(|e| e.to_string())?;
+        file.write_all(&block_align.to_le_bytes()).map_err(|e| e.to_string())?;
+        file.write_all(&bits_per_sample.to_le_bytes()).map_err(|e| e.to_string())?;
+
+        // data chunk
+        file.write_all(b"data").map_err(|e| e.to_string())?;
+        file.write_all(&data_size.to_le_bytes()).map_err(|e| e.to_string())?;
+
+        // Convert f32 samples to i16 and write
+        for &sample in samples {
+            let clamped = sample.max(-1.0).min(1.0);
+            let int_sample = (clamped * 32767.0) as i16;
+            file.write_all(&int_sample.to_le_bytes()).map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
     }
 }
 
