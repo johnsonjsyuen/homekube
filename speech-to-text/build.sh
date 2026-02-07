@@ -1,11 +1,13 @@
 #!/bin/bash
 set -e
 
+cd speech-to-text
+
 echo "=== Building speech-to-text images ==="
 
 # Build Rust backend
 echo "Building speech-to-text backend..."
-docker build -t localhost:5000/speech-to-text:latest -f speech-to-text/Dockerfile .
+docker build -t localhost:5000/speech-to-text:latest -f Dockerfile .
 
 echo "Pushing backend to local registry..."
 docker push localhost:5000/speech-to-text:latest
@@ -13,7 +15,7 @@ docker push localhost:5000/speech-to-text:latest
 # Build Whisper (includes model, ~1.5GB download during build)
 echo ""
 echo "Building Whisper image (this will download the model, ~1.5GB)..."
-docker build -t localhost:5000/speech-to-text-whisper:latest -f speech-to-text/Dockerfile.whisper .
+docker build -t localhost:5000/speech-to-text-whisper:latest -f Dockerfile.whisper .
 
 echo "Pushing Whisper to local registry..."
 docker push localhost:5000/speech-to-text-whisper:latest
@@ -21,5 +23,5 @@ docker push localhost:5000/speech-to-text-whisper:latest
 echo ""
 echo "=== Build complete! ==="
 echo ""
-kubectl apply -f speech-to-text/k8s/
-kubectl rollout restart deployment speech-to-text
+kubectl apply -f k8s/
+kubectl rollout restart deployment
