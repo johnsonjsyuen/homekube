@@ -7,8 +7,16 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY . .
+
+# Cache dependencies by building with dummy source first
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release
+RUN rm -rf src
+
+# Build real source (only this layer invalidates on code changes)
+COPY src ./src
+RUN touch src/main.rs && cargo build --release
 
 FROM debian:bookworm-slim
 

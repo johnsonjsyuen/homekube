@@ -79,7 +79,7 @@ fn clean_phonemes(phonemes: &str) -> String {
 /// Timing is estimated proportionally based on phoneme length
 pub fn estimate_word_timings(
     text: &str,
-    phonemes: &str,
+    _phonemes: &str,
     total_samples: usize,
     sample_rate: u32,
 ) -> Vec<(String, u32, u32)> {

@@ -1,12 +1,16 @@
 # Build Stage for Rust backend
-FROM rust:bookworm as builder
+FROM rust:bookworm AS builder
 WORKDIR /app
 
-# Copy source files (excluding model files which are large)
+# Cache dependencies by building with dummy source first
 COPY Cargo.toml Cargo.lock* rust-toolchain.toml ./
-COPY src ./src
-
+RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release
+RUN rm -rf src
+
+# Build real source (only this layer invalidates on code changes)
+COPY src ./src
+RUN touch src/main.rs && cargo build --release
 
 # Runtime Stage
 FROM debian:bookworm-slim

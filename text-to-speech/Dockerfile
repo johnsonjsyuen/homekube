@@ -1,9 +1,9 @@
 # Build Stage
-FROM ubuntu:24.04 as builder
+FROM ubuntu:24.04 AS builder
 
 WORKDIR /app
 
-# Install build dependencies
+# Install build dependencies and Rust (rarely changes)
 RUN apt-get update && apt-get install -y \
     curl \
     build-essential \
@@ -11,13 +11,18 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-COPY . .
-
+# Cache dependencies by building with dummy source first
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release
+RUN rm -rf src
+
+# Build real source (only this layer invalidates on code changes)
+COPY src ./src
+RUN touch src/main.rs && cargo build --release
 
 # Runtime Stage
 FROM ubuntu:24.04
@@ -26,6 +31,9 @@ WORKDIR /app
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
+    software-properties-common \
+    && add-apt-repository universe \
+    && apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     python3-venv \

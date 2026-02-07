@@ -186,11 +186,6 @@ impl KokoroModel {
 
         Ok(audio)
     }
-
-    /// Get list of available voices
-    pub fn available_voices(&self) -> Vec<String> {
-        self.voices.embeddings.keys().cloned().collect()
-    }
 }
 
 #[cfg(test)]
