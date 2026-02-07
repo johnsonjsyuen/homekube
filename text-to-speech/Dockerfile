@@ -22,6 +22,7 @@ RUN rm -rf src
 
 # Build real source (only this layer invalidates on code changes)
 COPY src ./src
+COPY migrations ./migrations
 RUN touch src/main.rs && cargo build --release
 
 # Runtime Stage
