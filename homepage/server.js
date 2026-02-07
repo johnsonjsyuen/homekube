@@ -18,7 +18,7 @@ const server = createServer(handler);
 const wss = new WebSocketServer({ noServer: true });
 
 // Backend TTS service URL
-const TTS_BACKEND = process.env.TTS_BACKEND_URL || 'ws://text-to-speech:3000';
+const TTS_BACKEND = process.env.TTS_BACKEND_URL || 'ws://text-to-speech';
 
 server.on('upgrade', (request, socket, head) => {
     const pathname = new URL(request.url, `http://${request.headers.host}`).pathname;
