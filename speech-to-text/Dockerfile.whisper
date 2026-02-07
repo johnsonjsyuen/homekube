@@ -17,7 +17,8 @@ RUN pip install --no-cache-dir \
     fastapi==0.115.0 \
     uvicorn[standard]==0.32.0 \
     python-multipart==0.0.12 \
-    huggingface_hub
+    huggingface_hub \
+    requests
 
 # Download the Whisper model at build time
 # This avoids needing a PVC for model storage
