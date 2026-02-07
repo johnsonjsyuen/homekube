@@ -119,8 +119,9 @@
                                     (transcript ? " " : "") + msg.text;
                                 partialTranscript = "";
                             } else {
-                                // Partial transcript - show as pending
-                                partialTranscript = msg.text;
+                                // Partial transcript - accumulate
+                                partialTranscript +=
+                                    (partialTranscript ? " " : "") + msg.text;
                             }
                         }
                     } else if (msg.type === "error") {
