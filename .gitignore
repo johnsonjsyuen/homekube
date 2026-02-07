@@ -9,3 +9,5 @@ text-to-speech/target
 __pycache__/
 *.py[cod]
 *.log
+speech-to-text/target
+speech-to-text/consolidated.safetensors
