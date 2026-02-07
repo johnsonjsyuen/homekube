@@ -1,10 +1,10 @@
 FROM node:20-slim AS builder
 WORKDIR /app
-COPY package*.json .
-RUN npm ci --legacy-peer-deps
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile
 COPY . .
-RUN npm run build
-RUN npm prune --production --legacy-peer-deps
+RUN yarn build
+RUN yarn install --production --ignore-scripts --prefer-offline
 
 FROM node:20-slim
 WORKDIR /app
