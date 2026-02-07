@@ -1,6 +1,7 @@
 mod auth;
 mod state;
 mod transcribe;
+mod vad;
 
 use state::{AppState, JwksCache};
 

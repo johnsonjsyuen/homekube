@@ -21,6 +21,7 @@
     // Recording state
     let isRecording = $state(false);
     let transcript = $state("");
+    let partialTranscript = $state("");
     let connectionStatus = $state<
         "disconnected" | "connecting" | "connected" | "error"
     >("disconnected");
@@ -112,7 +113,15 @@
                         connectionStatus = "connected";
                     } else if (msg.type === "transcript") {
                         if (msg.text) {
-                            transcript += msg.text;
+                            if (msg.is_final) {
+                                // Final transcript - append and clear partial
+                                transcript +=
+                                    (transcript ? " " : "") + msg.text;
+                                partialTranscript = "";
+                            } else {
+                                // Partial transcript - show as pending
+                                partialTranscript = msg.text;
+                            }
                         }
                     } else if (msg.type === "error") {
                         errorMessage = msg.error || "Unknown error";
@@ -307,6 +316,7 @@
 
     function clearTranscript() {
         transcript = "";
+        partialTranscript = "";
     }
 </script>
 
@@ -393,8 +403,15 @@
                 </div>
 
                 <div class="transcript-box">
-                    {#if transcript}
-                        <p>{transcript}</p>
+                    {#if transcript || partialTranscript}
+                        <p>
+                            {transcript}{#if partialTranscript}<span
+                                    class="partial-text"
+                                    >{transcript
+                                        ? " "
+                                        : ""}{partialTranscript}</span
+                                >{/if}
+                        </p>
                     {:else}
                         <p class="placeholder">
                             Your transcription will appear here...
@@ -687,6 +704,22 @@
     .transcript-box .placeholder {
         color: #666;
         font-style: italic;
+    }
+
+    .partial-text {
+        color: #888;
+        font-style: italic;
+        animation: partial-pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes partial-pulse {
+        0%,
+        100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.5;
+        }
     }
 
     .error-msg {
