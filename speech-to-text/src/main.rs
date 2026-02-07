@@ -18,7 +18,7 @@ async fn main() {
     let keycloak_realm = std::env::var("KEYCLOAK_REALM").unwrap_or_else(|_| "homekube".to_string());
     let keycloak_audience =
         std::env::var("KEYCLOAK_AUDIENCE").unwrap_or_else(|_| "stt".to_string());
-    let vllm_url = std::env::var("VLLM_URL")
+    let whisper_url = std::env::var("WHISPER_URL")
         .unwrap_or_else(|_| "http://localhost:8000".to_string());
 
     let state = AppState {
@@ -26,7 +26,7 @@ async fn main() {
         keycloak_url,
         keycloak_realm,
         keycloak_audience,
-        vllm_url,
+        whisper_url,
     };
 
     // CORS configuration for WebSocket

@@ -1,7 +1,7 @@
 //! WebSocket handler for real-time speech-to-text transcription.
-//! 
-//! This module handles bidirectional WebSocket communication between the browser
-//! and vLLM's realtime API for Voxtral model transcription.
+//!
+//! This module handles WebSocket communication with the browser client,
+//! buffering audio and sending to Whisper HTTP API for transcription.
 
 use crate::auth::{extract_token_from_query, validate_ws_token};
 use crate::state::AppState;
@@ -15,66 +15,27 @@ use axum::{
 };
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use tokio_tungstenite::{connect_async, tungstenite::Message as TungMessage};
 
-/// Request to start a transcription session
+/// Request to Whisper transcription API
 #[derive(Debug, Serialize)]
-struct SessionConfig {
-    #[serde(rename = "type")]
-    msg_type: String,
-    session: SessionParams,
+struct WhisperRequest {
+    audio: String, // base64 encoded PCM16 audio
+    language: String,
 }
 
-#[derive(Debug, Serialize)]
-struct SessionParams {
-    modalities: Vec<String>,
-    input_audio_format: String,
-    input_audio_transcription: TranscriptionConfig,
-    temperature: f32,
-}
-
-#[derive(Debug, Serialize)]
-struct TranscriptionConfig {
-    model: String,
-}
-
-/// Audio input message to vLLM
-#[derive(Debug, Serialize)]
-struct AudioInput {
-    #[serde(rename = "type")]
-    msg_type: String,
-    audio: String, // base64 encoded audio
-}
-
-/// End of audio stream message
-#[derive(Debug, Serialize)]
-struct AudioCommit {
-    #[serde(rename = "type")]
-    msg_type: String,
-}
-
-/// Response from vLLM containing transcription
+/// Response from Whisper transcription API
 #[derive(Debug, Deserialize)]
-struct VllmResponse {
-    #[serde(rename = "type")]
-    msg_type: String,
+struct WhisperResponse {
+    text: String,
     #[serde(default)]
-    transcript: Option<String>,
-    #[serde(default)]
-    delta: Option<TranscriptDelta>,
-    #[serde(default)]
-    error: Option<VllmError>,
+    segments: Vec<TranscriptSegment>,
 }
 
 #[derive(Debug, Deserialize)]
-struct TranscriptDelta {
-    #[serde(default)]
-    transcript: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct VllmError {
-    message: String,
+struct TranscriptSegment {
+    start: f32,
+    end: f32,
+    text: String,
 }
 
 /// Message sent to browser client
@@ -155,45 +116,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, token: Option<String>
 
     tracing::info!(user = %user.username, "WebSocket connection authenticated");
 
-    // Connect to vLLM realtime API
-    let vllm_ws_url = format!("{}/v1/realtime", state.vllm_url.replace("http", "ws"));
-    
-    let vllm_conn = match connect_async(&vllm_ws_url).await {
-        Ok((ws, _)) => ws,
-        Err(e) => {
-            let (mut sender, _) = socket.split();
-            let msg = ClientMessage::error(format!("Failed to connect to transcription service: {}", e));
-            let _ = sender
-                .send(Message::Text(serde_json::to_string(&msg).unwrap().into()))
-                .await;
-            tracing::error!(error = %e, "Failed to connect to vLLM");
-            return;
-        }
-    };
-
-    let (mut vllm_sink, mut vllm_stream) = vllm_conn.split();
     let (mut client_sink, mut client_stream) = socket.split();
-
-    // Send session configuration to vLLM
-    let session_config = SessionConfig {
-        msg_type: "session.update".to_string(),
-        session: SessionParams {
-            modalities: vec!["text".to_string()],
-            input_audio_format: "pcm16".to_string(),
-            input_audio_transcription: TranscriptionConfig {
-                model: "Voxtral-Mini-4B-Realtime-2602".to_string(),
-            },
-            temperature: 0.0,
-        },
-    };
-
-    if let Err(e) = vllm_sink
-        .send(TungMessage::Text(serde_json::to_string(&session_config).unwrap().into()))
-        .await
-    {
-        tracing::error!(error = %e, "Failed to send session config to vLLM");
-        return;
-    }
 
     // Notify client that connection is ready
     let connected_msg = ClientMessage::connected();
@@ -205,124 +128,115 @@ async fn handle_socket(socket: WebSocket, state: AppState, token: Option<String>
         return;
     }
 
-    // Spawn task to forward client audio to vLLM
-    let client_to_vllm = async move {
-        while let Some(msg) = client_stream.next().await {
-            match msg {
-                Ok(Message::Text(text)) => {
-                    // Client sends JSON with audio data
-                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) {
-                        if let Some(audio_data) = parsed.get("audio").and_then(|v| v.as_str()) {
-                            let audio_msg = AudioInput {
-                                msg_type: "input_audio_buffer.append".to_string(),
-                                audio: audio_data.to_string(),
+    // Buffer for accumulating audio data
+    let mut audio_buffer: Vec<u8> = Vec::new();
+    let http_client = reqwest::Client::new();
+    let whisper_url = format!("{}/transcribe", state.whisper_url);
+
+    // Process messages from client
+    while let Some(msg) = client_stream.next().await {
+        match msg {
+            Ok(Message::Text(text)) => {
+                // Client sends JSON with audio data or commit signal
+                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Some(audio_data) = parsed.get("audio").and_then(|v| v.as_str()) {
+                        // Decode base64 audio and append to buffer
+                        if let Ok(decoded) = base64::Engine::decode(
+                            &base64::engine::general_purpose::STANDARD,
+                            audio_data,
+                        ) {
+                            audio_buffer.extend(decoded);
+                        }
+                    } else if parsed.get("type").and_then(|v| v.as_str()) == Some("commit") {
+                        // Client signals end of audio - send to Whisper for transcription
+                        if !audio_buffer.is_empty() {
+                            let audio_b64 = base64::Engine::encode(
+                                &base64::engine::general_purpose::STANDARD,
+                                &audio_buffer,
+                            );
+
+                            let request = WhisperRequest {
+                                audio: audio_b64,
+                                language: "en".to_string(),
                             };
-                            if let Err(e) = vllm_sink
-                                .send(TungMessage::Text(serde_json::to_string(&audio_msg).unwrap().into()))
+
+                            match http_client
+                                .post(&whisper_url)
+                                .json(&request)
+                                .send()
                                 .await
                             {
-                                tracing::error!(error = %e, "Failed to forward audio to vLLM");
-                                break;
+                                Ok(response) => {
+                                    if response.status().is_success() {
+                                        match response.json::<WhisperResponse>().await {
+                                            Ok(whisper_response) => {
+                                                if !whisper_response.text.is_empty() {
+                                                    let msg = ClientMessage::transcript(
+                                                        whisper_response.text,
+                                                    );
+                                                    if let Err(e) = client_sink
+                                                        .send(Message::Text(
+                                                            serde_json::to_string(&msg)
+                                                                .unwrap()
+                                                                .into(),
+                                                        ))
+                                                        .await
+                                                    {
+                                                        tracing::error!(
+                                                            error = %e,
+                                                            "Failed to send transcript to client"
+                                                        );
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                tracing::error!(
+                                                    error = %e,
+                                                    "Failed to parse Whisper response"
+                                                );
+                                            }
+                                        }
+                                    } else {
+                                        tracing::error!(
+                                            status = %response.status(),
+                                            "Whisper API error"
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::error!(error = %e, "Failed to call Whisper API");
+                                    let msg = ClientMessage::error(format!(
+                                        "Transcription failed: {}",
+                                        e
+                                    ));
+                                    let _ = client_sink
+                                        .send(Message::Text(
+                                            serde_json::to_string(&msg).unwrap().into(),
+                                        ))
+                                        .await;
+                                }
                             }
-                        } else if parsed.get("type").and_then(|v| v.as_str()) == Some("commit") {
-                            // Client signals end of audio chunk
-                            let commit_msg = AudioCommit {
-                                msg_type: "input_audio_buffer.commit".to_string(),
-                            };
-                            if let Err(e) = vllm_sink
-                                .send(TungMessage::Text(serde_json::to_string(&commit_msg).unwrap().into()))
-                                .await
-                            {
-                                tracing::error!(error = %e, "Failed to send commit to vLLM");
-                                break;
-                            }
+
+                            // Clear buffer after processing
+                            audio_buffer.clear();
                         }
                     }
                 }
-                Ok(Message::Binary(data)) => {
-                    // Direct binary audio data - encode as base64 and forward
-                    let audio_b64 = base64::Engine::encode(
-                        &base64::engine::general_purpose::STANDARD,
-                        &data,
-                    );
-                    let audio_msg = AudioInput {
-                        msg_type: "input_audio_buffer.append".to_string(),
-                        audio: audio_b64,
-                    };
-                    if let Err(e) = vllm_sink
-                        .send(TungMessage::Text(serde_json::to_string(&audio_msg).unwrap().into()))
-                        .await
-                    {
-                        tracing::error!(error = %e, "Failed to forward binary audio to vLLM");
-                        break;
-                    }
-                }
-                Ok(Message::Close(_)) => {
-                    tracing::info!("Client closed WebSocket connection");
-                    break;
-                }
-                Err(e) => {
-                    tracing::error!(error = %e, "Error receiving from client");
-                    break;
-                }
-                _ => {}
             }
-        }
-    };
-
-    // Spawn task to forward vLLM transcriptions to client
-    let vllm_to_client = async move {
-        while let Some(msg) = vllm_stream.next().await {
-            match msg {
-                Ok(TungMessage::Text(text)) => {
-                    if let Ok(response) = serde_json::from_str::<VllmResponse>(&text) {
-                        // Handle different response types
-                        let client_msg = match response.msg_type.as_str() {
-                            "conversation.item.input_audio_transcription.completed" => {
-                                response.transcript.map(ClientMessage::transcript)
-                            }
-                            "response.audio_transcript.delta" => {
-                                response.delta
-                                    .and_then(|d| d.transcript)
-                                    .map(ClientMessage::transcript)
-                            }
-                            "error" => {
-                                response.error.map(|e| ClientMessage::error(e.message))
-                            }
-                            _ => None,
-                        };
-
-                        if let Some(msg) = client_msg {
-                            if let Err(e) = client_sink
-                                .send(Message::Text(serde_json::to_string(&msg).unwrap().into()))
-                                .await
-                            {
-                                tracing::error!(error = %e, "Failed to send transcript to client");
-                                break;
-                            }
-                        }
-                    }
-                }
-                Ok(TungMessage::Close(_)) => {
-                    tracing::info!("vLLM closed WebSocket connection");
-                    break;
-                }
-                Err(e) => {
-                    tracing::error!(error = %e, "Error receiving from vLLM");
-                    break;
-                }
-                _ => {}
+            Ok(Message::Binary(data)) => {
+                // Direct binary audio data - append to buffer
+                audio_buffer.extend(data.to_vec());
             }
-        }
-    };
-
-    // Run both tasks concurrently
-    tokio::select! {
-        _ = client_to_vllm => {
-            tracing::info!("Client-to-vLLM task completed");
-        }
-        _ = vllm_to_client => {
-            tracing::info!("vLLM-to-client task completed");
+            Ok(Message::Close(_)) => {
+                tracing::info!("Client closed WebSocket connection");
+                break;
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Error receiving from client");
+                break;
+            }
+            _ => {}
         }
     }
 

@@ -1,0 +1,34 @@
+# Whisper Speech-to-Text API server
+# Uses faster-whisper for efficient CPU transcription
+# Model is downloaded during build (no PVC needed)
+
+FROM python:3.11-slim
+
+# Install dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python packages
+RUN pip install --no-cache-dir \
+    faster-whisper==1.1.0 \
+    fastapi==0.115.0 \
+    uvicorn[standard]==0.32.0 \
+    python-multipart==0.0.12 \
+    huggingface_hub
+
+# Download the Whisper model at build time
+# This avoids needing a PVC for model storage
+RUN python -c "from faster_whisper import WhisperModel; WhisperModel('large-v3-turbo', device='cpu', compute_type='int8')"
+
+# Copy server code
+COPY whisper_server.py .
+
+# Update server to use the downloaded model name instead of path
+ENV MODEL_PATH=large-v3-turbo
+
+EXPOSE 8000
+
+CMD ["uvicorn", "whisper_server:app", "--host", "0.0.0.0", "--port", "8000"]

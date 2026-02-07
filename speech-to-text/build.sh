@@ -10,18 +10,15 @@ docker build -t localhost:5000/speech-to-text:latest -f Dockerfile .
 echo "Pushing backend to local registry..."
 docker push localhost:5000/speech-to-text:latest
 
-# Build vLLM (small image, model loaded from PVC)
+# Build Whisper (includes model, ~1.5GB download during build)
 echo ""
-echo "Building vLLM image (model loaded from PVC)..."
-docker build -t localhost:5000/speech-to-text-vllm:latest -f Dockerfile.vllm .
+echo "Building Whisper image (this will download the model, ~1.5GB)..."
+docker build -t localhost:5000/speech-to-text-whisper:latest -f Dockerfile.whisper .
 
-echo "Pushing vLLM to local registry..."
-docker push localhost:5000/speech-to-text-vllm:latest
+echo "Pushing Whisper to local registry..."
+docker push localhost:5000/speech-to-text-whisper:latest
 
 echo ""
 echo "=== Build complete! ==="
 echo ""
-echo "Before deploying, copy model files to PVC."
-echp "See instructions in UPLOAD_MODEL.md"
-echo ""
-kubectl apply -f k8s/
+echo "Deploy with: kubectl apply -f k8s/"

@@ -9,7 +9,7 @@ pub struct AppState {
     pub keycloak_url: String,
     pub keycloak_realm: String,
     pub keycloak_audience: String,
-    pub vllm_url: String,
+    pub whisper_url: String,
 }
 
 #[derive(Default)]

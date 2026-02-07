@@ -28,7 +28,7 @@ spec:
           value: "homekube"
         - name: KEYCLOAK_AUDIENCE
           value: "stt"
-        - name: VLLM_URL
+        - name: WHISPER_URL
           value: "http://localhost:8000"
         - name: RUST_LOG
           value: "info"
@@ -51,41 +51,32 @@ spec:
           initialDelaySeconds: 5
           periodSeconds: 5
       
-      # vLLM sidecar for Voxtral model
-      - name: vllm
-        image: localhost:5000/speech-to-text-vllm:latest
+      # Whisper sidecar for transcription
+      - name: whisper
+        image: localhost:5000/speech-to-text-whisper:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
-          name: vllm
+          name: http
         env:
-        - name: VLLM_DISABLE_COMPILE_CACHE
-          value: "1"
-        volumeMounts:
-        - name: model
-          mountPath: /app/model
-          readOnly: true
+        - name: CPU_THREADS
+          value: "4"
         resources:
           requests:
-            memory: "16Gi"
-            cpu: "2"
+            memory: "2Gi"
+            cpu: "1"
           limits:
-            memory: "24Gi"
+            memory: "4Gi"
         readinessProbe:
           httpGet:
             path: /health
             port: 8000
-          initialDelaySeconds: 120
+          initialDelaySeconds: 30
           periodSeconds: 10
-          failureThreshold: 30
+          failureThreshold: 10
         livenessProbe:
           httpGet:
             path: /health
             port: 8000
-          initialDelaySeconds: 180
+          initialDelaySeconds: 60
           periodSeconds: 30
-      
-      volumes:
-      - name: model
-        persistentVolumeClaim:
-          claimName: voxtral-model
