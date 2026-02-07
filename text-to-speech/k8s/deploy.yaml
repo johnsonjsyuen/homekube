@@ -49,10 +49,10 @@ spec:
           mountPath: /app/storage
         resources:
           requests:
-            memory: "1Gi"
-            cpu: "250m"
+            memory: "2Gi"
+            cpu: "500m"
           limits:
-            memory: "4Gi"
+            memory: "6Gi"
       volumes:
       - name: storage
         persistentVolumeClaim:

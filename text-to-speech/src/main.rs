@@ -1,7 +1,10 @@
 mod auth;
 mod cleanup;
 mod handlers;
+mod inference;
+mod phonemizer;
 mod state;
+mod ws_handler;
 
 use state::{AppState, JwksCache};
 
@@ -28,6 +31,19 @@ async fn main() {
     // Ensure storage directory exists
     tokio::fs::create_dir_all(&storage_path).await.unwrap();
 
+    // Load Kokoro ONNX model for live TTS (optional - may not exist in test mode)
+    let kokoro_model =
+        match inference::KokoroModel::load("/app/kokoro-v1.0.onnx", "/app/voices-v1.0.bin") {
+            Ok(model) => {
+                tracing::info!("Kokoro TTS model loaded successfully");
+                Some(model)
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load Kokoro model (live TTS disabled): {}", e);
+                None
+            }
+        };
+
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
@@ -47,6 +63,7 @@ async fn main() {
         keycloak_url,
         keycloak_realm,
         keycloak_audience,
+        kokoro_model,
     };
 
     // Spawn cleanup task
@@ -63,14 +80,22 @@ async fn main() {
         }
     });
 
-    let app = Router::new()
+    // Routes requiring auth middleware
+    let authed_routes = Router::new()
         .route("/generate", post(handlers::generate_speech))
         .route("/status/:id", get(handlers::check_status))
         .route("/jobs", get(handlers::list_jobs))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_middleware,
-        ))
+        ));
+
+    // WebSocket route - auth is handled via first message, not middleware
+    let ws_routes = Router::new().route("/ws/live", get(ws_handler::ws_live_handler));
+
+    let app = Router::new()
+        .merge(authed_routes)
+        .merge(ws_routes)
         .with_state(state);
 
     tracing::info!("Starting TTS server on 0.0.0.0:3000");

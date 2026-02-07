@@ -133,6 +133,13 @@ async fn validate_token(state: &AppState, token: &str) -> Result<KeycloakClaims,
     Ok(token_data.claims)
 }
 
+/// Public wrapper for token validation, used by WebSocket handler
+/// Returns the username on success
+pub async fn validate_token_public(state: &AppState, token: &str) -> Result<String, String> {
+    let claims = validate_token(state, token).await?;
+    Ok(claims.preferred_username.unwrap_or(claims.sub))
+}
+
 pub async fn auth_middleware(
     State(state): State<AppState>,
     mut request: Request,

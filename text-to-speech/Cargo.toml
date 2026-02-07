@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axum = { version = "0.7.5", features = ["multipart", "macros"] }
+axum = { version = "0.7.5", features = ["multipart", "macros", "ws"] }
+ort = { version = "2.0.0-rc.11", features = ["download-binaries", "ndarray"] }
+ndarray = "0.17"
 tokio = { version = "1.37", features = ["full"] }
 tokio-util = { version = "0.7", features = ["io"] }
 anyhow = "1.0"

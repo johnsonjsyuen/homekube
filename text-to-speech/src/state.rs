@@ -1,3 +1,4 @@
+use crate::inference::KokoroModel;
 use jsonwebtoken::DecodingKey;
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
@@ -12,6 +13,7 @@ pub struct AppState {
     pub keycloak_url: String,
     pub keycloak_realm: String,
     pub keycloak_audience: String,
+    pub kokoro_model: Option<Arc<KokoroModel>>,
 }
 
 #[derive(Default)]
