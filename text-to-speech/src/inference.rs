@@ -124,22 +124,7 @@ impl KokoroModel {
 
     /// Convert text phonemes to token IDs
     fn phonemes_to_tokens(&self, phonemes: &str) -> Vec<i64> {
-        let mut tokens = Vec::with_capacity(phonemes.len() + 2);
-
-        // Start token
-        tokens.push(0); // $ = start of sequence
-
-        for c in phonemes.chars() {
-            if let Some(&id) = self.vocab.get(&c) {
-                tokens.push(id);
-            }
-            // Skip unknown characters
-        }
-
-        // End token
-        tokens.push(0); // $ = end of sequence
-
-        tokens
+        phonemes_to_tokens(&self.vocab, phonemes)
     }
 
     /// Synthesize audio from phonemes
@@ -224,15 +209,35 @@ mod tests {
     #[test]
     fn test_phonemes_to_tokens() {
         let vocab = build_vocab();
-        let model = KokoroModel {
-            session: unsafe { std::mem::zeroed() }, // Mock for test
-            voices: VoiceEmbeddings {
-                embeddings: HashMap::new(),
-            },
-            vocab,
-        };
 
-        // This test would need a real session, skip for now
-        // Just verify vocab works
+        // Test basic phonemes
+        let tokens = super::phonemes_to_tokens(&vocab, "a");
+        assert_eq!(tokens.len(), 3); // start + 'a' + end
+        assert_eq!(tokens[0], 0);
+        assert_eq!(tokens[2], 0);
+
+        // Test unknown char
+        let tokens = super::phonemes_to_tokens(&vocab, "a@"); // @ is unknown
+        assert_eq!(tokens.len(), 3); // start + 'a' + end
     }
+}
+
+/// Convert text phonemes to token IDs
+fn phonemes_to_tokens(vocab: &HashMap<char, i64>, phonemes: &str) -> Vec<i64> {
+    let mut tokens = Vec::with_capacity(phonemes.len() + 2);
+
+    // Start token
+    tokens.push(0); // $ = start of sequence
+
+    for c in phonemes.chars() {
+        if let Some(&id) = vocab.get(&c) {
+            tokens.push(id);
+        }
+        // Skip unknown characters
+    }
+
+    // End token
+    tokens.push(0); // $ = end of sequence
+
+    tokens
 }

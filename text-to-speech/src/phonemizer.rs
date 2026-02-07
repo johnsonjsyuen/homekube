@@ -89,7 +89,6 @@ pub fn estimate_word_timings(
     }
 
     let total_ms = (total_samples as f64 / sample_rate as f64 * 1000.0) as u32;
-    let phoneme_len = phonemes.len().max(1);
 
     // Estimate phonemes per word proportionally to character count
     let total_chars: usize = words.iter().map(|w| w.len()).sum();
