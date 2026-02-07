@@ -169,10 +169,16 @@
         ws.onmessage = (event) => {
             if (event.data instanceof Blob) {
                 // Binary audio data
+                console.log(
+                    "[LiveTTS] Received audio chunk:",
+                    event.data.size,
+                    "bytes",
+                );
                 handleAudioData(event.data);
             } else {
                 // JSON message
                 const msg = JSON.parse(event.data);
+                console.log("[LiveTTS] Received message:", msg);
                 handleMessage(msg);
             }
         };
