@@ -146,9 +146,11 @@ async fn handle_socket(socket: WebSocket, state: AppState, token: Option<String>
                             audio_data,
                         ) {
                             audio_buffer.extend(decoded);
+                            tracing::debug!(buffer_size = audio_buffer.len(), "Audio chunk received");
                         }
                     } else if parsed.get("type").and_then(|v| v.as_str()) == Some("commit") {
                         // Client signals end of audio - send to Whisper for transcription
+                        tracing::info!(buffer_size = audio_buffer.len(), "Commit received, sending to Whisper");
                         if !audio_buffer.is_empty() {
                             let audio_b64 = base64::Engine::encode(
                                 &base64::engine::general_purpose::STANDARD,
@@ -167,9 +169,11 @@ async fn handle_socket(socket: WebSocket, state: AppState, token: Option<String>
                                 .await
                             {
                                 Ok(response) => {
+                                    tracing::info!(status = %response.status(), "Whisper response received");
                                     if response.status().is_success() {
                                         match response.json::<WhisperResponse>().await {
                                             Ok(whisper_response) => {
+                                                tracing::info!(text_len = whisper_response.text.len(), text = %whisper_response.text, "Transcription result");
                                                 if !whisper_response.text.is_empty() {
                                                     let msg = ClientMessage::transcript(
                                                         whisper_response.text,
@@ -188,6 +192,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, token: Option<String>
                                                         );
                                                         break;
                                                     }
+                                                    tracing::info!("Transcript sent to client");
                                                 }
                                             }
                                             Err(e) => {

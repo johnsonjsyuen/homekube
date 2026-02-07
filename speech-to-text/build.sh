@@ -21,4 +21,5 @@ docker push localhost:5000/speech-to-text-whisper:latest
 echo ""
 echo "=== Build complete! ==="
 echo ""
-echo "Deploy with: kubectl apply -f k8s/"
+kubectl apply -f speech-to-text/k8s/
+kubectl rollout restart deployment speech-to-text
