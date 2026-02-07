@@ -190,18 +190,24 @@
         if (connectionStatus !== "connected") return;
 
         try {
-            // Request microphone access
+            // Request microphone access - don't force sample rate, use native
             mediaStream = await navigator.mediaDevices.getUserMedia({
                 audio: {
-                    sampleRate: 16000,
                     channelCount: 1,
                     echoCancellation: true,
                     noiseSuppression: true,
                 },
             });
 
-            // Create audio context for processing
-            audioContext = new AudioContext({ sampleRate: 16000 });
+            // Create audio context with native sample rate
+            audioContext = new AudioContext();
+            const nativeSampleRate = audioContext.sampleRate;
+            const targetSampleRate = 16000;
+
+            console.log(
+                `[STT] Native sample rate: ${nativeSampleRate}, target: ${targetSampleRate}`,
+            );
+
             const source = audioContext.createMediaStreamSource(mediaStream);
 
             // Use ScriptProcessor for PCM16 data (deprecated but widely supported)
@@ -213,10 +219,23 @@
 
                 const inputData = event.inputBuffer.getChannelData(0);
 
+                // Resample to 16kHz if needed
+                let samples: Float32Array;
+                if (nativeSampleRate !== targetSampleRate) {
+                    const ratio = nativeSampleRate / targetSampleRate;
+                    const newLength = Math.floor(inputData.length / ratio);
+                    samples = new Float32Array(newLength);
+                    for (let i = 0; i < newLength; i++) {
+                        samples[i] = inputData[Math.floor(i * ratio)];
+                    }
+                } else {
+                    samples = inputData;
+                }
+
                 // Convert Float32 to PCM16
-                const pcm16 = new Int16Array(inputData.length);
-                for (let i = 0; i < inputData.length; i++) {
-                    const s = Math.max(-1, Math.min(1, inputData[i]));
+                const pcm16 = new Int16Array(samples.length);
+                for (let i = 0; i < samples.length; i++) {
+                    const s = Math.max(-1, Math.min(1, samples[i]));
                     pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
                 }
 
