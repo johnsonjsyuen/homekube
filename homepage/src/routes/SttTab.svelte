@@ -113,16 +113,8 @@
                         connectionStatus = "connected";
                     } else if (msg.type === "transcript") {
                         if (msg.text) {
-                            if (msg.is_final) {
-                                // Final transcript - append and clear partial
-                                transcript +=
-                                    (transcript ? " " : "") + msg.text;
-                                partialTranscript = "";
-                            } else {
-                                // Partial transcript - accumulate
-                                partialTranscript +=
-                                    (partialTranscript ? " " : "") + msg.text;
-                            }
+                            // All transcripts append - each is a completed speech segment
+                            transcript += (transcript ? " " : "") + msg.text;
                         }
                     } else if (msg.type === "error") {
                         errorMessage = msg.error || "Unknown error";
