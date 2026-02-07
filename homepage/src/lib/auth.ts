@@ -188,6 +188,24 @@ export function getToken(): string | null {
     return authState.token;
 }
 
+/**
+ * Get a fresh token, refreshing if necessary.
+ * Use this before making new connections (e.g. WebSocket).
+ */
+export async function getFreshToken(): Promise<string | null> {
+    if (!keycloak?.authenticated) return null;
+    try {
+        const refreshed = await keycloak.updateToken(30);
+        if (refreshed) {
+            updateAuthState(keycloak);
+        }
+    } catch {
+        console.error('[Auth] Failed to refresh token');
+        return null;
+    }
+    return keycloak.token || null;
+}
+
 export function isAuthenticated(): boolean {
     return authState.authenticated;
 }

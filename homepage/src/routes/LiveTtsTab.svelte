@@ -5,7 +5,7 @@
         login,
         logout,
         onAuthStateChange,
-        getToken,
+        getFreshToken,
         type AuthState,
     } from "$lib/auth";
 
@@ -133,6 +133,14 @@
         parseTextIntoWords(text);
         wordTimings = [];
 
+        // Get a fresh token before connecting
+        const token = await getFreshToken();
+        if (!token) {
+            status = "error";
+            errorMessage = "Failed to get authentication token";
+            return;
+        }
+
         // Initialize audio context
         if (!audioContext) {
             audioContext = new AudioContext({ sampleRate: 24000 });
@@ -152,8 +160,7 @@
 
         ws.onopen = () => {
             console.log("[LiveTTS] WebSocket connected");
-            // Send auth message
-            const token = getToken();
+            // Send auth message with pre-refreshed token
             ws!.send(
                 JSON.stringify({ type: "auth", token: `Bearer ${token}` }),
             );
@@ -176,11 +183,13 @@
             errorMessage = "WebSocket connection error";
         };
 
-        ws.onclose = () => {
-            console.log("[LiveTTS] WebSocket closed");
+        ws.onclose = (event) => {
+            console.log(
+                `[LiveTTS] WebSocket closed: code=${event.code} reason=${event.reason}`,
+            );
             if (status === "connecting") {
                 status = "error";
-                errorMessage = "Connection closed unexpectedly";
+                errorMessage = `Connection closed unexpectedly (code: ${event.code})`;
             }
         };
     }
