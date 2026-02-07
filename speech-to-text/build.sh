@@ -24,4 +24,4 @@ echo ""
 echo "Before deploying, copy model files to PVC."
 echp "See instructions in UPLOAD_MODEL.md"
 echo ""
-kubectl apply -f k8s/"
+kubectl apply -f k8s/
