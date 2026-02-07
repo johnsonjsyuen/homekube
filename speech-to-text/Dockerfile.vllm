@@ -1,6 +1,6 @@
 # vLLM container for serving Voxtral model
 # Model files are mounted from PVC, not baked into image
-FROM vllm/vllm-cpu:nightly
+FROM public.ecr.aws/q9t5s3a7/vllm-cpu-release-repo:latest
 
 EXPOSE 8000
 
