@@ -75,7 +75,7 @@
                 );
                 sentLength = text.length;
                 updateWordsDisplay();
-            }, 500);
+            }, 1500);
         }
     });
 
