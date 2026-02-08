@@ -2,12 +2,13 @@
     import { onMount, onDestroy } from "svelte";
     import {
         initKeycloak,
-        login,
-        logout,
         onAuthStateChange,
         getToken,
         type AuthState,
     } from "$lib/auth";
+
+    // Mock mode detection
+    const isMockMode = import.meta.env.VITE_DEV_MODE === 'mock';
 
     // Auth state
     let authState = $state<AuthState>({
@@ -77,15 +78,7 @@
         disconnectWebSocket();
     });
 
-    async function handleLogin() {
-        await login("/?tab=stt");
-    }
-
-    async function handleLogout() {
-        await logout();
-    }
-
-    function connectWebSocket() {
+    async function connectWebSocket() {
         const token = getToken();
         if (!token) {
             errorMessage = "No authentication token available";
@@ -97,7 +90,16 @@
         const wsUrl = `${getWsUrl()}?token=${encodeURIComponent(token)}`;
 
         try {
-            ws = new WebSocket(wsUrl);
+            // Import mock WebSocket if in mock mode
+            let MockWebSocketClass: any = null;
+            if (isMockMode) {
+                const module = await import('$lib/mocks/websocket');
+                MockWebSocketClass = module.MockSTTWebSocket;
+            }
+
+            ws = isMockMode && MockWebSocketClass
+                ? new MockWebSocketClass(wsUrl)
+                : new WebSocket(wsUrl);
 
             ws.onopen = () => {
                 console.log("[STT] WebSocket connected");
@@ -162,7 +164,7 @@
         errorMessage = "";
 
         // Connect WebSocket first
-        connectWebSocket();
+        await connectWebSocket();
 
         // Wait for connection
         await new Promise<void>((resolve, reject) => {
@@ -322,20 +324,10 @@
                 <span class="spinner">...</span> Loading authentication...
             </div>
         {:else if !authState.authenticated}
-            <div class="auth-required">
-                <p>Please log in to use the speech-to-text feature.</p>
-                <button class="login-btn" onclick={handleLogin}>
-                    Log In
-                </button>
+            <div class="feature-disabled">
+                <p>Please log in using the button in the top-right corner to access speech-to-text.</p>
             </div>
         {:else}
-            <div class="user-info">
-                <span>Logged in as: <strong>{authState.username}</strong></span>
-                <button class="logout-btn" onclick={handleLogout}
-                    >Log Out</button
-                >
-            </div>
-
             <!-- Recording Controls -->
             <div class="recording-section">
                 <div class="recording-controls">
@@ -450,65 +442,11 @@
         padding: 20px;
     }
 
-    .auth-required {
+    .feature-disabled {
         text-align: center;
-        padding: 20px;
-    }
-
-    .auth-required p {
-        color: #aaa;
-        margin-bottom: 20px;
-    }
-
-    .login-btn {
-        background: #4a90e2;
-        color: white;
-        border: none;
-        padding: 12px 30px;
-        border-radius: 8px;
+        padding: 40px 20px;
+        color: #888;
         font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s;
-    }
-
-    .login-btn:hover {
-        background: #357abd;
-    }
-
-    .user-info {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-        padding: 10px 15px;
-        background: #333;
-        border-radius: 8px;
-        font-size: 0.9rem;
-    }
-
-    .user-info span {
-        color: #aaa;
-    }
-
-    .user-info strong {
-        color: #fff;
-    }
-
-    .logout-btn {
-        background: transparent;
-        color: #f87171;
-        border: 1px solid #f87171;
-        padding: 5px 15px;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 0.85rem;
-        transition: all 0.2s;
-    }
-
-    .logout-btn:hover {
-        background: #f87171;
-        color: #000;
     }
 
     .recording-section {

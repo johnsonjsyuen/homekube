@@ -1,11 +1,14 @@
+<script lang="ts">
     import { goto } from "$app/navigation";
     import { page } from "$app/state";
+    import { browser } from "$app/environment";
     import type { PageData } from "./$types";
     import WeatherTab from "./WeatherTab.svelte";
     // import SpeedtestTab from "./SpeedtestTab.svelte";
     import TtsTab from "./TtsTab.svelte";
     import SttTab from "./SttTab.svelte";
     import LiveTtsTab from "./LiveTtsTab.svelte";
+    import AuthHeader from "$lib/components/AuthHeader.svelte";
     import { onMount } from "svelte";
     import { initKeycloak } from "$lib/auth";
 
@@ -15,10 +18,13 @@
     let activeTab = $state(page.url.searchParams.get("tab") || "weather");
 
     onMount(() => {
+        // Only run in browser (not during SSR)
+        if (!browser) return;
+
         // Preload Keycloak when browser is idle
         // This ensures Weather tab loads instantly while auth is ready for other tabs
-        if ('requestIdleCallback' in window) {
-            requestIdleCallback(() => initKeycloak(), { timeout: 2000 });
+        if (typeof window.requestIdleCallback !== 'undefined') {
+            window.requestIdleCallback(() => initKeycloak(), { timeout: 2000 });
         } else {
             // Safari fallback
             setTimeout(() => initKeycloak(), 100);
@@ -72,57 +78,64 @@
 
 <div class="container">
     <header class="header">
-        <div class="tabs">
-            <button
-                class="tab-btn {activeTab === 'weather' ? 'active' : ''}"
-                onclick={() => (activeTab = "weather")}
-            >
-                Weather
-            </button>
-            <button
-                class="tab-btn {activeTab === 'tts' ? 'active' : ''}"
-                onclick={() => (activeTab = "tts")}
-            >
-                Text to Speech
-            </button>
-            <button
-                class="tab-btn {activeTab === 'stt' ? 'active' : ''}"
-                onclick={() => (activeTab = "stt")}
-            >
-                Speech to Text
-            </button>
-            <button
-                class="tab-btn {activeTab === 'live-tts' ? 'active' : ''}"
-                onclick={() => (activeTab = "live-tts")}
-            >
-                Live TTS
-            </button>
+        <div class="header-top">
+            <div class="tabs">
+                <button
+                    class="tab-btn {activeTab === 'weather' ? 'active' : ''}"
+                    onclick={() => (activeTab = "weather")}
+                >
+                    Weather
+                </button>
+                <button
+                    class="tab-btn {activeTab === 'tts' ? 'active' : ''}"
+                    onclick={() => (activeTab = "tts")}
+                >
+                    Text to Speech
+                </button>
+                <button
+                    class="tab-btn {activeTab === 'stt' ? 'active' : ''}"
+                    onclick={() => (activeTab = "stt")}
+                >
+                    Speech to Text
+                </button>
+                <button
+                    class="tab-btn {activeTab === 'live-tts' ? 'active' : ''}"
+                    onclick={() => (activeTab = "live-tts")}
+                >
+                    Live TTS
+                </button>
+            </div>
+            <div class="header-right">
+                <AuthHeader />
+            </div>
         </div>
 
-        {#if activeTab === "weather"}
-            <div class="location-container">
-                <div class="location">📍 {data.location}</div>
-                <select
-                    class="location-select"
-                    onchange={handleLocationChange}
-                    value={currentSelectValue}
-                >
-                    <option value="port_melbourne">Port Melbourne</option>
-                    <option value="sydney">Sydney</option>
-                    <option value="hong_kong">Hong Kong</option>
-                    <option value="current_location">Current Location</option>
-                </select>
-            </div>
-        {/if}
-        <div class="datetime-container">
-            <div class="datetime">{data.localTime}</div>
-            {#if data.fetchedAt}
-                <div class="fetched-at">
-                    Last updated: {new Date(
-                        data.fetchedAt,
-                    ).toLocaleTimeString()}
+        <div class="header-bottom">
+            {#if activeTab === "weather"}
+                <div class="location-container">
+                    <div class="location">📍 {data.location}</div>
+                    <select
+                        class="location-select"
+                        onchange={handleLocationChange}
+                        value={currentSelectValue}
+                    >
+                        <option value="port_melbourne">Port Melbourne</option>
+                        <option value="sydney">Sydney</option>
+                        <option value="hong_kong">Hong Kong</option>
+                        <option value="current_location">Current Location</option>
+                    </select>
                 </div>
             {/if}
+            <div class="datetime-container">
+                <div class="datetime">{data.localTime}</div>
+                {#if data.fetchedAt}
+                    <div class="fetched-at">
+                        Last updated: {new Date(
+                            data.fetchedAt,
+                        ).toLocaleTimeString()}
+                    </div>
+                {/if}
+            </div>
         </div>
     </header>
 
@@ -152,17 +165,32 @@
     }
 
     .header {
+        margin-bottom: 30px;
+    }
+
+    .header-top {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 30px;
-        flex-wrap: wrap;
+        margin-bottom: 15px;
+        gap: 15px;
+    }
+
+    .header-right {
+        flex-shrink: 0;
+    }
+
+    .header-bottom {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
         gap: 15px;
     }
 
     .tabs {
         display: flex;
         gap: 10px;
+        flex-wrap: wrap;
     }
 
     .tab-btn {

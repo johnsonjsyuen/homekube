@@ -2,8 +2,6 @@
     import { onMount } from "svelte";
     import {
         initKeycloak,
-        login,
-        logout,
         onAuthStateChange,
         getToken,
         type AuthState,
@@ -155,15 +153,6 @@
         }
     }
 
-    async function handleLogin() {
-        // Redirect back to the TTS tab after login
-        await login("/?tab=tts");
-    }
-
-    async function handleLogout() {
-        await logout();
-    }
-
     async function generateSpeech() {
         if (!authState.authenticated) {
             alert("Please log in to use text-to-speech.");
@@ -268,25 +257,11 @@
     <div class="tts-card">
         <h3>Generate Speech</h3>
 
-        {#if !authInitialized}
-            <div class="auth-loading">
-                <span class="spinner">...</span> Loading authentication...
-            </div>
-        {:else if !authState.authenticated}
-            <div class="auth-required">
-                <p>Please log in to use the text-to-speech feature.</p>
-                <button class="login-btn" onclick={handleLogin}>
-                    Log In
-                </button>
+        {#if !authState.authenticated}
+            <div class="feature-disabled">
+                <p>Please log in using the button in the top-right corner to access text-to-speech.</p>
             </div>
         {:else}
-            <div class="user-info">
-                <span>Logged in as: <strong>{authState.username}</strong></span>
-                <button class="logout-btn" onclick={handleLogout}
-                    >Log Out</button
-                >
-            </div>
-
             <div class="form-group">
                 <label for="tts-file">Text File</label>
                 <input
@@ -485,71 +460,11 @@
         color: #fff;
     }
 
-    .auth-loading {
+    .feature-disabled {
         text-align: center;
-        color: #aaa;
-        padding: 20px;
-    }
-
-    .auth-required {
-        text-align: center;
-        padding: 20px;
-    }
-
-    .auth-required p {
-        color: #aaa;
-        margin-bottom: 20px;
-    }
-
-    .login-btn {
-        background: #4a90e2;
-        color: white;
-        border: none;
-        padding: 12px 30px;
-        border-radius: 8px;
+        padding: 40px 20px;
+        color: #888;
         font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s;
-    }
-
-    .login-btn:hover {
-        background: #357abd;
-    }
-
-    .user-info {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-        padding: 10px 15px;
-        background: #333;
-        border-radius: 8px;
-        font-size: 0.9rem;
-    }
-
-    .user-info span {
-        color: #aaa;
-    }
-
-    .user-info strong {
-        color: #fff;
-    }
-
-    .logout-btn {
-        background: transparent;
-        color: #f87171;
-        border: 1px solid #f87171;
-        padding: 5px 15px;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 0.85rem;
-        transition: all 0.2s;
-    }
-
-    .logout-btn:hover {
-        background: #f87171;
-        color: #000;
     }
 
     .form-group {
