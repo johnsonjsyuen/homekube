@@ -139,58 +139,35 @@ async fn handle_connection(mut socket: WebSocket, state: AppState) {
                         }
                     }
                     Ok(ClientMessage::SynthesizeAppend { text, voice, speed }) => {
-                        // Append new text and synthesize only complete sentences
+                        // Append new text to pending buffer
                         pending_text.push_str(&text);
 
-                        // Split into sentences and keep the last fragment if incomplete
-                        let sentences = split_sentences(&pending_text);
-                        if sentences.is_empty() {
+                        let to_speak = pending_text.trim().to_string();
+                        if to_speak.is_empty() {
                             continue;
                         }
 
-                        // Check if the pending text ends with sentence-ending punctuation
-                        let trimmed = pending_text.trim_end();
-                        let ends_with_sentence = trimmed.ends_with('.')
-                            || trimmed.ends_with('!')
-                            || trimmed.ends_with('?')
-                            || trimmed.ends_with(':')
-                            || trimmed.ends_with(';');
+                        // The frontend debounces (waits for typing pause) before sending,
+                        // so we synthesize everything we have. Clear the buffer.
+                        pending_text.clear();
 
-                        let (to_speak, leftover) = if ends_with_sentence {
-                            // All sentences are complete
-                            (sentences, String::new())
-                        } else if sentences.len() > 1 {
-                            // Last sentence is incomplete, speak all but the last
-                            let mut complete = sentences;
-                            let last = complete.pop().unwrap_or_default();
-                            (complete, last)
-                        } else {
-                            // Only one incomplete sentence, wait for more
-                            continue;
-                        };
-
-                        pending_text = leftover;
-
-                        if !to_speak.is_empty() {
-                            let stop_rx = stop_tx.subscribe();
-                            let combined = to_speak.join(" ");
-                            if let Err(e) = handle_synthesize(
+                        let stop_rx = stop_tx.subscribe();
+                        if let Err(e) = handle_synthesize(
+                            &mut socket,
+                            &state,
+                            &to_speak,
+                            &voice,
+                            speed,
+                            stop_rx,
+                            &mut sentence_counter,
+                        )
+                        .await
+                        {
+                            let _ = send_message(
                                 &mut socket,
-                                &state,
-                                &combined,
-                                &voice,
-                                speed,
-                                stop_rx,
-                                &mut sentence_counter,
+                                &ServerMessage::Error { message: e },
                             )
-                            .await
-                            {
-                                let _ = send_message(
-                                    &mut socket,
-                                    &ServerMessage::Error { message: e },
-                                )
-                                .await;
-                            }
+                            .await;
                         }
                     }
                     Ok(ClientMessage::Stop) => {
