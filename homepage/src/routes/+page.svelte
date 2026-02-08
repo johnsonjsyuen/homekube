@@ -1,4 +1,3 @@
-<script lang="ts">
     import { goto } from "$app/navigation";
     import { page } from "$app/state";
     import type { PageData } from "./$types";
@@ -7,11 +6,18 @@
     import TtsTab from "./TtsTab.svelte";
     import SttTab from "./SttTab.svelte";
     import LiveTtsTab from "./LiveTtsTab.svelte";
+    import { onMount } from "svelte";
+    import { initKeycloak } from "$lib/auth";
 
     let { data } = $props();
 
     // Initialize active tab from URL query parameter
     let activeTab = $state(page.url.searchParams.get("tab") || "weather");
+
+    onMount(() => {
+        // Initialize Keycloak to handle login redirects globally
+        initKeycloak();
+    });
 
     let currentSelectValue = $derived.by(() => {
         const lat = page.url.searchParams.get("lat");
