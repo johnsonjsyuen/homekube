@@ -57,6 +57,7 @@ function setupTokenProxy() {
 
 let keycloak: Keycloak | null = null;
 let initialized = false;
+let refreshInterval: number | null = null;
 
 export interface AuthState {
     authenticated: boolean;
@@ -143,7 +144,8 @@ export async function initKeycloak(): Promise<AuthState> {
         updateAuthState(keycloak);
 
         // Set up token refresh
-        setInterval(async () => {
+        if (refreshInterval) clearInterval(refreshInterval);
+        refreshInterval = setInterval(async () => {
             if (keycloak?.authenticated) {
                 try {
                     const refreshed = await keycloak.updateToken(60);
@@ -155,7 +157,7 @@ export async function initKeycloak(): Promise<AuthState> {
                     await logout();
                 }
             }
-        }, 30000);
+        }, 30000) as unknown as number;
 
         return authState;
     } catch (error) {
@@ -179,6 +181,12 @@ export async function login(redirectPath?: string): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
+    // Clean up refresh interval
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+
     if (keycloak?.authenticated) {
         await keycloak.logout({ redirectUri: window.location.origin });
     }

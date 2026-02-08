@@ -15,8 +15,14 @@
     let activeTab = $state(page.url.searchParams.get("tab") || "weather");
 
     onMount(() => {
-        // Initialize Keycloak to handle login redirects globally
-        initKeycloak();
+        // Preload Keycloak when browser is idle
+        // This ensures Weather tab loads instantly while auth is ready for other tabs
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(() => initKeycloak(), { timeout: 2000 });
+        } else {
+            // Safari fallback
+            setTimeout(() => initKeycloak(), 100);
+        }
     });
 
     let currentSelectValue = $derived.by(() => {
