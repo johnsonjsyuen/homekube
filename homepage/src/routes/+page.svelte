@@ -15,11 +15,6 @@
     // Initialize active tab from URL query parameter
     let activeTab = $state(page.url.searchParams.get("tab") || "weather");
 
-    onMount(() => {
-        // Initialize Keycloak to handle login redirects globally
-        initKeycloak();
-    });
-
     let currentSelectValue = $derived.by(() => {
         const lat = page.url.searchParams.get("lat");
         const lon = page.url.searchParams.get("lon");
