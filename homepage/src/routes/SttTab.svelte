@@ -249,8 +249,14 @@
                 }
                 const base64Audio = btoa(binary);
 
-                // Send to WebSocket
-                ws.send(JSON.stringify({ audio: base64Audio }));
+                // Send to WebSocket with recent transcript as context
+                const recentText = transcript.slice(-200);
+                ws.send(
+                    JSON.stringify({
+                        audio: base64Audio,
+                        initial_prompt: recentText,
+                    }),
+                );
             };
 
             source.connect(audioProcessor);

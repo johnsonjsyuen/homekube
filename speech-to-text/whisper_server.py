@@ -35,6 +35,7 @@ class TranscribeRequest(BaseModel):
     """Request body for transcription."""
     audio: str  # Base64 encoded PCM16 audio at 16kHz
     language: str = "en"
+    initial_prompt: Optional[str] = None
 
 
 class TranscribeResponse(BaseModel):
@@ -89,12 +90,18 @@ async def transcribe(request: TranscribeRequest):
         import numpy as np
         audio_array = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
         
+        # Build optional transcription kwargs
+        transcribe_kwargs = {}
+        if request.initial_prompt:
+            transcribe_kwargs["initial_prompt"] = request.initial_prompt
+
         # Run transcription
         segments, info = model.transcribe(
             audio_array,
             language=request.language,
             beam_size=5,
             vad_filter=True,  # Filter out non-speech
+            **transcribe_kwargs,
         )
         
         # Collect results
