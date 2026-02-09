@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="EMPTY_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/speech-to-text/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/speedtest/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/text-to-speech/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/text-to-speech/tests" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/speech-to-text/target" />
+      <excludeFolder url="file://$MODULE_DIR$/speedtest/target" />
+      <excludeFolder url="file://$MODULE_DIR$/text-to-speech/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>

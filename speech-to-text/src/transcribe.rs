@@ -24,6 +24,8 @@ use tokio::sync::mpsc;
 struct WhisperRequest {
     audio: String, // base64 encoded PCM16 audio
     language: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    initial_prompt: Option<String>,
 }
 
 /// Response from Whisper transcription API
@@ -303,20 +305,33 @@ async fn transcription_worker(
     http_client: reqwest::Client,
     whisper_url: String,
 ) {
+    // Accumulate transcript text across segments for context conditioning.
+    // Whisper's prompt window is ~224 tokens; ~200 chars keeps safely within bounds.
+    const MAX_PROMPT_CHARS: usize = 200;
+    let mut context = String::new();
+
     while let Some(segment) = segment_rx.recv().await {
         let audio_b64 = base64::Engine::encode(
             &base64::engine::general_purpose::STANDARD,
             &segment.data,
         );
 
+        let initial_prompt = if context.is_empty() {
+            None
+        } else {
+            Some(context.clone())
+        };
+
         let request = WhisperRequest {
             audio: audio_b64,
             language: "en".to_string(),
+            initial_prompt,
         };
 
         tracing::info!(
             size_bytes = segment.data.len(),
             is_final = segment.is_final,
+            context_len = context.len(),
             "Sending segment to Whisper"
         );
 
@@ -327,6 +342,21 @@ async fn transcription_worker(
                         Ok(whisper_response) => {
                             let text = whisper_response.text.trim().to_string();
                             if !text.is_empty() {
+                                // Append to rolling context, trimming to last MAX_PROMPT_CHARS
+                                if !context.is_empty() {
+                                    context.push(' ');
+                                }
+                                context.push_str(&text);
+                                if context.len() > MAX_PROMPT_CHARS {
+                                    let start = context.len() - MAX_PROMPT_CHARS;
+                                    // Find a word boundary to avoid splitting mid-word
+                                    let trim_at = context[start..]
+                                        .find(' ')
+                                        .map(|i| start + i + 1)
+                                        .unwrap_or(start);
+                                    context = context[trim_at..].to_string();
+                                }
+
                                 let msg = ClientMessage::transcript(text.clone(), segment.is_final);
                                 let mut sink = client_sink.lock().await;
                                 if let Err(e) = sink
