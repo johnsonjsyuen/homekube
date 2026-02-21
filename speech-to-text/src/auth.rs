@@ -215,6 +215,153 @@ pub async fn validate_ws_token(state: &AppState, token: &str) -> Result<Authenti
     let username = claims
         .preferred_username
         .unwrap_or_else(|| claims.sub.clone());
-    
+
     Ok(AuthenticatedUser { username })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::{AppState, JwksCache};
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+
+    use axum::{body::Body, http::Request, middleware as axum_mw, routing::get, Router};
+    use tower::ServiceExt;
+
+    fn create_test_state() -> AppState {
+        AppState {
+            jwks_cache: Arc::new(RwLock::new(JwksCache::default())),
+            keycloak_url: "http://localhost:8080".to_string(),
+            keycloak_realm: "test".to_string(),
+            keycloak_audience: "test".to_string(),
+            whisper_url: "http://localhost:8000".to_string(),
+        }
+    }
+
+    // ── extract_token_from_query tests ──────────────────────────────
+
+    #[test]
+    fn test_extract_token_basic() {
+        let result = extract_token_from_query(Some("token=abc123"));
+        assert_eq!(result, Some("abc123".to_string()));
+    }
+
+    #[test]
+    fn test_extract_token_multiple_params() {
+        let result = extract_token_from_query(Some("lang=en&token=abc123&mode=live"));
+        assert_eq!(result, Some("abc123".to_string()));
+    }
+
+    #[test]
+    fn test_extract_token_none_query() {
+        let result = extract_token_from_query(None);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_token_no_token_param() {
+        let result = extract_token_from_query(Some("lang=en&mode=live"));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_token_empty_query() {
+        let result = extract_token_from_query(Some(""));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_token_token_no_value() {
+        // "token" with no '=' sign — splitn(2, '=') yields only one part, so
+        // parts.next() for the value returns None.
+        let result = extract_token_from_query(Some("token"));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_token_empty_value() {
+        let result = extract_token_from_query(Some("token="));
+        assert_eq!(result, Some("".to_string()));
+    }
+
+    #[test]
+    fn test_extract_token_special_chars() {
+        // The function does no URL decoding, so percent-encoded characters are
+        // returned as-is.
+        let result = extract_token_from_query(Some("token=abc%20def"));
+        assert_eq!(result, Some("abc%20def".to_string()));
+    }
+
+    #[test]
+    fn test_extract_token_first_param() {
+        let result = extract_token_from_query(Some("token=first&other=second"));
+        assert_eq!(result, Some("first".to_string()));
+    }
+
+    #[test]
+    fn test_extract_token_value_with_equals() {
+        // splitn(2, '=') splits at most once, so "abc=def" stays intact.
+        let result = extract_token_from_query(Some("token=abc=def"));
+        assert_eq!(result, Some("abc=def".to_string()));
+    }
+
+    // ── auth_middleware tests ───────────────────────────────────────
+    //
+    // All middleware and ws_token tests are combined into a single test to
+    // avoid races on the process-global STT_TEST_MODE env var.
+
+    async fn dummy_handler() -> &'static str {
+        "ok"
+    }
+
+    fn build_test_app(state: AppState) -> Router {
+        Router::new()
+            .route("/test", get(dummy_handler))
+            .layer(axum_mw::from_fn_with_state(state.clone(), auth_middleware))
+            .with_state(state)
+    }
+
+    #[tokio::test]
+    async fn test_auth_middleware_and_ws_token() {
+        // 1. Test mode bypass — middleware returns 200 without auth header
+        unsafe { std::env::set_var("STT_TEST_MODE", "1") };
+
+        let app = build_test_app(create_test_state());
+        let response = app
+            .oneshot(Request::builder().uri("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // 2. validate_ws_token in test mode
+        let state = create_test_state();
+        let result = validate_ws_token(&state, "any_token_value").await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().username, "test_user");
+
+        // 3. Turn off test mode — missing header should give 401
+        unsafe { std::env::remove_var("STT_TEST_MODE") };
+
+        let app = build_test_app(create_test_state());
+        let response = app
+            .oneshot(Request::builder().uri("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // 4. Wrong auth scheme (Basic instead of Bearer) should give 401
+        let app = build_test_app(create_test_state());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/test")
+                    .header("Authorization", "Basic abc")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
 }

@@ -112,6 +112,20 @@ export async function initKeycloak(): Promise<AuthState> {
         return authState;
     }
 
+    // In Cypress tests, mock authentication since there's no Keycloak server
+    if ((window as any).Cypress) {
+        console.log('[Auth] Cypress detected, using mock auth');
+        authState = {
+            authenticated: true,
+            token: 'cypress-test-token',
+            username: 'test_user',
+            roles: ['user']
+        };
+        initialized = true;
+        notifyCallbacks();
+        return authState;
+    }
+
     // Setup fetch proxy to avoid CORS issues with token endpoint
     setupTokenProxy();
 

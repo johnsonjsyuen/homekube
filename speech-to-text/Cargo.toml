@@ -20,3 +20,4 @@ tower-http = { version = "0.5", features = ["cors"] }
 
 [dev-dependencies]
 tokio-test = "0.4"
+tower = { version = "0.5", features = ["util"] }

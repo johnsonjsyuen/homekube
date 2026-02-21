@@ -24,6 +24,8 @@ use tokio::sync::mpsc;
 struct WhisperRequest {
     audio: String, // base64 encoded PCM16 audio
     language: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    initial_prompt: Option<String>,
 }
 
 /// Response from Whisper transcription API
@@ -90,6 +92,8 @@ struct AudioSegment {
     data: Vec<u8>,
     /// Whether this is the final segment (recording stopped)
     is_final: bool,
+    /// Recent transcript text to condition Whisper for better accuracy
+    initial_prompt: Option<String>,
 }
 
 /// WebSocket upgrade handler
@@ -167,6 +171,9 @@ async fn handle_socket(socket: WebSocket, state: AppState, token: Option<String>
 
     // Double buffer: active buffer collects audio, ready buffer is sent for transcription
     let mut active_buffer: Vec<u8> = Vec::new();
+
+    // Track the latest initial_prompt from the frontend for Whisper conditioning
+    let mut initial_prompt: Option<String> = None;
     
     // Overlap buffer - keep last ~0.5s for context between segments
     const OVERLAP_SAMPLES: usize = 16000 / 2; // 0.5s at 16kHz
@@ -179,6 +186,15 @@ async fn handle_socket(socket: WebSocket, state: AppState, token: Option<String>
                 // Client sends JSON with audio data or control signals
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) {
                     if let Some(audio_data) = parsed.get("audio").and_then(|v| v.as_str()) {
+                        // Update initial_prompt from frontend if provided
+                        if let Some(prompt) = parsed.get("initial_prompt").and_then(|v| v.as_str()) {
+                            initial_prompt = if prompt.is_empty() {
+                                None
+                            } else {
+                                Some(prompt.to_string())
+                            };
+                        }
+
                         // Decode base64 audio and append to buffer
                         if let Ok(decoded) = base64::Engine::decode(
                             &base64::engine::general_purpose::STANDARD,
@@ -208,6 +224,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, token: Option<String>
                                         let segment = AudioSegment {
                                             data: active_buffer.clone(),
                                             is_final: false,
+                                            initial_prompt: initial_prompt.clone(),
                                         };
 
                                         if let Err(e) = segment_tx.send(segment).await {
@@ -232,6 +249,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, token: Option<String>
                             let segment = AudioSegment {
                                 data: std::mem::take(&mut active_buffer),
                                 is_final: true,
+                                initial_prompt: initial_prompt.clone(),
                             };
 
                             if let Err(e) = segment_tx.send(segment).await {
@@ -263,6 +281,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, token: Option<String>
                         let segment = AudioSegment {
                             data: active_buffer.clone(),
                             is_final: false,
+                            initial_prompt: initial_prompt.clone(),
                         };
 
                         if let Err(e) = segment_tx.send(segment).await {
@@ -312,6 +331,7 @@ async fn transcription_worker(
         let request = WhisperRequest {
             audio: audio_b64,
             language: "en".to_string(),
+            initial_prompt: segment.initial_prompt.clone(),
         };
 
         tracing::info!(

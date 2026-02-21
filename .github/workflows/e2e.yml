@@ -1,4 +1,4 @@
-name: End-to-End Tests
+name: Tests
 
 on:
   push:
@@ -13,24 +13,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Cypress run
+        id: cypress
+        uses: cypress-io/github-action@v6
         with:
-          node-version: 20
-          cache: 'npm'
-          cache-dependency-path: homepage/package-lock.json
+          working-directory: homepage
+          start: yarn dev
+          wait-on: 'http://localhost:5173'
+          wait-on-timeout: 60
 
-      - name: Install dependencies
+      - name: Show failing test names
+        if: failure()
         run: |
-          cd homepage
-          npm ci
+          find homepage/cypress/screenshots -name '*.png' -type f 2>/dev/null | while read f; do
+            echo "::error::Failed test screenshot: $f"
+          done
 
-      - name: Start server and run tests
-        run: |
-          cd homepage
-          npm run dev &
-          npx wait-on http://localhost:5173 --timeout 60000
-          npm run cy:run
+      - name: Upload Cypress artifacts
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-artifacts
+          path: |
+            homepage/cypress/screenshots
+            homepage/cypress/videos
 
   tts-integration-test:
     runs-on: ubuntu-latest
@@ -42,3 +48,41 @@ jobs:
         run: |
           cd text-to-speech
           cargo test --test integration_test
+
+  stt-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: speech-to-text
+
+      - name: Run STT unit tests
+        run: |
+          cd speech-to-text
+          cargo test --bins
+
+  tts-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-speech
+
+      - name: Run TTS unit tests
+        run: |
+          cd text-to-speech
+          cargo test --bins

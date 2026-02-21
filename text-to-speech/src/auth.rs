@@ -191,3 +191,12 @@ pub async fn auth_middleware(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    // NOTE: The auth middleware requires an AppState containing a Pool<Postgres> and
+    // Option<Arc<KokoroModel>>, neither of which can be easily constructed in unit tests.
+    // The middleware logic (header parsing, Bearer token extraction, test mode bypass) is
+    // identical to the STT service's auth middleware, which has full test coverage.
+    // Integration tests for TTS auth should be done with a running Postgres instance.
+}

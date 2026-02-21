@@ -1,18 +1,24 @@
 describe('Homepage', () => {
   beforeEach(() => {
+    // Intercept TTS jobs API to prevent errors from missing backend
+    cy.intercept('GET', '/api/tts/jobs', { body: [] });
     cy.visit('/');
+    // Wait for SvelteKit hydration so event handlers are attached
+    cy.get('[data-hydrated]', { timeout: 10000 }).should('exist');
   });
 
   describe('Location Selector', () => {
     it('should change location to Sydney', () => {
       cy.get('.location-select').select('sydney');
-      cy.url().should('include', 'location=sydney');
+      // SvelteKit goto() only updates URL after the server-side load function
+      // resolves, which fetches weather data from external APIs (can be slow in CI)
+      cy.url({ timeout: 30000 }).should('include', 'location=sydney');
       cy.get('.location').should('contain', 'Sydney');
     });
 
     it('should change location to Hong Kong', () => {
       cy.get('.location-select').select('hong_kong');
-      cy.url().should('include', 'location=hong_kong');
+      cy.url({ timeout: 30000 }).should('include', 'location=hong_kong');
       cy.get('.location').should('contain', 'Hong Kong');
     });
 
@@ -29,7 +35,7 @@ describe('Homepage', () => {
       });
 
       cy.get('.location-select').select('current_location');
-      cy.url().should('include', 'lat=');
+      cy.url({ timeout: 30000 }).should('include', 'lat=');
       cy.url().should('include', 'lon=');
     });
 
@@ -80,7 +86,6 @@ describe('Homepage', () => {
 
   describe('Text to Speech Tab', () => {
     beforeEach(() => {
-      cy.wait(1000); // Wait for hydration
       cy.contains('.tab-btn', 'Text to Speech').click();
       cy.contains('.tab-btn.active', 'Text to Speech').should('be.visible');
     });

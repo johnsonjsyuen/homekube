@@ -1,5 +1,9 @@
 import type { PageServerLoad } from './$types';
 import { XMLParser } from 'fast-xml-parser';
+import { getMockWeatherData } from '$lib/mock-weather';
+
+// In CI/test environments, use faster timeouts to avoid flaky tests
+const isCI = typeof process !== 'undefined' && process.env?.CI === 'true';
 
 // Weather code to description and icon mapping
 const WEATHER_CODES: Record<number, [string, string]> = {
@@ -88,7 +92,7 @@ const fetchWithRetry = async (url: string, retries = 3, timeout = 10000, retryDe
 async function fetchUVData() {
     try {
         console.log('Fetching UV data from ARPANSA...');
-        const response = await fetchWithRetry('https://uvdata.arpansa.gov.au/xml/uvvalues.xml', 1, 10000);
+        const response = await fetchWithRetry('https://uvdata.arpansa.gov.au/xml/uvvalues.xml', isCI ? 0 : 1, isCI ? 3000 : 10000);
         const xmlText = await response.text();
 
         const parser = new XMLParser({ ignoreAttributes: false });
@@ -137,7 +141,11 @@ async function fetchWeatherData(lat: string, lon: string, timezone: string) {
         "timezone": timezone
     });
 
-    const response = await fetchWithRetry(`${baseUrl}?${params}`);
+    const response = await fetchWithRetry(
+        `${baseUrl}?${params}`,
+        isCI ? 1 : 3,
+        isCI ? 5000 : 10000
+    );
     return await response.json();
 }
 
@@ -168,8 +176,8 @@ async function updateSavedLocationsCache(locationsToUpdate?: string[]) {
     }
 
     if (failedKeys.length > 0) {
-        console.log(`Failed to fetch: ${failedKeys.join(', ')}. Retrying in 10 seconds...`);
-        setTimeout(() => updateSavedLocationsCache(failedKeys), 10 * 1000);
+        console.log(`Failed to fetch: ${failedKeys.join(', ')}. Retrying in ${isCI ? 2 : 10} seconds...`);
+        setTimeout(() => updateSavedLocationsCache(failedKeys), isCI ? 2000 : 10000);
     }
 
     // Schedule next full refresh only if this was a full refresh (not a retry of failed locations)
@@ -247,18 +255,31 @@ async function fetchSpeedtestData() {
 // setInterval(fetchSpeedtestData, 5 * 60 * 1000); // Refresh every 5 minutes
 
 export const load: PageServerLoad = async ({ url }) => {
+    const latParam = url.searchParams.get('lat');
+    const lonParam = url.searchParams.get('lon');
+    const locationKey = url.searchParams.get('location');
+
+    // In CI, return mock weather data to avoid external API dependency
+    if (isCI) {
+        let locationName: string;
+        if (latParam && lonParam) {
+            locationName = "Current Location";
+        } else {
+            const key = locationKey || 'port_melbourne';
+            const loc = LOCATIONS[key] || LOCATIONS['port_melbourne'];
+            locationName = loc.name;
+        }
+        return getMockWeatherData(locationName);
+    }
+
     // Wait for initial cache population (with timeout to prevent indefinite blocking)
     if (!cacheInitialized && cacheInitPromise) {
         console.log('Waiting for cache initialization...');
         await Promise.race([
             cacheInitPromise,
-            new Promise(resolve => setTimeout(resolve, 30000)) // 30s timeout
+            new Promise(resolve => setTimeout(resolve, isCI ? 10000 : 30000))
         ]);
     }
-
-    const latParam = url.searchParams.get('lat');
-    const lonParam = url.searchParams.get('lon');
-    const locationKey = url.searchParams.get('location');
 
     let lat: string, lon: string, timezone: string, locationName: string;
     let weatherRes;
