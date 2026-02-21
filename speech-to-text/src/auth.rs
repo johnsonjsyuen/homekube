@@ -308,11 +308,8 @@ mod tests {
 
     // ── auth_middleware tests ───────────────────────────────────────
     //
-    // NOTE: Tests that manipulate `STT_TEST_MODE` use std::env::set_var /
-    // remove_var which affect the entire process.  Because cargo test runs
-    // tests in parallel by default, these tests can interfere with each
-    // other.  Run with `cargo test -- --test-threads=1` for deterministic
-    // results, or accept the small race window in CI.
+    // All middleware and ws_token tests are combined into a single test to
+    // avoid races on the process-global STT_TEST_MODE env var.
 
     async fn dummy_handler() -> &'static str {
         "ok"
@@ -326,55 +323,35 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_auth_middleware_test_mode() {
-        // Set STT_TEST_MODE so the middleware bypasses real auth.
+    async fn test_auth_middleware_and_ws_token() {
+        // 1. Test mode bypass — middleware returns 200 without auth header
         unsafe { std::env::set_var("STT_TEST_MODE", "1") };
 
         let app = build_test_app(create_test_state());
-
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/test")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/test").body(Body::empty()).unwrap())
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
 
-        // Clean up.
-        unsafe { std::env::remove_var("STT_TEST_MODE") };
-    }
+        // 2. validate_ws_token in test mode
+        let state = create_test_state();
+        let result = validate_ws_token(&state, "any_token_value").await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().username, "test_user");
 
-    #[tokio::test]
-    async fn test_auth_middleware_missing_header() {
-        // Ensure test mode is off.
+        // 3. Turn off test mode — missing header should give 401
         unsafe { std::env::remove_var("STT_TEST_MODE") };
 
         let app = build_test_app(create_test_state());
-
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/test")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/test").body(Body::empty()).unwrap())
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    }
 
-    #[tokio::test]
-    async fn test_auth_middleware_invalid_header_format() {
-        // Ensure test mode is off.
-        unsafe { std::env::remove_var("STT_TEST_MODE") };
-
+        // 4. Wrong auth scheme (Basic instead of Bearer) should give 401
         let app = build_test_app(create_test_state());
-
         let response = app
             .oneshot(
                 Request::builder()
@@ -385,23 +362,6 @@ mod tests {
             )
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    }
-
-    // ── validate_ws_token tests ─────────────────────────────────────
-
-    #[tokio::test]
-    async fn test_validate_ws_token_test_mode() {
-        unsafe { std::env::set_var("STT_TEST_MODE", "1") };
-
-        let state = create_test_state();
-        let result = validate_ws_token(&state, "any_token_value").await;
-
-        assert!(result.is_ok());
-        let user = result.unwrap();
-        assert_eq!(user.username, "test_user");
-
-        unsafe { std::env::remove_var("STT_TEST_MODE") };
     }
 }
