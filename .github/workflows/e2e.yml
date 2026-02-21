@@ -14,12 +14,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Cypress run
+        id: cypress
         uses: cypress-io/github-action@v6
         with:
           working-directory: homepage
           start: yarn dev
           wait-on: 'http://localhost:5173'
           wait-on-timeout: 60
+
+      - name: Show screenshot filenames on failure
+        if: failure()
+        run: find homepage/cypress/screenshots -type f 2>/dev/null || echo "No screenshots"
 
       - name: Upload Cypress artifacts
         uses: actions/upload-artifact@v4
