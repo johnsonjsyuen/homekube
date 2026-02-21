@@ -32,6 +32,29 @@ jobs:
           npx wait-on http://localhost:5173 --timeout 60000
           yarn cy:run
 
+  homepage-app-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'yarn'
+          cache-dependency-path: homepage-app/yarn.lock
+
+      - name: Install dependencies
+        run: |
+          cd homepage-app
+          yarn install --frozen-lockfile
+
+      - name: Run tests
+        run: |
+          cd homepage-app
+          yarn test
+
   tts-integration-test:
     runs-on: ubuntu-latest
     steps:
