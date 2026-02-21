@@ -3,6 +3,8 @@ describe('Homepage', () => {
     // Intercept TTS jobs API to prevent errors from missing backend
     cy.intercept('GET', '/api/tts/jobs', { body: [] });
     cy.visit('/');
+    // Wait for SvelteKit hydration so event handlers are attached
+    cy.get('[data-hydrated]', { timeout: 10000 }).should('exist');
   });
 
   describe('Location Selector', () => {
@@ -84,7 +86,6 @@ describe('Homepage', () => {
 
   describe('Text to Speech Tab', () => {
     beforeEach(() => {
-      cy.wait(1000); // Wait for hydration
       cy.contains('.tab-btn', 'Text to Speech').click();
       cy.contains('.tab-btn.active', 'Text to Speech').should('be.visible');
     });

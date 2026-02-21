@@ -12,6 +12,13 @@
 
     let { data } = $props();
 
+    // Track hydration state for testing (event handlers only work after hydration)
+    let hydrated = $state(false);
+    onMount(() => {
+        hydrated = true;
+        initKeycloak();
+    });
+
     // Initialize active tab from URL query parameter
     let activeTab = $state(page.url.searchParams.get("tab") || "weather");
 
@@ -60,7 +67,7 @@
     }
 </script>
 
-<div class="container">
+<div class="container" data-hydrated={hydrated ? '' : undefined}>
     <header class="header">
         <div class="tabs">
             <button
