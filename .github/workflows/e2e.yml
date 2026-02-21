@@ -13,24 +13,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Cypress run
+        uses: cypress-io/github-action@v6
         with:
-          node-version: 20
-          cache: 'yarn'
-          cache-dependency-path: homepage/yarn.lock
-
-      - name: Install dependencies
-        run: |
-          cd homepage
-          yarn install --frozen-lockfile
-
-      - name: Start server and run tests
-        run: |
-          cd homepage
-          yarn dev &
-          npx wait-on http://localhost:5173 --timeout 60000
-          yarn cy:run
+          working-directory: homepage
+          start: yarn dev
+          wait-on: 'http://localhost:5173'
+          wait-on-timeout: 60
 
   tts-integration-test:
     runs-on: ubuntu-latest
