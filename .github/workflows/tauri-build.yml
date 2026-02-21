@@ -1,0 +1,180 @@
+name: Tauri Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # macOS desktop build
+  # ---------------------------------------------------------------------------
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'yarn'
+          cache-dependency-path: homepage-app/yarn.lock
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: homepage-app/src-tauri
+
+      - name: Install frontend dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: homepage-app
+
+      # tauri-action runs beforeBuildCommand (yarn build) automatically via
+      # tauri.conf.json, then compiles the Rust binary and bundles the app.
+      - name: Build Tauri app for macOS
+        uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: homepage-app
+          tauriScript: yarn tauri
+
+      - name: Upload macOS artifact (.dmg)
+        uses: actions/upload-artifact@v4
+        with:
+          name: homepage-app-macos-dmg
+          path: homepage-app/src-tauri/target/**/bundle/dmg/*.dmg
+          retention-days: 7
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Windows desktop build
+  # ---------------------------------------------------------------------------
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'yarn'
+          cache-dependency-path: homepage-app/yarn.lock
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: homepage-app/src-tauri
+
+      - name: Install frontend dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: homepage-app
+
+      # tauri-action runs beforeBuildCommand (yarn build) automatically via
+      # tauri.conf.json, then compiles the Rust binary and produces NSIS
+      # installer (.exe) and MSI bundles.
+      - name: Build Tauri app for Windows
+        uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: homepage-app
+          tauriScript: yarn tauri
+
+      - name: Upload Windows artifact (NSIS .exe)
+        uses: actions/upload-artifact@v4
+        with:
+          name: homepage-app-windows-nsis
+          path: homepage-app/src-tauri/target/**/bundle/nsis/*.exe
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload Windows artifact (.msi)
+        uses: actions/upload-artifact@v4
+        with:
+          name: homepage-app-windows-msi
+          path: homepage-app/src-tauri/target/**/bundle/msi/*.msi
+          retention-days: 7
+          # MSI may not always be produced depending on Tauri bundle config
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Android build (debug APK -- no signing keys)
+  # ---------------------------------------------------------------------------
+  build-android:
+    runs-on: ubuntu-latest
+    env:
+      # NDK version matching Android SDK 36 / Tauri 2 requirements
+      NDK_VERSION: "27.0.12077973"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'yarn'
+          cache-dependency-path: homepage-app/yarn.lock
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: homepage-app/src-tauri
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: sdkmanager --install "ndk;${{ env.NDK_VERSION }}"
+
+      # Point NDK_HOME at the installed NDK so the Rust cross-compilation
+      # toolchains can locate the Android sysroot and linker.
+      - name: Set NDK_HOME environment variable
+        run: echo "NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}" >> "$GITHUB_ENV"
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('homepage-app/src-tauri/gen/android/**/*.gradle*', 'homepage-app/src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Install frontend dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: homepage-app
+
+      # Build a debug APK (no signing keys needed). The tauri CLI
+      # runs beforeBuildCommand (yarn build) automatically.
+      - name: Build Android APK (debug)
+        run: yarn tauri android build --debug --apk --target aarch64
+        working-directory: homepage-app
+
+      - name: Upload Android APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: homepage-app-android-apk
+          path: homepage-app/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          retention-days: 7
+          if-no-files-found: error
