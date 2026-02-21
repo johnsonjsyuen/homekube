@@ -8,14 +8,16 @@ describe('Homepage', () => {
   describe('Location Selector', () => {
     it('should change location to Sydney', () => {
       cy.get('.location-select').select('sydney');
-      cy.url().should('include', 'location=sydney');
-      cy.get('.location', { timeout: 60000 }).should('contain', 'Sydney');
+      // SvelteKit goto() only updates URL after the load function resolves,
+      // which fetches weather data from external APIs (can be slow in CI)
+      cy.url({ timeout: 60000 }).should('include', 'location=sydney');
+      cy.get('.location').should('contain', 'Sydney');
     });
 
     it('should change location to Hong Kong', () => {
       cy.get('.location-select').select('hong_kong');
-      cy.url().should('include', 'location=hong_kong');
-      cy.get('.location', { timeout: 60000 }).should('contain', 'Hong Kong');
+      cy.url({ timeout: 60000 }).should('include', 'location=hong_kong');
+      cy.get('.location').should('contain', 'Hong Kong');
     });
 
     it('should request geolocation when "Current Location" selected', () => {
