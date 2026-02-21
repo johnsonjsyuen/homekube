@@ -254,6 +254,58 @@ async function fetchSpeedtestData() {
 // setInterval(fetchSpeedtestData, 5 * 60 * 1000); // Refresh every 5 minutes
 
 export const load: PageServerLoad = async ({ url }) => {
+    const latParam = url.searchParams.get('lat');
+    const lonParam = url.searchParams.get('lon');
+    const locationKey = url.searchParams.get('location');
+
+    // In CI, return mock weather data to avoid external API dependency
+    if (isCI) {
+        let locationName: string;
+        if (latParam && lonParam) {
+            locationName = "Current Location";
+        } else {
+            const key = locationKey || 'port_melbourne';
+            const data = LOCATIONS[key] || LOCATIONS['port_melbourne'];
+            locationName = data.name;
+        }
+        const localTime = new Date().toLocaleString('en-US', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        }).replace(' at ', ' • ');
+
+        return {
+            location: locationName,
+            localTime,
+            fetchedAt: new Date().toISOString(),
+            temperature: 22,
+            condition: "Clear sky",
+            currentIcon: "☀️",
+            windSpeed: 10,
+            windDirection: 180,
+            windDirectionDesc: "S",
+            humidity: 50,
+            cloudCover: 20,
+            uvIndex: 3,
+            uvTime: null,
+            forecast: [
+                { date: '2026-01-01', name: 'Today', icon: '☀️', high: 25, low: 15, max_wind: 15 },
+                { date: '2026-01-02', name: 'Mon', icon: '⛅', high: 23, low: 14, max_wind: 12 },
+            ],
+            dailyHourlyMap: {
+                '2026-01-01': [
+                    { time: '9 AM', wind_speed: 8, wind_direction: 180, wind_direction_desc: 'S' },
+                    { time: '12 PM', wind_speed: 12, wind_direction: 200, wind_direction_desc: 'SSW' },
+                ],
+                '2026-01-02': [
+                    { time: '9 AM', wind_speed: 6, wind_direction: 90, wind_direction_desc: 'E' },
+                ],
+            },
+            speedtestResults: [],
+            speedtestByLocation: {},
+            error: null
+        };
+    }
+
     // Wait for initial cache population (with timeout to prevent indefinite blocking)
     if (!cacheInitialized && cacheInitPromise) {
         console.log('Waiting for cache initialization...');
@@ -262,10 +314,6 @@ export const load: PageServerLoad = async ({ url }) => {
             new Promise(resolve => setTimeout(resolve, isCI ? 10000 : 30000))
         ]);
     }
-
-    const latParam = url.searchParams.get('lat');
-    const lonParam = url.searchParams.get('lon');
-    const locationKey = url.searchParams.get('location');
 
     let lat: string, lon: string, timezone: string, locationName: string;
     let weatherRes;
