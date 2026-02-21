@@ -22,9 +22,16 @@ jobs:
           wait-on: 'http://localhost:5173'
           wait-on-timeout: 60
 
-      - name: Show screenshot filenames on failure
+      - name: Show failing test details
         if: failure()
-        run: find homepage/cypress/screenshots -type f 2>/dev/null || echo "No screenshots"
+        run: |
+          echo "## Cypress Test Failures" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Screenshots" >> $GITHUB_STEP_SUMMARY
+          find homepage/cypress/screenshots -name '*.png' -type f 2>/dev/null | while read f; do
+            echo "- \`$f\`" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Cypress artifacts
         uses: actions/upload-artifact@v4
