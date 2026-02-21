@@ -1,4 +1,4 @@
-name: End-to-End Tests
+name: Tests
 
 on:
   push:
@@ -42,3 +42,41 @@ jobs:
         run: |
           cd text-to-speech
           cargo test --test integration_test
+
+  stt-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: speech-to-text
+
+      - name: Run STT unit tests
+        run: |
+          cd speech-to-text
+          cargo test --bins
+
+  tts-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-speech
+
+      - name: Run TTS unit tests
+        run: |
+          cd text-to-speech
+          cargo test --bins

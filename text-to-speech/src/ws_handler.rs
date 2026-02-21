@@ -354,3 +354,148 @@ async fn send_message(socket: &mut WebSocket, msg: &ServerMessage) -> Result<(),
         .await
         .map_err(|e| format!("Failed to send message: {}", e))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── ClientMessage deserialization tests ──
+
+    #[test]
+    fn test_deserialize_auth_message() {
+        let json = r#"{"type":"auth","token":"mytoken"}"#;
+        let msg: ClientMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            ClientMessage::Auth { token } => assert_eq!(token, "mytoken"),
+            other => panic!("Expected Auth, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_synthesize_message() {
+        let json = r#"{"type":"synthesize","text":"hello","voice":"af_heart","speed":1.0}"#;
+        let msg: ClientMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            ClientMessage::Synthesize { text, voice, speed } => {
+                assert_eq!(text, "hello");
+                assert_eq!(voice, "af_heart");
+                assert!((speed - 1.0).abs() < f32::EPSILON);
+            }
+            other => panic!("Expected Synthesize, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_synthesize_append_message() {
+        let json = r#"{"type":"synthesize_append","text":"world","voice":"af_heart","speed":1.5}"#;
+        let msg: ClientMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            ClientMessage::SynthesizeAppend { text, voice, speed } => {
+                assert_eq!(text, "world");
+                assert_eq!(voice, "af_heart");
+                assert!((speed - 1.5).abs() < f32::EPSILON);
+            }
+            other => panic!("Expected SynthesizeAppend, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_stop_message() {
+        let json = r#"{"type":"stop"}"#;
+        let msg: ClientMessage = serde_json::from_str(json).unwrap();
+        assert!(matches!(msg, ClientMessage::Stop));
+    }
+
+    #[test]
+    fn test_deserialize_invalid_type() {
+        let json = r#"{"type":"unknown"}"#;
+        let result = serde_json::from_str::<ClientMessage>(json);
+        assert!(result.is_err(), "Expected error for unknown type, got {:?}", result);
+    }
+
+    #[test]
+    fn test_deserialize_missing_fields() {
+        let json = r#"{"type":"synthesize","text":"hello"}"#;
+        let result = serde_json::from_str::<ClientMessage>(json);
+        assert!(result.is_err(), "Expected error for missing fields, got {:?}", result);
+    }
+
+    // ── ServerMessage serialization tests ──
+
+    #[test]
+    fn test_serialize_auth_ok() {
+        let msg = ServerMessage::AuthOk {
+            username: "testuser".to_string(),
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "auth_ok");
+        assert_eq!(json["username"], "testuser");
+    }
+
+    #[test]
+    fn test_serialize_auth_error() {
+        let msg = ServerMessage::AuthError {
+            message: "bad".to_string(),
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "auth_error");
+        assert_eq!(json["message"], "bad");
+    }
+
+    #[test]
+    fn test_serialize_word_timing() {
+        let msg = ServerMessage::WordTiming {
+            sentence_index: 2,
+            words: vec![
+                WordInfo { word: "hello".to_string(), start_ms: 0, end_ms: 300 },
+                WordInfo { word: "world".to_string(), start_ms: 300, end_ms: 600 },
+            ],
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "word_timing");
+        assert_eq!(json["sentence_index"], 2);
+        let words = json["words"].as_array().unwrap();
+        assert_eq!(words.len(), 2);
+        assert_eq!(words[0]["word"], "hello");
+        assert_eq!(words[0]["start_ms"], 0);
+        assert_eq!(words[0]["end_ms"], 300);
+        assert_eq!(words[1]["word"], "world");
+        assert_eq!(words[1]["start_ms"], 300);
+        assert_eq!(words[1]["end_ms"], 600);
+    }
+
+    #[test]
+    fn test_serialize_sentence_done() {
+        let msg = ServerMessage::SentenceDone { sentence_index: 0 };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "sentence_done");
+        assert_eq!(json["sentence_index"], 0);
+    }
+
+    #[test]
+    fn test_serialize_done() {
+        let msg = ServerMessage::Done;
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "done");
+        // Done has no extra fields beyond "type"
+        assert_eq!(json.as_object().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_serialize_error() {
+        let msg = ServerMessage::Error {
+            message: "err".to_string(),
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "error");
+        assert_eq!(json["message"], "err");
+    }
+
+    #[test]
+    fn test_serialize_stopped() {
+        let msg = ServerMessage::Stopped;
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "stopped");
+        assert_eq!(json.as_object().unwrap().len(), 1);
+    }
+}
