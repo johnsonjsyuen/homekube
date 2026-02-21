@@ -1,5 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { XMLParser } from 'fast-xml-parser';
+import { getMockWeatherData } from '$lib/mock-weather';
 
 // In CI/test environments, use faster timeouts to avoid flaky tests
 const isCI = typeof process !== 'undefined' && process.env?.CI === 'true';
@@ -265,45 +266,10 @@ export const load: PageServerLoad = async ({ url }) => {
             locationName = "Current Location";
         } else {
             const key = locationKey || 'port_melbourne';
-            const data = LOCATIONS[key] || LOCATIONS['port_melbourne'];
-            locationName = data.name;
+            const loc = LOCATIONS[key] || LOCATIONS['port_melbourne'];
+            locationName = loc.name;
         }
-        const localTime = new Date().toLocaleString('en-US', {
-            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-        }).replace(' at ', ' • ');
-
-        return {
-            location: locationName,
-            localTime,
-            fetchedAt: new Date().toISOString(),
-            temperature: 22,
-            condition: "Clear sky",
-            currentIcon: "☀️",
-            windSpeed: 10,
-            windDirection: 180,
-            windDirectionDesc: "S",
-            humidity: 50,
-            cloudCover: 20,
-            uvIndex: 3,
-            uvTime: null,
-            forecast: [
-                { date: '2026-01-01', name: 'Today', icon: '☀️', high: 25, low: 15, max_wind: 15 },
-                { date: '2026-01-02', name: 'Mon', icon: '⛅', high: 23, low: 14, max_wind: 12 },
-            ],
-            dailyHourlyMap: {
-                '2026-01-01': [
-                    { time: '9 AM', wind_speed: 8, wind_direction: 180, wind_direction_desc: 'S' },
-                    { time: '12 PM', wind_speed: 12, wind_direction: 200, wind_direction_desc: 'SSW' },
-                ],
-                '2026-01-02': [
-                    { time: '9 AM', wind_speed: 6, wind_direction: 90, wind_direction_desc: 'E' },
-                ],
-            },
-            speedtestResults: [],
-            speedtestByLocation: {},
-            error: null
-        };
+        return getMockWeatherData(locationName);
     }
 
     // Wait for initial cache population (with timeout to prevent indefinite blocking)
