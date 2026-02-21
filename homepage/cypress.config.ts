@@ -5,7 +5,7 @@ export default defineConfig({
     baseUrl: "http://localhost:5173",
     video: false,
     supportFile: false,
-    pageLoadTimeout: 120000,
+    pageLoadTimeout: 60000,
     setupNodeEvents(on, config) {
       // implement node event listeners here
     },

@@ -1,6 +1,9 @@
 import type { PageServerLoad } from './$types';
 import { XMLParser } from 'fast-xml-parser';
 
+// In CI/test environments, use faster timeouts to avoid flaky tests
+const isCI = typeof process !== 'undefined' && process.env?.CI === 'true';
+
 // Weather code to description and icon mapping
 const WEATHER_CODES: Record<number, [string, string]> = {
     0: ["Clear sky", "☀️"],
@@ -88,7 +91,7 @@ const fetchWithRetry = async (url: string, retries = 3, timeout = 10000, retryDe
 async function fetchUVData() {
     try {
         console.log('Fetching UV data from ARPANSA...');
-        const response = await fetchWithRetry('https://uvdata.arpansa.gov.au/xml/uvvalues.xml', 1, 10000);
+        const response = await fetchWithRetry('https://uvdata.arpansa.gov.au/xml/uvvalues.xml', isCI ? 0 : 1, isCI ? 3000 : 10000);
         const xmlText = await response.text();
 
         const parser = new XMLParser({ ignoreAttributes: false });
@@ -137,7 +140,11 @@ async function fetchWeatherData(lat: string, lon: string, timezone: string) {
         "timezone": timezone
     });
 
-    const response = await fetchWithRetry(`${baseUrl}?${params}`);
+    const response = await fetchWithRetry(
+        `${baseUrl}?${params}`,
+        isCI ? 1 : 3,
+        isCI ? 5000 : 10000
+    );
     return await response.json();
 }
 
@@ -168,8 +175,8 @@ async function updateSavedLocationsCache(locationsToUpdate?: string[]) {
     }
 
     if (failedKeys.length > 0) {
-        console.log(`Failed to fetch: ${failedKeys.join(', ')}. Retrying in 10 seconds...`);
-        setTimeout(() => updateSavedLocationsCache(failedKeys), 10 * 1000);
+        console.log(`Failed to fetch: ${failedKeys.join(', ')}. Retrying in ${isCI ? 2 : 10} seconds...`);
+        setTimeout(() => updateSavedLocationsCache(failedKeys), isCI ? 2000 : 10000);
     }
 
     // Schedule next full refresh only if this was a full refresh (not a retry of failed locations)
@@ -252,7 +259,7 @@ export const load: PageServerLoad = async ({ url }) => {
         console.log('Waiting for cache initialization...');
         await Promise.race([
             cacheInitPromise,
-            new Promise(resolve => setTimeout(resolve, 30000)) // 30s timeout
+            new Promise(resolve => setTimeout(resolve, isCI ? 10000 : 30000))
         ]);
     }
 
