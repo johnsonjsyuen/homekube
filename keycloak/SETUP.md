@@ -43,6 +43,12 @@ Click "Next"
 | Valid post logout redirect URIs | `https://www.johnsonyuen.com/*` |
 | Web origins | `+` |
 
+> **For the Tauri desktop/mobile app**, add these additional redirect URIs:
+> - Valid redirect URIs: `https://tauri.localhost/*` (Windows, Android, iOS)
+> - Valid redirect URIs: `tauri://localhost/*` (macOS, Linux)
+> - Valid post logout redirect URIs: `https://tauri.localhost/*`
+> - Valid post logout redirect URIs: `tauri://localhost/*`
+>
 > **For local development**, add these additional redirect URIs:
 > - Valid redirect URIs: `http://localhost:5173/*`
 > - Valid post logout redirect URIs: `http://localhost:5173/*`
