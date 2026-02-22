@@ -59,8 +59,7 @@ export async function initKeycloak(): Promise<AuthState> {
     keycloak = new Keycloak(keycloakConfig);
 
     try {
-        alert(`[Auth] origin: ${window.location.origin} href: ${window.location.href}`);
-        console.log('[Auth] Starting Keycloak init...', 'origin:', window.location.origin, 'href:', window.location.href);
+        console.log('[Auth] Starting Keycloak init...', 'origin:', globalThis.window?.location?.origin, 'href:', globalThis.window?.location?.href);
 
         const authenticated = await keycloak.init({
             onLoad: 'check-sso',
