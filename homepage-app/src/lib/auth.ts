@@ -59,7 +59,7 @@ export async function initKeycloak(): Promise<AuthState> {
     keycloak = new Keycloak(keycloakConfig);
 
     try {
-        console.log('[Auth] Starting Keycloak init...');
+        console.log('[Auth] Starting Keycloak init...', 'origin:', globalThis.window?.location?.origin, 'href:', globalThis.window?.location?.href);
 
         const authenticated = await keycloak.init({
             onLoad: 'check-sso',
@@ -104,6 +104,7 @@ export async function login(redirectPath?: string): Promise<void> {
         const redirectUri = redirectPath
             ? window.location.origin + redirectPath
             : window.location.href;
+        console.log('[Auth] login redirectUri:', redirectUri, 'origin:', window.location.origin, 'href:', window.location.href);
         await keycloak.login({ redirectUri });
     }
 }
