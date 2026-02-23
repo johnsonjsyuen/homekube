@@ -56,7 +56,8 @@ function setupTokenProxy() {
 }
 
 let keycloak: Keycloak | null = null;
-let initialized = false;
+let initPromise: Promise<AuthState> | null = null;
+let tokenProxySetup = false;
 
 export interface AuthState {
     authenticated: boolean;
@@ -102,16 +103,19 @@ function updateAuthState(kc: Keycloak) {
     notifyCallbacks();
 }
 
-export async function initKeycloak(): Promise<AuthState> {
+export function initKeycloak(): Promise<AuthState> {
     if (typeof window === 'undefined') {
-        // Server-side, return unauthenticated state
-        return authState;
+        return Promise.resolve(authState);
     }
 
-    if (initialized && keycloak) {
-        return authState;
-    }
+    // Return existing promise if init is already in progress or completed
+    if (initPromise) return initPromise;
 
+    initPromise = doInitKeycloak();
+    return initPromise;
+}
+
+async function doInitKeycloak(): Promise<AuthState> {
     // In Cypress tests, mock authentication since there's no Keycloak server
     if ((window as any).Cypress) {
         console.log('[Auth] Cypress detected, using mock auth');
@@ -121,40 +125,54 @@ export async function initKeycloak(): Promise<AuthState> {
             username: 'test_user',
             roles: ['user']
         };
-        initialized = true;
         notifyCallbacks();
         return authState;
     }
 
-    // Setup fetch proxy to avoid CORS issues with token endpoint
-    setupTokenProxy();
+    // Setup fetch proxy once to avoid CORS issues with token endpoint
+    if (!tokenProxySetup) {
+        setupTokenProxy();
+        tokenProxySetup = true;
+    }
 
     const config = getKeycloakConfig();
-    console.log('[Auth] Initializing Keycloak with config:', config);
     keycloak = new Keycloak(config);
 
-    try {
-        console.log('[Auth] Starting Keycloak init...');
-        console.log('[Auth] Current URL:', window.location.href);
+    // Check if we're returning from a login redirect
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasAuthCode = urlParams.has('code') && urlParams.has('state');
 
-        // Check if we're returning from a login redirect (URL has code parameter)
-        const urlParams = new URLSearchParams(window.location.search);
-        const hasAuthCode = urlParams.has('code') && urlParams.has('state');
-        console.log('[Auth] Has auth code in URL:', hasAuthCode);
+    try {
+        // Temporarily bypass SvelteKit's patched replaceState during init.
+        // Keycloak calls replaceState to clean auth params from the URL after
+        // processing the code. SvelteKit intercepts replaceState and triggers
+        // a navigation, which can cause a reload loop.
+        const patchedReplaceState = history.replaceState;
+        if (hasAuthCode) {
+            history.replaceState = History.prototype.replaceState.bind(history);
+        }
 
         const authenticated = await keycloak.init({
             onLoad: 'check-sso',
             pkceMethod: 'S256',
-            checkLoginIframe: false,  // Disable iframe check which can cause CORS issues
-            responseMode: 'query'     // Use query params instead of fragment for better compatibility
+            silentCheckSsoRedirectUri: window.location.origin + '/silent-check-sso.html',
+            checkLoginIframe: false,
+            responseMode: 'query'
         });
 
-        console.log('[Auth] Keycloak init complete. Authenticated:', authenticated);
-        console.log('[Auth] Token:', keycloak.token ? 'present' : 'missing');
-        console.log('[Auth] Token parsed:', keycloak.tokenParsed);
+        // Restore SvelteKit's patched replaceState
+        if (hasAuthCode) {
+            history.replaceState = patchedReplaceState;
+        }
 
-        initialized = true;
         updateAuthState(keycloak);
+
+        // If we had auth params, the URL was cleaned by Keycloak using the
+        // native replaceState (bypassing SvelteKit). Now sync SvelteKit's
+        // internal state by doing a replaceState with the current (clean) URL.
+        if (hasAuthCode) {
+            history.replaceState(history.state, '', window.location.href);
+        }
 
         // Set up token refresh
         setInterval(async () => {
@@ -174,7 +192,6 @@ export async function initKeycloak(): Promise<AuthState> {
         return authState;
     } catch (error) {
         console.error('[Auth] Keycloak init failed:', error);
-        initialized = true; // Mark as initialized even on failure to prevent retries
         return authState;
     }
 }

@@ -75,6 +75,11 @@ sw.addEventListener('fetch', (event) => {
 		return;
 	}
 
+	// Auth redirects: don't cache pages with Keycloak auth params
+	if (url.searchParams.has('code') && url.searchParams.has('state')) {
+		return;
+	}
+
 	// SvelteKit data endpoints (__data.json): network-first with normalized URL
 	if (url.pathname.endsWith('__data.json')) {
 		event.respondWith(networkFirstData(request, url));
