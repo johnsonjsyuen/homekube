@@ -19,6 +19,7 @@ const wss = new WebSocketServer({ noServer: true });
 
 // Backend TTS service URL
 const TTS_BACKEND = process.env.TTS_BACKEND_URL || 'ws://text-to-speech';
+const WHATSAPP_BACKEND = process.env.WHATSAPP_BACKEND_URL || 'ws://whatsapp';
 
 server.on('upgrade', (request, socket, head) => {
     const pathname = new URL(request.url, `http://${request.headers.host}`).pathname;
@@ -85,6 +86,67 @@ server.on('upgrade', (request, socket, head) => {
 
             clientWs.on('error', (error) => {
                 console.error('[WS Proxy] Client error:', error.message);
+                if (backendWs.readyState === WebSocket.OPEN) {
+                    backendWs.close(1011, 'Client connection error');
+                }
+            });
+        });
+    } else if (pathname === '/api/whatsapp/conversation') {
+        wss.handleUpgrade(request, socket, head, (clientWs) => {
+            console.log('[WS Proxy] Client connected to /api/whatsapp/conversation');
+
+            const backendUrl = `${WHATSAPP_BACKEND}/ws/conversation`;
+            const backendWs = new WebSocket(backendUrl);
+
+            let backendReady = false;
+            const messageQueue = [];
+
+            backendWs.on('open', () => {
+                console.log('[WS Proxy] Connected to WhatsApp backend');
+                backendReady = true;
+                for (const msg of messageQueue) {
+                    backendWs.send(msg);
+                }
+                messageQueue.length = 0;
+            });
+
+            backendWs.on('message', (data, isBinary) => {
+                if (clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.send(data, { binary: isBinary });
+                }
+            });
+
+            backendWs.on('close', (code, reason) => {
+                console.log(`[WS Proxy] WhatsApp backend closed: ${code} ${reason}`);
+                if (clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.close(code, reason);
+                }
+            });
+
+            backendWs.on('error', (error) => {
+                console.error('[WS Proxy] WhatsApp backend error:', error.message);
+                if (clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.close(1011, 'Backend connection error');
+                }
+            });
+
+            clientWs.on('message', (data, isBinary) => {
+                if (backendReady) {
+                    backendWs.send(data, { binary: isBinary });
+                } else {
+                    messageQueue.push(data);
+                }
+            });
+
+            clientWs.on('close', (code, reason) => {
+                console.log(`[WS Proxy] WhatsApp client closed: ${code} ${reason}`);
+                if (backendWs.readyState === WebSocket.OPEN || backendWs.readyState === WebSocket.CONNECTING) {
+                    backendWs.close(code, reason);
+                }
+            });
+
+            clientWs.on('error', (error) => {
+                console.error('[WS Proxy] WhatsApp client error:', error.message);
                 if (backendWs.readyState === WebSocket.OPEN) {
                     backendWs.close(1011, 'Client connection error');
                 }

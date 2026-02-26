@@ -12,3 +12,6 @@ __pycache__/
 speech-to-text/target
 speech-to-text/consolidated.safetensors
 temporal/chart/charts/
+whatsapp/node_modules/
+whatsapp/dist/
+whatsapp/package-lock.json
