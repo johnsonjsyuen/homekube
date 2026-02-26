@@ -36,6 +36,9 @@ export function getMockWeatherData(locationName: string) {
                 { time: '9 AM', wind_speed: 6, wind_direction: 90, wind_direction_desc: 'E' },
             ],
         },
+        uvChartData: null,
+        uvChartMax: null,
+        uvChartMaxTime: null,
         speedtestResults: [],
         speedtestByLocation: {},
         error: null

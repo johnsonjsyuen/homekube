@@ -63,6 +63,15 @@ const UV_LOCATION_MAP: Record<string, string> = {
     "port_melbourne": "Melbourne"
 };
 
+// UV chart coordinates (location key -> ARPANSA API lat/lon)
+const UV_CHART_COORDS: Record<string, { lat: number; lon: number }> = {
+    "port_melbourne": { lat: -37.73, lon: 145.1 },
+    "sydney": { lat: -34.04, lon: 151.1 }
+};
+
+// Cache for UV chart data from ARPANSA JSON API
+let uvChartCache: Record<string, { data: any; fetchedAt: Date }> = {};
+
 const fetchWithRetry = async (url: string, retries = 3, timeout = 10000, retryDelay = 2000) => {
     for (let i = 0; i <= retries; i++) {
         const controller = new AbortController();
@@ -128,6 +137,47 @@ async function fetchUVData() {
 // Initial UV fetch and schedule refreshes
 fetchUVData();
 setInterval(fetchUVData, 15 * 60 * 1000);
+
+// Fetch UV chart data from ARPANSA JSON API
+async function fetchUVChartData(locationKey: string): Promise<{ tableData: any[] | null; maxUV: number | null; maxUVTime: string | null }> {
+    const coords = UV_CHART_COORDS[locationKey];
+    if (!coords) return { tableData: null, maxUV: null, maxUVTime: null };
+
+    // Check cache (15-minute TTL)
+    const cached = uvChartCache[locationKey];
+    if (cached && (Date.now() - cached.fetchedAt.getTime()) < 15 * 60 * 1000) {
+        return cached.data;
+    }
+
+    try {
+        // Format today's date as DD-MM-YYYY in the station's local timezone
+        const tz = LOCATIONS[locationKey]?.timezone ?? 'Australia/Melbourne';
+        const now = new Date();
+        const formatter = new Intl.DateTimeFormat('en-AU', { timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric' });
+        const parts = formatter.formatToParts(now);
+        const day = parts.find(p => p.type === 'day')!.value;
+        const month = parts.find(p => p.type === 'month')!.value;
+        const year = parts.find(p => p.type === 'year')!.value;
+        const dateStr = `${day}-${month}-${year}`;
+
+        const url = `https://uvdata.arpansa.gov.au/api/uvlevel/?longitude=${coords.lon}&latitude=${coords.lat}&date=${dateStr}`;
+        const response = await fetchWithRetry(url, isCI ? 0 : 1, isCI ? 3000 : 10000);
+        const json = await response.json();
+
+        const result = {
+            tableData: json.TableData || null,
+            maxUV: json.MaximumUVLevel ?? null,
+            maxUVTime: json.MaximumUVLevelDateTime ?? null
+        };
+
+        uvChartCache[locationKey] = { data: result, fetchedAt: new Date() };
+        console.log(`UV chart data updated for ${locationKey}`);
+        return result;
+    } catch (error) {
+        console.warn(`Failed to fetch UV chart data for ${locationKey}:`, error);
+        return { tableData: null, maxUV: null, maxUVTime: null };
+    }
+}
 
 async function fetchWeatherData(lat: string, lon: string, timezone: string) {
     const baseUrl = "https://api.open-meteo.com/v1/forecast";
@@ -413,6 +463,9 @@ export const load: PageServerLoad = async ({ url }) => {
         const uvIndex = uvData?.index ?? current.uv_index ?? null;
         const uvTime = uvData?.time ?? null; // OpenMeteo is "current", so no specific time label needed
 
+        // Fetch UV chart data for Australian locations
+        const uvChartResult = await fetchUVChartData(locationKeyForUV);
+
         return {
             location: locationName,
             localTime,
@@ -427,6 +480,9 @@ export const load: PageServerLoad = async ({ url }) => {
             cloudCover,
             uvIndex,
             uvTime,
+            uvChartData: uvChartResult.tableData,
+            uvChartMax: uvChartResult.maxUV,
+            uvChartMaxTime: uvChartResult.maxUVTime,
             forecast,
             dailyHourlyMap,
             speedtestResults,
@@ -447,10 +503,14 @@ export const load: PageServerLoad = async ({ url }) => {
             currentIcon: null,
             windSpeed: null,
             windDirection: null,
+            windDirectionDesc: null,
             humidity: null,
             cloudCover: null,
             uvIndex: null,
             uvTime: null,
+            uvChartData: null,
+            uvChartMax: null,
+            uvChartMaxTime: null,
             forecast: null,
             dailyHourlyMap: null,
             speedtestResults: [],
