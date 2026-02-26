@@ -7,6 +7,7 @@
     import TtsTab from "./TtsTab.svelte";
     import SttTab from "./SttTab.svelte";
     import LiveTtsTab from "./LiveTtsTab.svelte";
+    import WhatsAppTab from "./WhatsAppTab.svelte";
     import { onMount } from "svelte";
     import { initKeycloak } from "$lib/auth";
 
@@ -94,6 +95,12 @@
             >
                 Live TTS
             </button>
+            <button
+                class="tab-btn {activeTab === 'whatsapp' ? 'active' : ''}"
+                onclick={() => (activeTab = "whatsapp")}
+            >
+                WhatsApp
+            </button>
         </div>
 
         {#if activeTab === "weather"}
@@ -131,6 +138,8 @@
         <SttTab />
     {:else if activeTab === "live-tts"}
         <LiveTtsTab />
+    {:else if activeTab === "whatsapp"}
+        <WhatsAppTab />
     {/if}
 </div>
 

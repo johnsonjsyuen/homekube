@@ -16,4 +16,9 @@ cd speech-to-text
 ./build.sh
 cd ..
 
+echo "Building WhatsApp..."
+cd whatsapp
+./build.sh
+cd ..
+
 echo "All builds completed successfully!"

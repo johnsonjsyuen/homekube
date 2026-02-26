@@ -16,6 +16,9 @@ spec:
       - name: homepage
         image: localhost:5000/homepage:latest
         imagePullPolicy: Always
+        env:
+        - name: WHATSAPP_BACKEND_URL
+          value: "ws://whatsapp"
         ports:
         - containerPort: 3000
 ---

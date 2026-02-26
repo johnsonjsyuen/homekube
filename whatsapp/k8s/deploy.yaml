@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whatsapp
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: whatsapp
+  template:
+    metadata:
+      labels:
+        app: whatsapp
+    spec:
+      containers:
+      - name: whatsapp
+        image: localhost:5000/whatsapp:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        env:
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: whatsapp-db-app
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: whatsapp-db-app
+              key: password
+        - name: DB_HOST
+          value: "whatsapp-db-rw"
+        - name: DB_NAME
+          value: "whatsapp"
+        - name: DATABASE_URL
+          value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):5432/$(DB_NAME)"
+        - name: KEYCLOAK_URL
+          value: "http://keycloak.keycloak.svc.cluster.local"
+        - name: KEYCLOAK_REALM
+          value: "homekube"
+        - name: KEYCLOAK_AUDIENCE
+          value: "whatsapp"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
