@@ -485,6 +485,7 @@ export const load: PageServerLoad = async ({ url }) => {
             uvChartMaxTime: uvChartResult.maxUVTime,
             forecast,
             dailyHourlyMap,
+            timezone: responseTimezone,
             speedtestResults,
             speedtestByLocation,
             error: null
@@ -513,6 +514,7 @@ export const load: PageServerLoad = async ({ url }) => {
             uvChartMaxTime: null,
             forecast: null,
             dailyHourlyMap: null,
+            timezone: null,
             speedtestResults: [],
             speedtestByLocation: {}
         };

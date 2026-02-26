@@ -29,6 +29,7 @@
         uvTime: null,
         forecast: null,
         dailyHourlyMap: null,
+        timezone: null,
         error: null
     });
 

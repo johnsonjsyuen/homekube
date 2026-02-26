@@ -65,6 +65,7 @@ export interface WeatherData {
     uvTime: string | null;
     forecast: any[] | null;
     dailyHourlyMap: Record<string, any[]> | null;
+    timezone: string | null;
     error: string | null;
 }
 
@@ -252,6 +253,7 @@ export async function loadWeather(locationKey: string, customLat?: string, custo
             uvTime,
             forecast,
             dailyHourlyMap,
+            timezone: responseTimezone,
             error: null
         };
 
@@ -273,7 +275,8 @@ export async function loadWeather(locationKey: string, customLat?: string, custo
             uvIndex: null,
             uvTime: null,
             forecast: null,
-            dailyHourlyMap: null
+            dailyHourlyMap: null,
+            timezone: null
         };
     }
 }

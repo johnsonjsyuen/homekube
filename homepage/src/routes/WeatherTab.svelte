@@ -1,10 +1,12 @@
 <script lang="ts">
     import UvChart from './UvChart.svelte';
+    import { tick } from 'svelte';
 
     let { data } = $props();
 
     let selectedDate = $state("");
     let selectedDateName = $state("");
+    let hourlyScrollEl: HTMLDivElement;
 
     $effect(() => {
         if (data.forecast && data.forecast.length > 0) {
@@ -26,6 +28,36 @@
     let hourlyData = $derived(
         data.dailyHourlyMap ? data.dailyHourlyMap[selectedDate] : [],
     );
+
+    // Auto-scroll hourly wind forecast to current hour when viewing Today
+    $effect(() => {
+        const isToday = selectedDateName === 'Today';
+        const hasData = hourlyData && hourlyData.length > 0;
+
+        if (isToday && hasData && data.timezone) {
+            const tz = data.timezone;
+            tick().then(() => {
+                if (!hourlyScrollEl) return;
+                const formatter = new Intl.DateTimeFormat('en-US', {
+                    hour: 'numeric',
+                    hour12: false,
+                    timeZone: tz
+                });
+                const hourPart = formatter.formatToParts(new Date()).find(p => p.type === 'hour');
+                const currentHour = hourPart ? parseInt(hourPart.value, 10) % 24 : 0;
+                const card = hourlyScrollEl.children[currentHour] as HTMLElement;
+                if (card) {
+                    card.scrollIntoView({ inline: 'start', behavior: 'instant', block: 'nearest' });
+                }
+            });
+        } else if (!isToday && hasData) {
+            tick().then(() => {
+                if (hourlyScrollEl) {
+                    hourlyScrollEl.scrollLeft = 0;
+                }
+            });
+        }
+    });
 
     // UV level classification
     let uvLevel = $derived.by(() => {
@@ -101,7 +133,7 @@
                     >{selectedDateName}'s Wind Forecast</span
                 >
             </div>
-            <div class="hourly-scroll" id="hourly-container">
+            <div class="hourly-scroll" id="hourly-container" bind:this={hourlyScrollEl}>
                 {#each hourlyData as h}
                     <div class="hourly-card">
                         <div class="hourly-time">{h.time}</div>
