@@ -11,4 +11,4 @@ __pycache__/
 *.log
 speech-to-text/target
 speech-to-text/consolidated.safetensors
-        
+temporal/chart/charts/

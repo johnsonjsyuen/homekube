@@ -1,0 +1,22 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Values.cnpg.name }}
+  labels:
+    {{- include "temporal-stack.labels" . | nindent 4 }}
+spec:
+  instances: {{ .Values.cnpg.instances }}
+  storage:
+    size: {{ .Values.cnpg.storage.size }}
+  bootstrap:
+    initdb:
+      database: {{ .Values.cnpg.bootstrap.database }}
+      owner: {{ .Values.cnpg.bootstrap.owner }}
+      {{- with .Values.cnpg.bootstrap.postInitSQL }}
+      postInitSQL:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- with .Values.cnpg.monitoring }}
+  monitoring:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}

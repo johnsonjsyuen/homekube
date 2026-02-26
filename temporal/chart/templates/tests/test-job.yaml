@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "temporal-stack.fullname" . }}-workflow-test
+  labels:
+    {{- include "temporal-stack.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: test
+          image: python:3.12-slim
+          command:
+            - sh
+            - -c
+            - |
+              pip install temporalio --quiet &&
+              python /test/test_workflow.py
+          volumeMounts:
+            - name: test-script
+              mountPath: /test
+      volumes:
+        - name: test-script
+          configMap:
+            name: {{ include "temporal-stack.fullname" . }}-test-script

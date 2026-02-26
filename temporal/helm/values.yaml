@@ -1,0 +1,59 @@
+server:
+  config:
+    numHistoryShards: 128
+    persistence:
+      defaultStore: default
+      default:
+        driver: "sql"
+        sql:
+          driver: "postgres12"
+          host: "temporal-db-rw"
+          port: 5432
+          database: "temporal"
+          user: "temporal"
+          password: "temporal"
+          existingSecret: "temporal-db-app"
+          maxConns: 20
+          maxIdleConns: 20
+          maxConnLifetime: "1h"
+      visibility:
+        driver: "sql"
+        sql:
+          driver: "postgres12"
+          host: "temporal-db-rw"
+          port: 5432
+          database: "temporal_visibility"
+          user: "temporal"
+          password: "temporal"
+          existingSecret: "temporal-db-app"
+          maxConns: 10
+          maxIdleConns: 10
+          maxConnLifetime: "1h"
+
+cassandra:
+  enabled: false
+
+elasticsearch:
+  enabled: false
+
+prometheus:
+  enabled: false
+
+grafana:
+  enabled: false
+
+schema:
+  createDatabase:
+    enabled: false
+  setup:
+    enabled: true
+    backoffLimit: 100
+  update:
+    enabled: true
+    backoffLimit: 100
+
+web:
+  enabled: true
+
+admintools:
+  enabled: true
