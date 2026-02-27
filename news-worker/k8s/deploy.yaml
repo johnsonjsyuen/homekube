@@ -47,18 +47,6 @@ spec:
               key: password
         - name: DATABASE_URL
           value: "postgres://$(WORKFLOWS_DB_USER):$(WORKFLOWS_DB_PASSWORD)@workflows-db-rw.temporal.svc.cluster.local:5432/workflows"
-        - name: WHATSAPP_DB_USER
-          valueFrom:
-            secretKeyRef:
-              name: whatsapp-db-app
-              key: username
-        - name: WHATSAPP_DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: whatsapp-db-app
-              key: password
-        - name: WHATSAPP_DATABASE_URL
-          value: "postgres://$(WHATSAPP_DB_USER):$(WHATSAPP_DB_PASSWORD)@whatsapp-db-rw.default.svc.cluster.local:5432/whatsapp"
         - name: WHATSAPP_URL
           value: "http://whatsapp.default.svc.cluster.local"
         - name: CLAUDE_CODE_NAMESPACE

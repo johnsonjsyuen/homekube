@@ -174,9 +174,9 @@ All three endpoints use `getCallerUserId(user)` -- no `userId` body parameter, s
 
 ## 4. Homepage Proxy Routes
 
-Three SvelteKit server routes under `homepage/src/routes/api/whatsapp/news/` that proxy to the WhatsApp service, passing the Keycloak Bearer token through:
+Three SvelteKit server routes under `homepage/src/routes/api/workflows/news/` that proxy to the news-worker service, passing the Keycloak Bearer token through:
 
-### `src/routes/api/whatsapp/news/subscribe/+server.ts`
+### `src/routes/api/workflows/news/subscribe/+server.ts`
 
 ```typescript
 import { json } from '@sveltejs/kit';
@@ -203,7 +203,7 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 ```
 
-### `src/routes/api/whatsapp/news/unsubscribe/+server.ts`
+### `src/routes/api/workflows/news/unsubscribe/+server.ts`
 
 ```typescript
 import { json } from '@sveltejs/kit';
@@ -230,7 +230,7 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 ```
 
-### `src/routes/api/whatsapp/news/status/+server.ts`
+### `src/routes/api/workflows/news/status/+server.ts`
 
 ```typescript
 import { json } from '@sveltejs/kit';
@@ -275,7 +275,7 @@ async function fetchSubscriptionStatus() {
     try {
         const token = await getFreshToken();
         if (!token) return;
-        const res = await fetch('/api/whatsapp/news/status', {
+        const res = await fetch('/api/workflows/news/status', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -291,7 +291,7 @@ async function toggleNewsSubscription() {
     try {
         const token = await getFreshToken();
         if (!token) return;
-        const endpoint = newsSubscribed ? '/api/whatsapp/news/unsubscribe' : '/api/whatsapp/news/subscribe';
+        const endpoint = newsSubscribed ? '/api/workflows/news/unsubscribe' : '/api/workflows/news/subscribe';
         const res = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
@@ -718,7 +718,7 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: whatsapp-db-credentials
+                  name: workflows-db-app
                   key: url
             - name: WHATSAPP_URL
               value: "http://whatsapp.whatsapp.svc.cluster.local:3000"
@@ -880,9 +880,9 @@ The role appears in the JWT as:
 | `whatsapp/src/migrations/002_news_subscriptions.sql` | Create | New migration: `news_subscriptions` table |
 | `whatsapp/src/db.ts` | Modify | Upgrade `runMigrations()` to sequential runner with `schema_migrations` tracking |
 | `whatsapp/src/routes/rest.ts` | Modify | Add `/api/news/subscribe`, `/api/news/unsubscribe`, `/api/news/subscription-status` routes |
-| `homepage/src/routes/api/whatsapp/news/subscribe/+server.ts` | Create | SvelteKit proxy route for subscribe |
-| `homepage/src/routes/api/whatsapp/news/unsubscribe/+server.ts` | Create | SvelteKit proxy route for unsubscribe |
-| `homepage/src/routes/api/whatsapp/news/status/+server.ts` | Create | SvelteKit proxy route for subscription status |
+| `homepage/src/routes/api/workflows/news/subscribe/+server.ts` | Create | SvelteKit proxy route for subscribe |
+| `homepage/src/routes/api/workflows/news/unsubscribe/+server.ts` | Create | SvelteKit proxy route for unsubscribe |
+| `homepage/src/routes/api/workflows/news/status/+server.ts` | Create | SvelteKit proxy route for subscription status |
 | `homepage/src/routes/WhatsAppTab.svelte` | Modify | Add news subscription UI section with toggle |
 | `news-digest-worker/src/workflows.ts` | Create | `DailyNewsDigestWorkflow` definition |
 | `news-digest-worker/src/activities.ts` | Create | Activity implementations (RSS, scrape, Claude, subscribers, send) |
@@ -903,7 +903,7 @@ The role appears in the JWT as:
 | WhatsApp DB + migrations | [whatsapp/src/db.ts](../whatsapp/src/db.ts) |
 | News subscriptions migration | [whatsapp/src/migrations/002_news_subscriptions.sql](../whatsapp/src/migrations/002_news_subscriptions.sql) |
 | Homepage WhatsApp tab | [homepage/src/routes/WhatsAppTab.svelte](../homepage/src/routes/WhatsAppTab.svelte) |
-| Homepage news proxy routes | [homepage/src/routes/api/whatsapp/news/](../homepage/src/routes/api/whatsapp/news/) |
+| Homepage news proxy routes | [homepage/src/routes/api/workflows/news/](../homepage/src/routes/api/workflows/news/) |
 | Temporal infrastructure | [temporal/](../temporal/) |
 | Keycloak setup | [keycloak/SETUP.md](../keycloak/SETUP.md) |
 | WhatsApp authz blueprint | [whatsapp-authz-blueprint.md](whatsapp-authz-blueprint.md) |

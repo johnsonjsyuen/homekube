@@ -77,7 +77,7 @@ Use Temporal for workflow orchestration with a dedicated worker service:
 | WhatsApp DB + migrations | [whatsapp/src/db.ts](../whatsapp/src/db.ts) |
 | News subscriptions migration | [whatsapp/src/migrations/002_news_subscriptions.sql](../whatsapp/src/migrations/002_news_subscriptions.sql) |
 | Homepage WhatsApp tab | [homepage/src/routes/WhatsAppTab.svelte](../homepage/src/routes/WhatsAppTab.svelte) |
-| Homepage proxy routes | [homepage/src/routes/api/whatsapp/news/](../homepage/src/routes/api/whatsapp/news/) |
+| Homepage proxy routes | [homepage/src/routes/api/workflows/news/](../homepage/src/routes/api/workflows/news/) |
 | Temporal infrastructure | [temporal/](../temporal/) |
 | Keycloak setup | [keycloak/SETUP.md](../keycloak/SETUP.md) |
 

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import QRCode from 'qrcode';
 import type { Pool } from 'pg';
 import type { SessionManager } from '../session-manager.js';
-import { resolveUserId, getCallerUserId, AuthorizationError, type TokenPayload } from '../auth.js';
+import { resolveUserId, getCallerUserId, isServiceAccount, AuthorizationError, type TokenPayload } from '../auth.js';
 
 function phoneToJid(phone: string): string {
     // Strip non-digits, normalize AU local numbers, and add @s.whatsapp.net
@@ -161,6 +161,43 @@ export function createRestRouter(pool: Pool, sessionManager: SessionManager): Ro
             res.json({ messageId, status: 'sent' });
         } catch (err: any) {
             console.error('[REST] Send error:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // POST /api/sessions/lookup - Bulk lookup connected sessions by user IDs (service accounts only)
+    router.post('/sessions/lookup', async (req, res) => {
+        try {
+            const user = (req as any).user as TokenPayload;
+            if (!isServiceAccount(user)) {
+                res.status(403).json({ error: 'Forbidden: service account required' });
+                return;
+            }
+
+            const { userIds } = req.body;
+            if (!Array.isArray(userIds) || userIds.length === 0 || userIds.length > 500) {
+                res.status(400).json({ error: 'userIds must be a non-empty array (max 500)' });
+                return;
+            }
+            if (!userIds.every((id: unknown) => typeof id === 'string')) {
+                res.status(400).json({ error: 'userIds must contain only strings' });
+                return;
+            }
+
+            const result = await pool.query(
+                `SELECT user_id, whatsapp_jid FROM sessions
+                 WHERE user_id = ANY($1) AND status = 'connected' AND whatsapp_jid IS NOT NULL`,
+                [userIds]
+            );
+
+            const sessions = result.rows.map((row: any) => ({
+                userId: row.user_id,
+                phone: row.whatsapp_jid.split(':')[0].split('@')[0],
+            }));
+
+            res.json({ sessions });
+        } catch (err: any) {
+            console.error('[REST] Sessions lookup error:', err);
             res.status(500).json({ error: err.message });
         }
     });

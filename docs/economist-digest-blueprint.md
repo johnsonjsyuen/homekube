@@ -43,7 +43,7 @@ Extend the existing `news-worker` service with a second workflow:
 6. `EconomistDigestWorkflow` — orchestrates the 5 steps
 7. Subscription routes: `/economist/subscribe`, `/economist/unsubscribe`, `/economist/subscription-status`, `/economist/trigger`
 8. Homepage UI section in WorkflowsTab for Economist digest
-9. Homepage proxy routes under `/api/whatsapp/economist/`
+9. Homepage proxy routes under `/api/workflows/economist/`
 10. Temporal schedule: `economist-digest` at 9 AM AEST daily
 
 ## 5. What We're NOT Building
@@ -78,7 +78,7 @@ Extend the existing `news-worker` service with a second workflow:
 | Auth middleware | [news-worker/src/auth.ts](../news-worker/src/auth.ts) |
 | Routes | [news-worker/src/routes.ts](../news-worker/src/routes.ts) |
 | Homepage WorkflowsTab | [homepage/src/routes/WorkflowsTab.svelte](../homepage/src/routes/WorkflowsTab.svelte) |
-| Homepage proxy routes | [homepage/src/routes/api/whatsapp/news/](../homepage/src/routes/api/whatsapp/news/) |
+| Homepage proxy routes | [homepage/src/routes/api/workflows/news/](../homepage/src/routes/api/workflows/news/) |
 | get-article.ts | [get-article.ts](../get-article.ts) |
 | ABC News blueprint | [news-digest-blueprint.md](news-digest-blueprint.md) |
 | ABC News spec | [news-digest-spec.md](news-digest-spec.md) |
