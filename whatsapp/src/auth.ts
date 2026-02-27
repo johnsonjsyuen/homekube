@@ -34,6 +34,43 @@ export interface TokenPayload {
     iat: number;
     aud?: string | string[];
     azp?: string;
+    realm_access?: {
+        roles: string[];
+    };
+}
+
+const WHATSAPP_SERVICE_ROLE = 'whatsapp-service';
+
+export class AuthorizationError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'AuthorizationError';
+    }
+}
+
+export function isServiceAccount(payload: TokenPayload): boolean {
+    const roles = payload.realm_access?.roles;
+    return Array.isArray(roles) && roles.includes(WHATSAPP_SERVICE_ROLE);
+}
+
+export function getCallerUserId(payload: TokenPayload): string {
+    return payload.preferred_username || payload.sub;
+}
+
+export function resolveUserId(payload: TokenPayload, requestedUserId?: string): string {
+    const callerUserId = getCallerUserId(payload);
+
+    if (!requestedUserId || requestedUserId === callerUserId) {
+        return callerUserId;
+    }
+
+    if (isServiceAccount(payload)) {
+        return requestedUserId;
+    }
+
+    throw new AuthorizationError(
+        `User ${callerUserId} is not authorized to act on behalf of ${requestedUserId}`
+    );
 }
 
 export function validateToken(token: string): Promise<TokenPayload> {
