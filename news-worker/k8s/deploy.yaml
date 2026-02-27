@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: news-worker
+  namespace: temporal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: news-worker
+  template:
+    metadata:
+      labels:
+        app: news-worker
+    spec:
+      serviceAccountName: news-worker
+      containers:
+      - name: news-worker
+        image: localhost:5000/news-worker:latest
+        imagePullPolicy: Always
+        env:
+        - name: TEMPORAL_ADDRESS
+          value: "temporal-frontend:7233"
+        - name: KEYCLOAK_URL
+          value: "http://keycloak.keycloak.svc.cluster.local"
+        - name: KEYCLOAK_REALM
+          value: "homekube"
+        - name: KEYCLOAK_CLIENT_ID
+          value: "news-worker"
+        - name: KEYCLOAK_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: news-worker-keycloak
+              key: client-secret
+        - name: WHATSAPP_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: whatsapp-db-app
+              key: username
+        - name: WHATSAPP_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: whatsapp-db-app
+              key: password
+        - name: WHATSAPP_DATABASE_URL
+          value: "postgres://$(WHATSAPP_DB_USER):$(WHATSAPP_DB_PASSWORD)@whatsapp-db-rw.default.svc.cluster.local:5432/whatsapp"
+        - name: WHATSAPP_URL
+          value: "http://whatsapp.default.svc.cluster.local"
+        - name: CLAUDE_CODE_NAMESPACE
+          value: "default"
+        - name: CLAUDE_CODE_LABEL
+          value: "app=claude-code"
+        - name: NEWS_SENDER_USER_ID
+          value: "johnson"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"

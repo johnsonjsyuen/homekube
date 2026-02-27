@@ -146,6 +146,71 @@ The role appears in the service account's JWT as:
 
 Without this role, the `userId` parameter on `/api/send` and WebSocket `start_conversation` is rejected with 403 for cross-user requests.
 
+## 6. Configure News Worker Client (for daily news digest)
+
+The news-worker service needs a confidential client with service account access to send WhatsApp messages on behalf of a designated sender.
+
+### 6.1 Create Client
+
+1. Go to **Clients** in the left menu
+2. Click "Create client"
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| Client type | OpenID Connect | |
+| Client ID | `news-worker` | |
+
+Click "Next"
+
+### 6.2 Capability Config
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| Client authentication | **ON** | Confidential client with client secret |
+| Authorization | OFF | Not needed |
+| Standard flow | OFF | Not needed - service account only |
+| Direct access grants | OFF | Not needed |
+| Service accounts roles | **ON** | Required for client_credentials grant |
+
+Click "Next", then "Save"
+
+### 6.3 Assign WhatsApp Service Role
+
+1. Go to **Clients** → select `news-worker`
+2. Go to the **Service account roles** tab
+3. Click **Assign role**
+4. Select `whatsapp-service`
+5. Click **Assign**
+
+This allows the news-worker to send messages on behalf of other users via the WhatsApp `/api/send` endpoint.
+
+### 6.4 Add WhatsApp Client Scope
+
+1. Go to **Clients** → select `news-worker`
+2. Go to the **Client scopes** tab
+3. Click **Add client scope**
+4. Select `whatsapp` (if it exists as a scope) or ensure the `aud` claim includes `whatsapp`
+5. Click **Add** → **Default**
+
+### 6.5 Create Kubernetes Secret
+
+```bash
+# Get the client secret from Keycloak: Clients → news-worker → Credentials tab
+kubectl create secret generic news-worker-keycloak \
+  --from-literal=client-secret=<SECRET_FROM_KEYCLOAK> \
+  -n temporal
+```
+
+### 6.6 Mirror WhatsApp DB Secret to Temporal Namespace
+
+The news-worker reads subscriber data from the WhatsApp database. Mirror the CNPG-generated secret:
+
+```bash
+kubectl get secret whatsapp-db-app -o json | \
+  jq '.metadata.namespace = "temporal" | del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp)' | \
+  kubectl apply -f -
+```
+
 ## Summary of Key Settings
 
 ```

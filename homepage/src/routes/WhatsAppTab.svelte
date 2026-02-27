@@ -22,6 +22,11 @@
     let sendResult = $state('');
     let sending = $state(false);
 
+    // News digest subscription state
+    let newsSubscribed = $state(false);
+    let newsLoading = $state(false);
+    let newsError = $state('');
+
     // Polling
     let statusInterval: ReturnType<typeof setInterval> | null = null;
     let qrInterval: ReturnType<typeof setInterval> | null = null;
@@ -219,10 +224,49 @@
         }
     }
 
+    async function fetchSubscriptionStatus() {
+        try {
+            const token = await getFreshToken();
+            if (!token) return;
+            const res = await fetch('/api/whatsapp/news/status', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            newsSubscribed = data.subscribed || false;
+        } catch (err: any) {
+            console.error('[WhatsApp] News status fetch error:', err);
+        }
+    }
+
+    async function toggleNewsSubscription() {
+        newsLoading = true;
+        newsError = '';
+        try {
+            const token = await getFreshToken();
+            if (!token) return;
+            const endpoint = newsSubscribed ? '/api/whatsapp/news/unsubscribe' : '/api/whatsapp/news/subscribe';
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                newsError = data.error || 'Failed to update subscription';
+                return;
+            }
+            newsSubscribed = data.subscribed;
+        } catch (err: any) {
+            newsError = err.message;
+        } finally {
+            newsLoading = false;
+        }
+    }
+
     // Fetch initial status when authenticated
     $effect(() => {
         if (authState.authenticated) {
             fetchStatus();
+            fetchSubscriptionStatus();
         }
     });
 </script>
@@ -332,6 +376,39 @@
                     </div>
                 {/if}
             </div>
+
+            <!-- Daily News Digest Section (only when connected) -->
+            {#if sessionStatus === 'connected'}
+                <div class="section">
+                    <h4>Daily News Digest</h4>
+                    <p class="section-description">Get a daily AI-summarised digest of top ABC News headlines delivered to your WhatsApp at 9 AM AEST.</p>
+                    <div class="digest-status">
+                        Status: <span class="status-badge" class:status-connected={newsSubscribed} class:status-disconnected={!newsSubscribed}>
+                            {newsSubscribed ? 'subscribed' : 'not subscribed'}
+                        </span>
+                    </div>
+                    {#if newsSubscribed}
+                        <button class="unsubscribe-btn" onclick={toggleNewsSubscription} disabled={newsLoading}>
+                            {#if newsLoading}
+                                <span class="spinner">...</span> Updating...
+                            {:else}
+                                Unsubscribe
+                            {/if}
+                        </button>
+                    {:else}
+                        <button class="subscribe-btn" onclick={toggleNewsSubscription} disabled={newsLoading}>
+                            {#if newsLoading}
+                                <span class="spinner">...</span> Updating...
+                            {:else}
+                                Subscribe to Daily Digest
+                            {/if}
+                        </button>
+                    {/if}
+                    {#if newsError}
+                        <div class="send-result error">{newsError}</div>
+                    {/if}
+                </div>
+            {/if}
 
             <!-- Test Messaging Section (only when connected) -->
             {#if sessionStatus === 'connected'}
@@ -754,5 +831,66 @@
     @keyframes pulse {
         0%, 100% { transform: scale(1); opacity: 1; }
         50% { transform: scale(1.2); opacity: 0.7; }
+    }
+
+    .section-description {
+        color: #999;
+        font-size: 0.85rem;
+        margin-bottom: 15px;
+        line-height: 1.5;
+    }
+
+    .digest-status {
+        text-align: center;
+        font-size: 0.85rem;
+        color: #888;
+        margin-bottom: 15px;
+    }
+
+    .subscribe-btn {
+        width: 100%;
+        background: linear-gradient(135deg, #4a90e2, #357abd);
+        color: #fff;
+        border: none;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .subscribe-btn:hover:not(:disabled) {
+        transform: scale(1.02);
+        box-shadow: 0 4px 15px rgba(74, 144, 226, 0.4);
+    }
+
+    .subscribe-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .unsubscribe-btn {
+        width: 100%;
+        background: transparent;
+        color: #f87171;
+        border: 1px solid #f87171;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .unsubscribe-btn:hover:not(:disabled) {
+        background: #f87171;
+        color: #000;
+    }
+
+    .unsubscribe-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
     }
 </style>
