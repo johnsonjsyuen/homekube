@@ -32,8 +32,9 @@ Format rules:
 - Start with a greeting line: "*Daily News Digest*" followed by today's date
 - For each article, use *bold* for the headline title
 - Write 1-2 sentence summary for each article
+- After each summary, include the original article URL on its own line so readers can tap to read more
 - Keep the total digest concise and readable on a phone screen
-- Use plain text formatting suitable for WhatsApp (no markdown links, just *bold* for emphasis)
+- Use plain text formatting suitable for WhatsApp (no markdown links, just *bold* for emphasis and plain URLs)
 - Number each article
 - End with a sign-off line
 

@@ -35,18 +35,18 @@ spec:
               name: news-worker-keycloak
               key: client-secret
               optional: true
-        - name: NEWS_DB_USER
+        - name: WORKFLOWS_DB_USER
           valueFrom:
             secretKeyRef:
-              name: news-db-app
+              name: workflows-db-app
               key: username
-        - name: NEWS_DB_PASSWORD
+        - name: WORKFLOWS_DB_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: news-db-app
+              name: workflows-db-app
               key: password
         - name: DATABASE_URL
-          value: "postgres://$(NEWS_DB_USER):$(NEWS_DB_PASSWORD)@news-db-rw.temporal.svc.cluster.local:5432/news"
+          value: "postgres://$(WORKFLOWS_DB_USER):$(WORKFLOWS_DB_PASSWORD)@workflows-db-rw.temporal.svc.cluster.local:5432/workflows"
         - name: WHATSAPP_DB_USER
           valueFrom:
             secretKeyRef:

@@ -1,7 +1,7 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
-  name: news-db
+  name: workflows-db
   namespace: temporal
 spec:
   instances: 1
@@ -9,5 +9,5 @@ spec:
     size: 1Gi
   bootstrap:
     initdb:
-      database: news
-      owner: news
+      database: workflows
+      owner: workflows
