@@ -9,6 +9,10 @@
     let newsLoading = $state(false);
     let newsError = $state('');
 
+    let triggerLoading = $state(false);
+    let triggerResult = $state('');
+    let triggerError = $state('');
+
     onMount(() => {
         initKeycloak().then(() => { authInitialized = true; });
         const unsubscribe = onAuthStateChange((state) => { authState = state; });
@@ -53,6 +57,30 @@
             newsError = err.message;
         } finally {
             newsLoading = false;
+        }
+    }
+
+    async function triggerNewsWorkflow() {
+        triggerLoading = true;
+        triggerResult = '';
+        triggerError = '';
+        try {
+            const token = await getFreshToken();
+            if (!token) return;
+            const res = await fetch('/api/whatsapp/news/trigger', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                triggerError = data.error || 'Failed to trigger workflow';
+                return;
+            }
+            triggerResult = `Workflow started: ${data.workflowId}`;
+        } catch (err: any) {
+            triggerError = err.message;
+        } finally {
+            triggerLoading = false;
         }
     }
 
@@ -110,6 +138,22 @@
                 {#if newsError}
                     <div class="error-result">{newsError}</div>
                 {/if}
+
+                <div class="trigger-section">
+                    <button class="trigger-btn" onclick={triggerNewsWorkflow} disabled={triggerLoading}>
+                        {#if triggerLoading}
+                            <span class="spinner">...</span> Starting...
+                        {:else}
+                            Run Now
+                        {/if}
+                    </button>
+                    {#if triggerResult}
+                        <div class="success-result">{triggerResult}</div>
+                    {/if}
+                    {#if triggerError}
+                        <div class="error-result">{triggerError}</div>
+                    {/if}
+                </div>
             </div>
         {/if}
     </div>
@@ -295,6 +339,48 @@
     .unsubscribe-btn:disabled {
         opacity: 0.6;
         cursor: not-allowed;
+    }
+
+    .trigger-section {
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #333;
+    }
+
+    .trigger-btn {
+        width: 100%;
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: #000;
+        border: none;
+        padding: 10px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .trigger-btn:hover:not(:disabled) {
+        transform: scale(1.02);
+        box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+    }
+
+    .trigger-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .success-result {
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 8px;
+        text-align: center;
+        font-size: 0.85rem;
+        background: rgba(74, 222, 128, 0.1);
+        color: #4ade80;
+        border: 1px solid rgba(74, 222, 128, 0.3);
+        word-break: break-all;
     }
 
     .error-result {

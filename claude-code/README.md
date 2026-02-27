@@ -2,30 +2,28 @@
 
 Persistent Claude Code pod for the news-worker to `kubectl exec` into for AI summarisation.
 
-## Prerequisites
-
-Create the API key secret:
-
-```bash
-kubectl create secret generic claude-code-api-key --from-literal=api-key=YOUR_KEY
-```
-
 ## Build & Deploy
 
 ```bash
 ./build.sh
 ```
 
-## Initial Login
+## Login
 
-After first deploy, exec into the pod and run `claude` to complete initial setup:
+Exec into the pod and run `claude` to authenticate:
 
 ```bash
 kubectl exec -it deployment/claude-code -- bash
 claude
 ```
 
-Accept the terms and verify it connects. The config is persisted in the PVC at `/home/node/.claude`.
+Follow the OAuth prompts to log in via browser. The config is persisted in the PVC at `/home/node/.claude`.
+
+Alternatively, create a secret with an API key (optional):
+
+```bash
+kubectl create secret generic claude-code-api-key --from-literal=api-key=YOUR_KEY
+```
 
 ## How News-Worker Uses It
 

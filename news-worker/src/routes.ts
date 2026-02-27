@@ -65,5 +65,25 @@ export function createRouter(pool: Pool): Router {
         }
     });
 
+    // POST /news/trigger - manually trigger the workflow for testing
+    router.post('/news/trigger', async (req, res) => {
+        try {
+            const { Connection, Client } = await import('@temporalio/client');
+            const connection = await Connection.connect({
+                address: process.env.TEMPORAL_ADDRESS || 'temporal-frontend:7233',
+            });
+            const client = new Client({ connection });
+            const workflowId = `news-digest-manual-${Date.now()}`;
+            const handle = await client.workflow.start('DailyNewsDigestWorkflow', {
+                taskQueue: 'news-digest-queue',
+                workflowId,
+            });
+            res.json({ workflowId: handle.workflowId, message: 'Workflow started' });
+        } catch (err: any) {
+            console.error('[REST] News trigger error:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     return router;
 }

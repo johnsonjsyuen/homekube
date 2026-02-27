@@ -24,6 +24,7 @@ spec:
             secretKeyRef:
               name: claude-code-api-key
               key: api-key
+              optional: true
         volumeMounts:
         - name: claude-config
           mountPath: /home/node/.claude
