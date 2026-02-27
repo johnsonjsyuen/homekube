@@ -114,6 +114,38 @@ Repeat the same process for the STT service:
 8. Go to **Clients** → `homepage` → **Client scopes** tab
 9. Click **Add client scope** → Select `stt` → **Add** -> **Default**
 
+## 5. Configure WhatsApp Service Role (for cross-user access)
+
+Service accounts that need to send WhatsApp messages on behalf of users require the `whatsapp-service` realm role.
+
+### 5.1 Create Realm Role
+
+1. Go to **Realm roles** in the left menu
+2. Click **Create role**
+3. Set **Role name**: `whatsapp-service`
+4. Set **Description**: `Allows cross-user WhatsApp session access for service accounts`
+5. Click **Save**
+
+### 5.2 Assign to a Service Account Client
+
+1. Go to **Clients** → select the service client (e.g., `temporal-worker`)
+2. Ensure **Client authentication**: ON and **Service accounts roles**: ON
+3. Go to the **Service account roles** tab
+4. Click **Assign role**
+5. Select `whatsapp-service`
+6. Click **Assign**
+
+The role appears in the service account's JWT as:
+```json
+{
+    "realm_access": {
+        "roles": ["whatsapp-service", "default-roles-homekube"]
+    }
+}
+```
+
+Without this role, the `userId` parameter on `/api/send` and WebSocket `start_conversation` is rejected with 403 for cross-user requests.
+
 ## Summary of Key Settings
 
 ```

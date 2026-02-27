@@ -14,11 +14,13 @@ All endpoints require a valid Keycloak JWT bearer token.
 
 ### User Tokens
 
-Users authenticate through the homepage Keycloak login. Their `preferred_username` is used as the user ID for session management.
+Users authenticate through the homepage Keycloak login. Their `preferred_username` is used as the user ID for session management. Users can only access their own WhatsApp session — the `userId` parameter on `/api/send` and WebSocket `start_conversation` is rejected with 403 if it refers to a different user.
 
 ### Service Account Tokens
 
-Cluster services obtain tokens via Keycloak client credentials grant:
+Cluster services that need cross-user access (sending from any user's WhatsApp) must have the `whatsapp-service` Keycloak realm role. With this role, the `userId` parameter is accepted on `/api/send` and WebSocket `start_conversation`.
+
+Services obtain tokens via Keycloak client credentials grant:
 
 ```bash
 curl -X POST "http://keycloak.keycloak.svc.cluster.local/realms/homekube/protocol/openid-connect/token" \
@@ -134,6 +136,7 @@ Send a WhatsApp message. Can be used by both users (sending from their own accou
 | Status | Body | Cause |
 |--------|------|-------|
 | 400 | `{ "error": "recipientPhone and message are required" }` | Missing fields |
+| 403 | `{ "error": "User X is not authorized to act on behalf of Y" }` | Cross-user `userId` without `whatsapp-service` role |
 | 500 | `{ "error": "No active session for user ..." }` | User not connected |
 
 ---
@@ -259,6 +262,7 @@ Incoming messages from the remote contact are pushed automatically:
 |-------------|---------|
 | 400 | Bad request (missing/invalid parameters) |
 | 401 | Unauthorized (missing or invalid JWT) |
+| 403 | Forbidden (not authorized for this action, e.g. cross-user access without `whatsapp-service` role) |
 | 500 | Internal server error |
 
 | WebSocket Close Code | Meaning |

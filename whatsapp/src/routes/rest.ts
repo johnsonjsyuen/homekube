@@ -2,7 +2,7 @@ import { Router } from 'express';
 import QRCode from 'qrcode';
 import type { Pool } from 'pg';
 import type { SessionManager } from '../session-manager.js';
-import type { TokenPayload } from '../auth.js';
+import { resolveUserId, getCallerUserId, AuthorizationError, type TokenPayload } from '../auth.js';
 
 function phoneToJid(phone: string): string {
     // Strip non-digits, normalize AU local numbers, and add @s.whatsapp.net
@@ -20,7 +20,7 @@ export function createRestRouter(pool: Pool, sessionManager: SessionManager): Ro
     router.post('/link', async (req, res) => {
         try {
             const user = (req as any).user as TokenPayload;
-            const userId = user.preferred_username || user.sub;
+            const userId = getCallerUserId(user);
             await sessionManager.startLinking(userId);
             res.json({ status: 'pairing' });
         } catch (err: any) {
@@ -33,7 +33,7 @@ export function createRestRouter(pool: Pool, sessionManager: SessionManager): Ro
     router.get('/qr', async (req, res) => {
         try {
             const user = (req as any).user as TokenPayload;
-            const userId = user.preferred_username || user.sub;
+            const userId = getCallerUserId(user);
             const qrData = sessionManager.getQrCode(userId);
             if (!qrData) {
                 res.json({ qr: null });
@@ -68,7 +68,7 @@ export function createRestRouter(pool: Pool, sessionManager: SessionManager): Ro
                 return;
             }
 
-            const pairingCode = await sessionManager.startPairing(user.preferred_username || user.sub, cleanPhone);
+            const pairingCode = await sessionManager.startPairing(getCallerUserId(user), cleanPhone);
             res.json({ pairingCode, status: 'pairing' });
         } catch (err: any) {
             console.error('[REST] Register error:', err);
@@ -80,7 +80,7 @@ export function createRestRouter(pool: Pool, sessionManager: SessionManager): Ro
     router.get('/status', async (req, res) => {
         try {
             const user = (req as any).user as TokenPayload;
-            const userId = user.preferred_username || user.sub;
+            const userId = getCallerUserId(user);
 
             const result = await pool.query(
                 'SELECT status, phone_number, whatsapp_jid, error_message, paired_at, last_connected_at FROM sessions WHERE user_id = $1',
@@ -111,7 +111,7 @@ export function createRestRouter(pool: Pool, sessionManager: SessionManager): Ro
     router.post('/disconnect', async (req, res) => {
         try {
             const user = (req as any).user as TokenPayload;
-            const userId = user.preferred_username || user.sub;
+            const userId = getCallerUserId(user);
             await sessionManager.disconnectSession(userId);
             res.json({ status: 'disconnected' });
         } catch (err: any) {
@@ -126,8 +126,18 @@ export function createRestRouter(pool: Pool, sessionManager: SessionManager): Ro
             const user = (req as any).user as TokenPayload;
             const { userId, recipientPhone, message } = req.body;
 
-            // Determine which user's session to use
-            const senderId = userId || user.preferred_username || user.sub;
+            // Determine which user's session to use (with authorization check)
+            let senderId: string;
+            try {
+                senderId = resolveUserId(user, userId);
+            } catch (err) {
+                if (err instanceof AuthorizationError) {
+                    console.warn(`[Auth] Authorization denied: ${err.message}`);
+                    res.status(403).json({ error: err.message });
+                    return;
+                }
+                throw err;
+            }
 
             if (!recipientPhone || !message) {
                 res.status(400).json({ error: 'recipientPhone and message are required' });
@@ -159,7 +169,7 @@ export function createRestRouter(pool: Pool, sessionManager: SessionManager): Ro
     router.get('/messages', async (req, res) => {
         try {
             const user = (req as any).user as TokenPayload;
-            const userId = user.preferred_username || user.sub;
+            const userId = getCallerUserId(user);
             const remotePhone = req.query.remotePhone as string;
             const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
             const offset = parseInt(req.query.offset as string) || 0;

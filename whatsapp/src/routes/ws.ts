@@ -2,7 +2,7 @@ import type { IncomingMessage as HttpRequest } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import type { Pool } from 'pg';
-import { validateToken, type TokenPayload } from '../auth.js';
+import { validateToken, resolveUserId, AuthorizationError, type TokenPayload } from '../auth.js';
 import type { SessionManager, IncomingMessage } from '../session-manager.js';
 
 function phoneToJid(phone: string): string {
@@ -73,7 +73,17 @@ function handleConnection(ws: WebSocket, pool: Pool, sessionManager: SessionMana
 
             switch (msg.type) {
                 case 'start_conversation': {
-                    const targetUserId = msg.userId || user!.preferred_username || user!.sub;
+                    let targetUserId: string;
+                    try {
+                        targetUserId = resolveUserId(user!, msg.userId);
+                    } catch (err) {
+                        if (err instanceof AuthorizationError) {
+                            console.warn(`[Auth] WS authorization denied: ${err.message}`);
+                            ws.send(JSON.stringify({ type: 'error', message: err.message }));
+                            return;
+                        }
+                        throw err;
+                    }
                     const remotePhone = msg.remotePhone;
 
                     if (!remotePhone) {
