@@ -21,4 +21,14 @@ cd whatsapp
 ./build.sh
 cd ..
 
+echo "Building News Worker..."
+cd news-worker
+./build.sh
+cd ..
+
+echo "Building Claude Code..."
+cd claude-code
+./build.sh
+cd ..
+
 echo "All builds completed successfully!"
