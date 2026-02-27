@@ -1,5 +1,5 @@
 import express from 'express';
-import { Worker } from '@temporalio/worker';
+import { NativeConnection, Worker } from '@temporalio/worker';
 import * as activities from './activities/index.js';
 import { runMigrations } from './db.js';
 import { authMiddleware } from './auth.js';
@@ -24,13 +24,14 @@ async function main() {
     });
 
     // Start Temporal worker
+    const connection = await NativeConnection.connect({
+        address: process.env.TEMPORAL_ADDRESS || 'temporal-frontend:7233',
+    });
     const worker = await Worker.create({
         workflowsPath: new URL('./workflow.js', import.meta.url).pathname,
         activities,
         taskQueue: 'news-digest-queue',
-        connection: {
-            address: process.env.TEMPORAL_ADDRESS || 'temporal-frontend:7233',
-        },
+        connection,
     });
 
     console.log('[Worker] Starting news-digest worker...');
