@@ -18,6 +18,8 @@ spec:
       - name: news-worker
         image: localhost:5000/news-worker:latest
         imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
         env:
         - name: TEMPORAL_ADDRESS
           value: "temporal-frontend:7233"
@@ -32,6 +34,18 @@ spec:
             secretKeyRef:
               name: news-worker-keycloak
               key: client-secret
+        - name: NEWS_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: news-db-app
+              key: username
+        - name: NEWS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: news-db-app
+              key: password
+        - name: DATABASE_URL
+          value: "postgres://$(NEWS_DB_USER):$(NEWS_DB_PASSWORD)@news-db-rw.temporal.svc.cluster.local:5432/news"
         - name: WHATSAPP_DB_USER
           valueFrom:
             secretKeyRef:
@@ -58,3 +72,15 @@ spec:
             cpu: "100m"
           limits:
             memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10

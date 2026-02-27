@@ -8,7 +8,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     try {
-        const response = await fetch('http://whatsapp/api/news/unsubscribe', {
+        const response = await fetch('http://news-worker.temporal.svc.cluster.local/api/news/unsubscribe', {
             method: 'POST',
             headers: { 'Authorization': authHeader }
         });
@@ -16,7 +16,7 @@ export const POST: RequestHandler = async ({ request }) => {
         const data = await response.json();
         return json(data, { status: response.status });
     } catch (e) {
-        console.error('Error proxying to WhatsApp news unsubscribe:', e);
+        console.error('Error proxying to news-worker unsubscribe:', e);
         return json({ error: 'Internal Server Error' }, { status: 500 });
     }
 };

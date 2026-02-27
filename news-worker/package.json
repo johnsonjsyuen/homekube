@@ -14,10 +14,15 @@
     "@temporalio/client": "^1.11.7",
     "@temporalio/worker": "^1.11.7",
     "@temporalio/workflow": "^1.11.7",
+    "express": "^4.21.2",
     "fast-xml-parser": "^4.5.1",
+    "jsonwebtoken": "^9.0.2",
+    "jwks-rsa": "^3.1.0",
     "pg": "^8.13.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^22.13.0",
     "@types/pg": "^8.11.11",
     "tsx": "^4.19.2",

@@ -24,5 +24,8 @@ COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
 
 COPY --from=builder /app/dist/ ./dist/
+COPY src/migrations/ ./dist/migrations/
+
+EXPOSE 3000
 
 CMD ["node", "dist/index.js"]

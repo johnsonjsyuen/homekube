@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS news_subscriptions (
-    user_id      TEXT PRIMARY KEY REFERENCES sessions(user_id),
+    user_id      TEXT PRIMARY KEY,
     subscribed   BOOLEAN NOT NULL DEFAULT TRUE,
     subscribed_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at   TIMESTAMPTZ DEFAULT NOW()

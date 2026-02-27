@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claude-code
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: claude-code
+  template:
+    metadata:
+      labels:
+        app: claude-code
+    spec:
+      containers:
+      - name: claude-code
+        image: localhost:5000/claude-code:latest
+        imagePullPolicy: Always
+        command: ["sleep", "infinity"]
+        env:
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: claude-code-api-key
+              key: api-key
+        volumeMounts:
+        - name: claude-config
+          mountPath: /home/node/.claude
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+      volumes:
+      - name: claude-config
+        persistentVolumeClaim:
+          claimName: claude-code-config
