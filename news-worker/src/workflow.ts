@@ -47,3 +47,5 @@ export async function DailyNewsDigestWorkflow(): Promise<string> {
 
     return `Digest sent to ${subscribers.length} subscribers`;
 }
+
+export { EconomistDigestWorkflow } from './economistWorkflow.js';
