@@ -13,6 +13,13 @@
     let triggerResult = $state('');
     let triggerError = $state('');
 
+    let econSubscribed = $state(false);
+    let econLoading = $state(false);
+    let econError = $state('');
+    let econTriggerLoading = $state(false);
+    let econTriggerResult = $state('');
+    let econTriggerError = $state('');
+
     onMount(() => {
         initKeycloak().then(() => { authInitialized = true; });
         const unsubscribe = onAuthStateChange((state) => { authState = state; });
@@ -84,9 +91,72 @@
         }
     }
 
+    async function fetchEconSubscriptionStatus() {
+        try {
+            const token = await getFreshToken();
+            if (!token) return;
+            const res = await fetch('/api/whatsapp/economist/status', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            econSubscribed = data.subscribed || false;
+        } catch (err: any) {
+            console.error('[Workflows] Economist status fetch error:', err);
+        }
+    }
+
+    async function toggleEconSubscription() {
+        econLoading = true;
+        econError = '';
+        try {
+            const token = await getFreshToken();
+            if (!token) return;
+            const endpoint = econSubscribed ? '/api/whatsapp/economist/unsubscribe' : '/api/whatsapp/economist/subscribe';
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                econError = data.error || 'Failed to update subscription';
+                return;
+            }
+            econSubscribed = data.subscribed;
+        } catch (err: any) {
+            econError = err.message;
+        } finally {
+            econLoading = false;
+        }
+    }
+
+    async function triggerEconWorkflow() {
+        econTriggerLoading = true;
+        econTriggerResult = '';
+        econTriggerError = '';
+        try {
+            const token = await getFreshToken();
+            if (!token) return;
+            const res = await fetch('/api/whatsapp/economist/trigger', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                econTriggerError = data.error || 'Failed to trigger workflow';
+                return;
+            }
+            econTriggerResult = `Workflow started: ${data.workflowId}`;
+        } catch (err: any) {
+            econTriggerError = err.message;
+        } finally {
+            econTriggerLoading = false;
+        }
+    }
+
     $effect(() => {
         if (authState.authenticated) {
             fetchSubscriptionStatus();
+            fetchEconSubscriptionStatus();
         }
     });
 </script>
@@ -152,6 +222,52 @@
                     {/if}
                     {#if triggerError}
                         <div class="error-result">{triggerError}</div>
+                    {/if}
+                </div>
+            </div>
+
+            <div class="section">
+                <h4>The Economist Digest</h4>
+                <p class="section-description">Get a daily AI-summarised digest of top articles from The Economist delivered to your WhatsApp at 9 AM AEST.</p>
+                <div class="digest-status">
+                    Status: <span class="status-badge" class:status-active={econSubscribed} class:status-inactive={!econSubscribed}>
+                        {econSubscribed ? 'subscribed' : 'not subscribed'}
+                    </span>
+                </div>
+                {#if econSubscribed}
+                    <button class="unsubscribe-btn" onclick={toggleEconSubscription} disabled={econLoading}>
+                        {#if econLoading}
+                            <span class="spinner">...</span> Updating...
+                        {:else}
+                            Unsubscribe
+                        {/if}
+                    </button>
+                {:else}
+                    <button class="subscribe-btn" onclick={toggleEconSubscription} disabled={econLoading}>
+                        {#if econLoading}
+                            <span class="spinner">...</span> Updating...
+                        {:else}
+                            Subscribe to Economist Digest
+                        {/if}
+                    </button>
+                {/if}
+                {#if econError}
+                    <div class="error-result">{econError}</div>
+                {/if}
+
+                <div class="trigger-section">
+                    <button class="trigger-btn" onclick={triggerEconWorkflow} disabled={econTriggerLoading}>
+                        {#if econTriggerLoading}
+                            <span class="spinner">...</span> Starting...
+                        {:else}
+                            Run Now
+                        {/if}
+                    </button>
+                    {#if econTriggerResult}
+                        <div class="success-result">{econTriggerResult}</div>
+                    {/if}
+                    {#if econTriggerError}
+                        <div class="error-result">{econTriggerError}</div>
                     {/if}
                 </div>
             </div>

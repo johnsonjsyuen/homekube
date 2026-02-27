@@ -36,6 +36,35 @@ async function main() {
     });
 
     console.log(`[Schedule] Created schedule: ${scheduleId} (daily at 9:00 AM AEST/AEDT)`);
+
+    // Economist digest schedule
+    const economistScheduleId = 'economist-digest';
+
+    try {
+        const econHandle = client.schedule.getHandle(economistScheduleId);
+        await econHandle.delete();
+        console.log(`[Schedule] Deleted existing schedule: ${economistScheduleId}`);
+    } catch {
+        // Schedule doesn't exist yet
+    }
+
+    await client.schedule.create({
+        scheduleId: economistScheduleId,
+        spec: {
+            calendars: [{ hour: [9], minute: [0] }],
+            timezone: 'Australia/Sydney',
+        },
+        action: {
+            type: 'startWorkflow',
+            workflowType: 'EconomistDigestWorkflow',
+            taskQueue: 'news-digest-queue',
+        },
+        policies: {
+            overlap: ScheduleOverlapPolicy.SKIP,
+        },
+    });
+
+    console.log(`[Schedule] Created schedule: ${economistScheduleId} (daily at 9:00 AM AEST/AEDT)`);
     process.exit(0);
 }
 
