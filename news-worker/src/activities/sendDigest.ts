@@ -8,7 +8,6 @@ const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM || 'homekube';
 const KEYCLOAK_CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID || 'news-worker';
 const KEYCLOAK_CLIENT_SECRET = process.env.KEYCLOAK_CLIENT_SECRET || '';
 const WHATSAPP_URL = process.env.WHATSAPP_URL || 'http://whatsapp';
-const NEWS_SENDER_USER_ID = process.env.NEWS_SENDER_USER_ID || 'johnson';
 
 async function getServiceToken(): Promise<string> {
     const tokenUrl = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token`;
@@ -42,7 +41,7 @@ export async function sendDigest(input: SendDigestInput): Promise<void> {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    userId: NEWS_SENDER_USER_ID,
+                    userId: subscriber.userId,
                     recipientPhone: subscriber.phone,
                     message: input.digest,
                 }),

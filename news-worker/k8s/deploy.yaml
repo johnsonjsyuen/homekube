@@ -65,8 +65,6 @@ spec:
           value: "default"
         - name: CLAUDE_CODE_LABEL
           value: "app=claude-code"
-        - name: NEWS_SENDER_USER_ID
-          value: "johnson"
         resources:
           requests:
             memory: "256Mi"
