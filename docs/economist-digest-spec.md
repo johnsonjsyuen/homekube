@@ -254,18 +254,13 @@ ${articleText}`;
 ### 2.4 `getEconomistSubscribers` — `news-worker/src/activities/getEconomistSubscribers.ts`
 
 ```typescript
-import pg from 'pg';
 import pool from '../db.js';
+import { lookupSessions } from './whatsappClient.js';
 
 export interface Subscriber {
     userId: string;
     phone: string;
 }
-
-const whatsappPool = new pg.Pool({
-    connectionString: process.env.WHATSAPP_DATABASE_URL,
-    max: 2,
-});
 
 export async function getEconomistSubscribers(): Promise<Subscriber[]> {
     const subscriptions = await pool.query(
@@ -278,22 +273,12 @@ export async function getEconomistSubscribers(): Promise<Subscriber[]> {
 
     const userIds = subscriptions.rows.map((r: any) => r.user_id);
 
-    const sessions = await whatsappPool.query(
-        `SELECT user_id, whatsapp_jid FROM sessions
-         WHERE user_id = ANY($1) AND status = 'connected'`,
-        [userIds]
-    );
-
-    return sessions.rows
-        .filter((row: any) => row.whatsapp_jid)
-        .map((row: any) => {
-            const phone = row.whatsapp_jid.split(':')[0].split('@')[0];
-            return { userId: row.user_id, phone };
-        });
+    // Look up connected sessions via WhatsApp API
+    return lookupSessions(userIds);
 }
 ```
 
-**Only difference from ABC `getSubscribers`:** Queries `economist_subscriptions` instead of `news_subscriptions`.
+**Only difference from ABC `getSubscribers`:** Queries `economist_subscriptions` instead of `news_subscriptions`. Both use `lookupSessions()` from `whatsappClient.ts` to resolve phone numbers via the WhatsApp API (no direct DB access to whatsapp-db).
 
 ### 2.5 Reuse `sendDigest`
 
@@ -482,7 +467,7 @@ router.post('/economist/trigger', async (req, res) => {
 
 ## 5. Homepage Proxy Routes
 
-4 new SvelteKit server routes under `homepage/src/routes/api/whatsapp/economist/`:
+4 new SvelteKit server routes under `homepage/src/routes/api/workflows/economist/`:
 
 ### `subscribe/+server.ts`
 
@@ -613,7 +598,7 @@ async function fetchEconSubscriptionStatus() {
     try {
         const token = await getFreshToken();
         if (!token) return;
-        const res = await fetch('/api/whatsapp/economist/status', {
+        const res = await fetch('/api/workflows/economist/status', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -629,7 +614,7 @@ async function toggleEconSubscription() {
     try {
         const token = await getFreshToken();
         if (!token) return;
-        const endpoint = econSubscribed ? '/api/whatsapp/economist/unsubscribe' : '/api/whatsapp/economist/subscribe';
+        const endpoint = econSubscribed ? '/api/workflows/economist/unsubscribe' : '/api/workflows/economist/subscribe';
         const res = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
@@ -654,7 +639,7 @@ async function triggerEconWorkflow() {
     try {
         const token = await getFreshToken();
         if (!token) return;
-        const res = await fetch('/api/whatsapp/economist/trigger', {
+        const res = await fetch('/api/workflows/economist/trigger', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -797,10 +782,10 @@ No other new dependencies — `fast-xml-parser`, `pg`, `express`, `@temporalio/*
 | `news-worker/src/schedules/register.ts` | Modify | Add `economist-digest` schedule |
 | `news-worker/package.json` | Modify | Add `linkedom` dependency |
 | `homepage/src/routes/WorkflowsTab.svelte` | Modify | Add Economist section |
-| `homepage/src/routes/api/whatsapp/economist/subscribe/+server.ts` | Create | Proxy route |
-| `homepage/src/routes/api/whatsapp/economist/unsubscribe/+server.ts` | Create | Proxy route |
-| `homepage/src/routes/api/whatsapp/economist/status/+server.ts` | Create | Proxy route |
-| `homepage/src/routes/api/whatsapp/economist/trigger/+server.ts` | Create | Proxy route |
+| `homepage/src/routes/api/workflows/economist/subscribe/+server.ts` | Create | Proxy route |
+| `homepage/src/routes/api/workflows/economist/unsubscribe/+server.ts` | Create | Proxy route |
+| `homepage/src/routes/api/workflows/economist/status/+server.ts` | Create | Proxy route |
+| `homepage/src/routes/api/workflows/economist/trigger/+server.ts` | Create | Proxy route |
 
 ## ANTI-PATTERNS (DO NOT)
 
@@ -861,6 +846,6 @@ No other new dependencies — `fast-xml-parser`, `pg`, `express`, `@temporalio/*
 | Auth middleware | [news-worker/src/auth.ts](../news-worker/src/auth.ts) |
 | Routes | [news-worker/src/routes.ts](../news-worker/src/routes.ts) |
 | Homepage WorkflowsTab | [homepage/src/routes/WorkflowsTab.svelte](../homepage/src/routes/WorkflowsTab.svelte) |
-| Existing proxy routes | [homepage/src/routes/api/whatsapp/news/](../homepage/src/routes/api/whatsapp/news/) |
+| Existing proxy routes | [homepage/src/routes/api/workflows/news/](../homepage/src/routes/api/workflows/news/) |
 | Schedule registration | [news-worker/src/schedules/register.ts](../news-worker/src/schedules/register.ts) |
 | K8s deployment | [news-worker/k8s/deploy.yaml](../news-worker/k8s/deploy.yaml) |

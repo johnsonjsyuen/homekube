@@ -33,7 +33,7 @@
         try {
             const token = await getFreshToken();
             if (!token) return;
-            const res = await fetch('/api/whatsapp/news/status', {
+            const res = await fetch('/api/workflows/news/status', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -49,7 +49,7 @@
         try {
             const token = await getFreshToken();
             if (!token) return;
-            const endpoint = newsSubscribed ? '/api/whatsapp/news/unsubscribe' : '/api/whatsapp/news/subscribe';
+            const endpoint = newsSubscribed ? '/api/workflows/news/unsubscribe' : '/api/workflows/news/subscribe';
             const res = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -74,7 +74,7 @@
         try {
             const token = await getFreshToken();
             if (!token) return;
-            const res = await fetch('/api/whatsapp/news/trigger', {
+            const res = await fetch('/api/workflows/news/trigger', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -95,7 +95,7 @@
         try {
             const token = await getFreshToken();
             if (!token) return;
-            const res = await fetch('/api/whatsapp/economist/status', {
+            const res = await fetch('/api/workflows/economist/status', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -111,7 +111,7 @@
         try {
             const token = await getFreshToken();
             if (!token) return;
-            const endpoint = econSubscribed ? '/api/whatsapp/economist/unsubscribe' : '/api/whatsapp/economist/subscribe';
+            const endpoint = econSubscribed ? '/api/workflows/economist/unsubscribe' : '/api/workflows/economist/subscribe';
             const res = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -136,7 +136,7 @@
         try {
             const token = await getFreshToken();
             if (!token) return;
-            const res = await fetch('/api/whatsapp/economist/trigger', {
+            const res = await fetch('/api/workflows/economist/trigger', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
