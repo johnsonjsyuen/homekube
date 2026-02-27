@@ -34,6 +34,7 @@ spec:
             secretKeyRef:
               name: news-worker-keycloak
               key: client-secret
+              optional: true
         - name: NEWS_DB_USER
           valueFrom:
             secretKeyRef:
