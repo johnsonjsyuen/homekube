@@ -8,6 +8,7 @@
     import SttTab from "./SttTab.svelte";
     import LiveTtsTab from "./LiveTtsTab.svelte";
     import WhatsAppTab from "./WhatsAppTab.svelte";
+    import WorkflowsTab from "./WorkflowsTab.svelte";
     import { onMount } from "svelte";
     import { initKeycloak } from "$lib/auth";
 
@@ -101,6 +102,12 @@
             >
                 WhatsApp
             </button>
+            <button
+                class="tab-btn {activeTab === 'workflows' ? 'active' : ''}"
+                onclick={() => (activeTab = "workflows")}
+            >
+                Workflows
+            </button>
         </div>
 
         {#if activeTab === "weather"}
@@ -140,6 +147,8 @@
         <LiveTtsTab />
     {:else if activeTab === "whatsapp"}
         <WhatsAppTab />
+    {:else if activeTab === "workflows"}
+        <WorkflowsTab />
     {/if}
 </div>
 

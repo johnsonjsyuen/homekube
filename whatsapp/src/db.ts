@@ -11,15 +11,10 @@ const pool = new pg.Pool({
 });
 
 export async function runMigrations(): Promise<void> {
-    const client = await pool.connect();
-    try {
-        const migrationPath = join(__dirname, 'migrations', '001_init.sql');
-        const sql = readFileSync(migrationPath, 'utf-8');
-        await client.query(sql);
-        console.log('[DB] Migrations applied successfully');
-    } finally {
-        client.release();
-    }
+    const migrationPath = join(__dirname, 'migrations', '001_init.sql');
+    const sql = readFileSync(migrationPath, 'utf-8');
+    await pool.query(sql);
+    console.log('[DB] Migrations applied');
 }
 
 export default pool;
