@@ -13,7 +13,7 @@ spec:
         "tags": ["homekube", "stt"],
         "timezone": "browser",
         "refresh": "30s",
-        "time": { "from": "now-1h", "to": "now" },
+        "time": { "from": "now-6h", "to": "now" },
         "panels": [
           {
             "id": 1,
@@ -36,20 +36,26 @@ spec:
           },
           {
             "id": 2,
-            "title": "Transcription Rate",
+            "title": "Transcriptions per Hour",
             "type": "timeseries",
             "gridPos": { "h": 8, "w": 18, "x": 6, "y": 0 },
             "targets": [
               {
-                "expr": "rate(stt_transcriptions_total[5m])",
-                "legendFormat": "transcriptions/s",
+                "expr": "round(increase(stt_transcriptions_total[1h]))",
+                "legendFormat": "transcriptions",
+                "interval": "1h",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
-                "unit": "ops",
-                "custom": { "fillOpacity": 20 }
+                "unit": "short",
+                "decimals": 0,
+                "custom": {
+                  "drawStyle": "bars",
+                  "barAlignment": 0,
+                  "fillOpacity": 80
+                }
               }
             }
           },
@@ -79,39 +85,52 @@ spec:
           },
           {
             "id": 4,
-            "title": "Audio Segments Rate",
+            "title": "Audio Segments per Hour",
             "type": "timeseries",
             "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
             "targets": [
               {
-                "expr": "rate(stt_audio_segments_total[5m])",
-                "legendFormat": "segments/s",
+                "expr": "round(increase(stt_audio_segments_total[1h]))",
+                "legendFormat": "segments",
+                "interval": "1h",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
-                "unit": "ops",
-                "custom": { "fillOpacity": 20 }
+                "unit": "short",
+                "decimals": 0,
+                "custom": {
+                  "drawStyle": "bars",
+                  "barAlignment": 0,
+                  "fillOpacity": 80
+                }
               }
             }
           },
           {
             "id": 5,
-            "title": "HTTP Request Rate",
+            "title": "HTTP Requests per Hour",
             "type": "timeseries",
             "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
             "targets": [
               {
-                "expr": "sum by (status) (rate(axum_http_requests_total{job=\"speech-to-text\"}[5m]))",
+                "expr": "round(sum by (status) (increase(axum_http_requests_total{job=\"speech-to-text\"}[1h])))",
                 "legendFormat": "{{status}}",
+                "interval": "1h",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
-                "unit": "reqps",
-                "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" } }
+                "unit": "short",
+                "decimals": 0,
+                "custom": {
+                  "drawStyle": "bars",
+                  "barAlignment": 0,
+                  "fillOpacity": 80,
+                  "stacking": { "mode": "normal" }
+                }
               }
             }
           },

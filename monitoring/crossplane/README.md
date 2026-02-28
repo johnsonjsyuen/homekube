@@ -51,13 +51,15 @@ All resources should show `SYNCED=True` and `READY=True`. Dashboards will appear
 
 ## Dashboards
 
+All count-based timeseries use `increase()[1h]` with bar charts instead of `rate()` — this shows whole numbers ("5 jobs this hour") instead of meaningless fractions ("0.003 ops/s") on a low-traffic homelab. Histogram percentiles (latency, duration) still use `rate()` as mathematically required.
+
 | Dashboard | Panels | Key Metrics |
 |-----------|--------|-------------|
-| **Overview** | 8 | Service health (up/down), 24h activity counts |
-| **Text-to-Speech** | 5 | Active jobs, jobs by status, generation duration, HTTP rate/latency |
-| **Speech-to-Text** | 6 | Active sessions, transcription rate/duration, audio segments, HTTP rate/latency |
-| **WhatsApp** | 6 | Active sessions, session connects, messages sent/received, HTTP rate/latency |
-| **News Worker** | 8 | Workflow runs, success rate, duration, articles fetched, messages sent, HTTP rate/latency |
+| **Overview** | 12 | Service health (up/down), 24h activity counts, CPU/memory per pod, HTTP errors, failed workflows |
+| **Text-to-Speech** | 6 | Active jobs, jobs per hour (bars), generation duration, HTTP requests/hour, latency, HTTP errors |
+| **Speech-to-Text** | 6 | Active sessions, transcriptions/hour (bars), duration, audio segments/hour, HTTP requests/hour, latency |
+| **WhatsApp** | 6 | Active sessions, session connects, messages/hour (bars), 24h totals, HTTP requests/hour, latency |
+| **News Worker** | 8 | Workflow runs (24h), success rate %, runs/hour (bars), duration, articles/hour, messages/hour, HTTP requests/hour, latency |
 
 ## Adding a new dashboard
 

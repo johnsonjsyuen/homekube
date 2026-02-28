@@ -13,7 +13,7 @@ spec:
         "tags": ["homekube", "news-worker"],
         "timezone": "browser",
         "refresh": "30s",
-        "time": { "from": "now-1h", "to": "now" },
+        "time": { "from": "now-6h", "to": "now" },
         "panels": [
           {
             "id": 1,
@@ -22,12 +22,13 @@ spec:
             "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
             "targets": [
               {
-                "expr": "sum(increase(workflow_runs_total[24h]))",
+                "expr": "round(sum(increase(workflow_runs_total[24h])))",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
+                "decimals": 0,
                 "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
               }
             },
@@ -55,20 +56,27 @@ spec:
           },
           {
             "id": 3,
-            "title": "Runs by Status/Workflow",
+            "title": "Runs per Hour",
             "type": "timeseries",
             "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
             "targets": [
               {
-                "expr": "sum by (workflow, status) (rate(workflow_runs_total[5m]))",
+                "expr": "round(sum by (workflow, status) (increase(workflow_runs_total[1h])))",
                 "legendFormat": "{{workflow}} - {{status}}",
+                "interval": "1h",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
-                "unit": "ops",
-                "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" } }
+                "unit": "short",
+                "decimals": 0,
+                "custom": {
+                  "drawStyle": "bars",
+                  "barAlignment": 0,
+                  "fillOpacity": 80,
+                  "stacking": { "mode": "normal" }
+                }
               }
             }
           },
@@ -98,58 +106,79 @@ spec:
           },
           {
             "id": 5,
-            "title": "Articles Fetched",
+            "title": "Articles Fetched per Hour",
             "type": "timeseries",
             "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
             "targets": [
               {
-                "expr": "sum by (workflow) (rate(workflow_articles_fetched_total[5m]))",
+                "expr": "round(sum by (workflow) (increase(workflow_articles_fetched_total[1h])))",
                 "legendFormat": "{{workflow}}",
+                "interval": "1h",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
-                "unit": "ops",
-                "custom": { "fillOpacity": 20 }
+                "unit": "short",
+                "decimals": 0,
+                "custom": {
+                  "drawStyle": "bars",
+                  "barAlignment": 0,
+                  "fillOpacity": 80,
+                  "stacking": { "mode": "normal" }
+                }
               }
             }
           },
           {
             "id": 6,
-            "title": "Messages Sent",
+            "title": "Messages Sent per Hour",
             "type": "timeseries",
             "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
             "targets": [
               {
-                "expr": "sum by (workflow) (rate(workflow_messages_sent_total[5m]))",
+                "expr": "round(sum by (workflow) (increase(workflow_messages_sent_total[1h])))",
                 "legendFormat": "{{workflow}}",
+                "interval": "1h",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
-                "unit": "ops",
-                "custom": { "fillOpacity": 20 }
+                "unit": "short",
+                "decimals": 0,
+                "custom": {
+                  "drawStyle": "bars",
+                  "barAlignment": 0,
+                  "fillOpacity": 80,
+                  "stacking": { "mode": "normal" }
+                }
               }
             }
           },
           {
             "id": 7,
-            "title": "HTTP Request Rate by Status",
+            "title": "HTTP Requests per Hour",
             "type": "timeseries",
             "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
             "targets": [
               {
-                "expr": "sum by (status) (rate(http_requests_total{job=\"news-worker\"}[5m]))",
+                "expr": "round(sum by (status) (increase(http_requests_total{job=\"news-worker\"}[1h])))",
                 "legendFormat": "{{status}}",
+                "interval": "1h",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
-                "unit": "reqps",
-                "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" } }
+                "unit": "short",
+                "decimals": 0,
+                "custom": {
+                  "drawStyle": "bars",
+                  "barAlignment": 0,
+                  "fillOpacity": 80,
+                  "stacking": { "mode": "normal" }
+                }
               }
             }
           },

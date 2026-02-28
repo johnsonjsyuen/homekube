@@ -13,7 +13,7 @@ spec:
         "tags": ["homekube", "tts"],
         "timezone": "browser",
         "refresh": "30s",
-        "time": { "from": "now-1h", "to": "now" },
+        "time": { "from": "now-6h", "to": "now" },
         "panels": [
           {
             "id": 1,
@@ -36,20 +36,27 @@ spec:
           },
           {
             "id": 2,
-            "title": "Jobs by Status",
+            "title": "Jobs per Hour",
             "type": "timeseries",
             "gridPos": { "h": 8, "w": 18, "x": 6, "y": 0 },
             "targets": [
               {
-                "expr": "sum by (status) (rate(tts_jobs_total[5m]))",
+                "expr": "round(sum by (status) (increase(tts_jobs_total[1h])))",
                 "legendFormat": "{{status}}",
+                "interval": "1h",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
-                "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" } },
-                "unit": "ops"
+                "unit": "short",
+                "decimals": 0,
+                "custom": {
+                  "drawStyle": "bars",
+                  "barAlignment": 0,
+                  "fillOpacity": 80,
+                  "stacking": { "mode": "normal" }
+                }
               }
             }
           },
@@ -84,20 +91,27 @@ spec:
           },
           {
             "id": 4,
-            "title": "HTTP Request Rate",
+            "title": "HTTP Requests per Hour",
             "type": "timeseries",
             "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
             "targets": [
               {
-                "expr": "sum by (status) (rate(axum_http_requests_total{job=\"text-to-speech\"}[5m]))",
+                "expr": "round(sum by (status) (increase(axum_http_requests_total{job=\"text-to-speech\"}[1h])))",
                 "legendFormat": "{{status}}",
+                "interval": "1h",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
-                "unit": "reqps",
-                "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" } }
+                "unit": "short",
+                "decimals": 0,
+                "custom": {
+                  "drawStyle": "bars",
+                  "barAlignment": 0,
+                  "fillOpacity": 80,
+                  "stacking": { "mode": "normal" }
+                }
               }
             }
           },
@@ -105,7 +119,7 @@ spec:
             "id": 5,
             "title": "HTTP Latency p95",
             "type": "timeseries",
-            "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
             "targets": [
               {
                 "expr": "histogram_quantile(0.95, sum by (le, endpoint) (rate(axum_http_requests_duration_seconds_bucket{job=\"text-to-speech\"}[5m])))",
@@ -117,6 +131,35 @@ spec:
               "defaults": {
                 "unit": "s",
                 "custom": { "fillOpacity": 10 }
+              }
+            }
+          },
+          {
+            "id": 6,
+            "title": "HTTP Errors per Hour",
+            "type": "timeseries",
+            "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+            "targets": [
+              {
+                "expr": "round(sum by (status) (increase(axum_http_requests_total{job=\"text-to-speech\",status=~\"[45]..\"}[1h])))",
+                "legendFormat": "{{status}}",
+                "interval": "1h",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "decimals": 0,
+                "noValue": "0",
+                "custom": {
+                  "drawStyle": "bars",
+                  "barAlignment": 0,
+                  "fillOpacity": 80,
+                  "stacking": { "mode": "normal" }
+                },
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] },
+                "color": { "mode": "fixed", "fixedColor": "red" }
               }
             }
           }

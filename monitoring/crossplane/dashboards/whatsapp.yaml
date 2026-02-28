@@ -13,7 +13,7 @@ spec:
         "tags": ["homekube", "whatsapp"],
         "timezone": "browser",
         "refresh": "30s",
-        "time": { "from": "now-1h", "to": "now" },
+        "time": { "from": "now-6h", "to": "now" },
         "panels": [
           {
             "id": 1,
@@ -41,13 +41,14 @@ spec:
             "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 },
             "targets": [
               {
-                "expr": "sum by (status) (increase(whatsapp_session_connects_total[24h]))",
+                "expr": "round(sum by (status) (increase(whatsapp_session_connects_total[24h])))",
                 "legendFormat": "{{status}}",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
+                "decimals": 0,
                 "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
               }
             },
@@ -55,25 +56,33 @@ spec:
           },
           {
             "id": 3,
-            "title": "Messages Sent vs Received",
+            "title": "Messages per Hour",
             "type": "timeseries",
             "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
             "targets": [
               {
-                "expr": "rate(whatsapp_messages_sent_total[5m])",
+                "expr": "round(increase(whatsapp_messages_sent_total[1h]))",
                 "legendFormat": "sent",
+                "interval": "1h",
                 "refId": "A"
               },
               {
-                "expr": "rate(whatsapp_messages_received_total[5m])",
+                "expr": "round(increase(whatsapp_messages_received_total[1h]))",
                 "legendFormat": "received",
+                "interval": "1h",
                 "refId": "B"
               }
             ],
             "fieldConfig": {
               "defaults": {
-                "unit": "ops",
-                "custom": { "fillOpacity": 20 }
+                "unit": "short",
+                "decimals": 0,
+                "custom": {
+                  "drawStyle": "bars",
+                  "barAlignment": 0,
+                  "fillOpacity": 80,
+                  "stacking": { "mode": "normal" }
+                }
               }
             }
           },
@@ -84,18 +93,19 @@ spec:
             "gridPos": { "h": 8, "w": 6, "x": 0, "y": 8 },
             "targets": [
               {
-                "expr": "sum(increase(whatsapp_messages_sent_total[24h]))",
+                "expr": "round(sum(increase(whatsapp_messages_sent_total[24h])))",
                 "legendFormat": "sent",
                 "refId": "A"
               },
               {
-                "expr": "sum(increase(whatsapp_messages_received_total[24h]))",
+                "expr": "round(sum(increase(whatsapp_messages_received_total[24h])))",
                 "legendFormat": "received",
                 "refId": "B"
               }
             ],
             "fieldConfig": {
               "defaults": {
+                "decimals": 0,
                 "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
               }
             },
@@ -103,20 +113,27 @@ spec:
           },
           {
             "id": 5,
-            "title": "HTTP Request Rate by Status",
+            "title": "HTTP Requests per Hour",
             "type": "timeseries",
             "gridPos": { "h": 8, "w": 9, "x": 6, "y": 8 },
             "targets": [
               {
-                "expr": "sum by (status) (rate(http_requests_total{job=\"whatsapp\"}[5m]))",
+                "expr": "round(sum by (status) (increase(http_requests_total{job=\"whatsapp\"}[1h])))",
                 "legendFormat": "{{status}}",
+                "interval": "1h",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
-                "unit": "reqps",
-                "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" } }
+                "unit": "short",
+                "decimals": 0,
+                "custom": {
+                  "drawStyle": "bars",
+                  "barAlignment": 0,
+                  "fillOpacity": 80,
+                  "stacking": { "mode": "normal" }
+                }
               }
             }
           },

@@ -16,10 +16,17 @@ spec:
         "time": { "from": "now-1h", "to": "now" },
         "panels": [
           {
+            "id": 100,
+            "title": "Service Health",
+            "type": "row",
+            "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+            "collapsed": false
+          },
+          {
             "id": 1,
             "title": "Text-to-Speech",
             "type": "stat",
-            "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+            "gridPos": { "h": 3, "w": 6, "x": 0, "y": 1 },
             "targets": [
               {
                 "expr": "up{job=\"text-to-speech\"}",
@@ -40,7 +47,7 @@ spec:
             "id": 2,
             "title": "Speech-to-Text",
             "type": "stat",
-            "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+            "gridPos": { "h": 3, "w": 6, "x": 6, "y": 1 },
             "targets": [
               {
                 "expr": "up{job=\"speech-to-text\"}",
@@ -61,7 +68,7 @@ spec:
             "id": 3,
             "title": "WhatsApp",
             "type": "stat",
-            "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+            "gridPos": { "h": 3, "w": 6, "x": 12, "y": 1 },
             "targets": [
               {
                 "expr": "up{job=\"whatsapp\"}",
@@ -82,7 +89,7 @@ spec:
             "id": 4,
             "title": "News Worker",
             "type": "stat",
-            "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+            "gridPos": { "h": 3, "w": 6, "x": 18, "y": 1 },
             "targets": [
               {
                 "expr": "up{job=\"news-worker\"}",
@@ -100,18 +107,26 @@ spec:
             "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
           },
           {
+            "id": 101,
+            "title": "Activity (24h)",
+            "type": "row",
+            "gridPos": { "h": 1, "w": 24, "x": 0, "y": 4 },
+            "collapsed": false
+          },
+          {
             "id": 5,
             "title": "TTS Jobs (24h)",
             "type": "stat",
-            "gridPos": { "h": 4, "w": 6, "x": 0, "y": 4 },
+            "gridPos": { "h": 4, "w": 6, "x": 0, "y": 5 },
             "targets": [
               {
-                "expr": "sum(increase(tts_jobs_total[24h]))",
+                "expr": "round(sum(increase(tts_jobs_total[24h])))",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
+                "decimals": 0,
                 "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
               }
             },
@@ -121,15 +136,16 @@ spec:
             "id": 6,
             "title": "Transcriptions (24h)",
             "type": "stat",
-            "gridPos": { "h": 4, "w": 6, "x": 6, "y": 4 },
+            "gridPos": { "h": 4, "w": 6, "x": 6, "y": 5 },
             "targets": [
               {
-                "expr": "sum(increase(stt_transcriptions_total[24h]))",
+                "expr": "round(sum(increase(stt_transcriptions_total[24h])))",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
+                "decimals": 0,
                 "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
               }
             },
@@ -139,15 +155,16 @@ spec:
             "id": 7,
             "title": "WhatsApp Messages (24h)",
             "type": "stat",
-            "gridPos": { "h": 4, "w": 6, "x": 12, "y": 4 },
+            "gridPos": { "h": 4, "w": 6, "x": 12, "y": 5 },
             "targets": [
               {
-                "expr": "sum(increase(whatsapp_messages_sent_total[24h])) + sum(increase(whatsapp_messages_received_total[24h]))",
+                "expr": "round(sum(increase(whatsapp_messages_sent_total[24h])) + sum(increase(whatsapp_messages_received_total[24h])))",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
+                "decimals": 0,
                 "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
               }
             },
@@ -157,16 +174,116 @@ spec:
             "id": 8,
             "title": "Workflow Runs (24h)",
             "type": "stat",
-            "gridPos": { "h": 4, "w": 6, "x": 18, "y": 4 },
+            "gridPos": { "h": 4, "w": 6, "x": 18, "y": 5 },
             "targets": [
               {
-                "expr": "sum(increase(workflow_runs_total[24h]))",
+                "expr": "round(sum(increase(workflow_runs_total[24h])))",
                 "refId": "A"
               }
             ],
             "fieldConfig": {
               "defaults": {
+                "decimals": 0,
                 "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+              }
+            },
+            "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
+          },
+          {
+            "id": 102,
+            "title": "Resource Usage",
+            "type": "row",
+            "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+            "collapsed": false
+          },
+          {
+            "id": 9,
+            "title": "Service CPU Usage (cores)",
+            "type": "timeseries",
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+            "targets": [
+              {
+                "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"default\",pod=~\"(text-to-speech|speech-to-text|whatsapp)-.*\",container!=\"\"}[5m]))",
+                "legendFormat": "{{pod}}",
+                "refId": "A"
+              },
+              {
+                "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"temporal\",pod=~\"news-worker-.*\",container!=\"\"}[5m]))",
+                "legendFormat": "{{pod}}",
+                "refId": "B"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "custom": { "fillOpacity": 20 }
+              }
+            }
+          },
+          {
+            "id": 10,
+            "title": "Service Memory Usage",
+            "type": "timeseries",
+            "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+            "targets": [
+              {
+                "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"default\",pod=~\"(text-to-speech|speech-to-text|whatsapp)-.*\",container!=\"\"})",
+                "legendFormat": "{{pod}}",
+                "refId": "A"
+              },
+              {
+                "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"temporal\",pod=~\"news-worker-.*\",container!=\"\"})",
+                "legendFormat": "{{pod}}",
+                "refId": "B"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "bytes",
+                "custom": { "fillOpacity": 20 }
+              }
+            }
+          },
+          {
+            "id": 103,
+            "title": "Errors (24h)",
+            "type": "row",
+            "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+            "collapsed": false
+          },
+          {
+            "id": 11,
+            "title": "HTTP Errors (24h)",
+            "type": "stat",
+            "gridPos": { "h": 4, "w": 6, "x": 0, "y": 19 },
+            "targets": [
+              {
+                "expr": "round((sum(increase(axum_http_requests_total{status=~\"[45]..\"}[24h])) or vector(0)) + (sum(increase(http_requests_total{status=~\"[45]..\"}[24h])) or vector(0)))",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "decimals": 0,
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 }] }
+              }
+            },
+            "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
+          },
+          {
+            "id": 12,
+            "title": "Failed Workflows (24h)",
+            "type": "stat",
+            "gridPos": { "h": 4, "w": 6, "x": 6, "y": 19 },
+            "targets": [
+              {
+                "expr": "round(sum(increase(workflow_runs_total{status=\"failed\"}[24h])))",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "decimals": 0,
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
               }
             },
             "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
