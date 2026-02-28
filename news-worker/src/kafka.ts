@@ -7,11 +7,26 @@ const kafka = new Kafka({
     brokers: KAFKA_BROKERS,
 });
 
+const TOPICS = ['digests'];
+
 let producerPromise: Promise<Producer> | null = null;
 
 export function getProducer(): Promise<Producer> {
     if (!producerPromise) {
         producerPromise = (async () => {
+            // Ensure topics exist before producing
+            const admin = kafka.admin();
+            await admin.connect();
+            const existing = await admin.listTopics();
+            const missing = TOPICS.filter((t) => !existing.includes(t));
+            if (missing.length > 0) {
+                await admin.createTopics({
+                    topics: missing.map((topic) => ({ topic, numPartitions: 1, replicationFactor: 1 })),
+                });
+                console.log(`[Kafka] Created topics: ${missing.join(', ')}`);
+            }
+            await admin.disconnect();
+
             const p = kafka.producer();
             await p.connect();
             console.log('[Kafka] Producer connected');
