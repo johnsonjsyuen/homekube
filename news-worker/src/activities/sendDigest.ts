@@ -1,4 +1,4 @@
-import { getServiceToken, WHATSAPP_URL } from './whatsappClient.js';
+import { getProducer } from '../kafka.js';
 import { workflowMessagesSentTotal } from '../metrics.js';
 
 export interface SendDigestInput {
@@ -8,32 +8,36 @@ export interface SendDigestInput {
 }
 
 export async function sendDigest(input: SendDigestInput): Promise<void> {
-    const token = await getServiceToken();
+    const producer = await getProducer();
+    const failures: string[] = [];
 
     for (const subscriber of input.subscribers) {
         try {
-            const response = await fetch(`${WHATSAPP_URL}/api/send`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    userId: subscriber.userId,
-                    recipientPhone: subscriber.phone,
-                    message: input.digest,
-                }),
+            await producer.send({
+                topic: 'digests',
+                messages: [
+                    {
+                        key: subscriber.userId,
+                        value: JSON.stringify({
+                            userId: subscriber.userId,
+                            recipientPhone: subscriber.phone,
+                            message: input.digest,
+                            workflow: input.workflow ?? 'unknown',
+                            timestamp: new Date().toISOString(),
+                        }),
+                    },
+                ],
             });
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error(`[Send] Failed to send to ${subscriber.phone}: ${response.status} ${errorText}`);
-            } else {
-                console.log(`[Send] Digest sent to ${subscriber.phone}`);
-                workflowMessagesSentTotal.inc({ workflow: input.workflow ?? 'unknown' });
-            }
+            console.log(`[Send] Produced digest for ${subscriber.phone}`);
+            workflowMessagesSentTotal.inc({ workflow: input.workflow ?? 'unknown' });
         } catch (err) {
-            console.error(`[Send] Error sending to ${subscriber.phone}:`, err);
+            console.error(`[Send] Error producing digest for ${subscriber.phone}:`, err);
+            failures.push(subscriber.phone);
         }
+    }
+
+    if (failures.length > 0) {
+        throw new Error(`Failed to produce digest for ${failures.length} subscriber(s): ${failures.join(', ')}`);
     }
 }

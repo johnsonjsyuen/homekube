@@ -3,15 +3,7 @@ import QRCode from 'qrcode';
 import type { Pool } from 'pg';
 import type { SessionManager } from '../session-manager.js';
 import { resolveUserId, getCallerUserId, isServiceAccount, AuthorizationError, type TokenPayload } from '../auth.js';
-
-function phoneToJid(phone: string): string {
-    // Strip non-digits, normalize AU local numbers, and add @s.whatsapp.net
-    let digits = phone.replace(/\D/g, '');
-    if (digits.startsWith('0') && digits.length === 10) {
-        digits = '61' + digits.slice(1);
-    }
-    return `${digits}@s.whatsapp.net`;
-}
+import { phoneToJid } from '../utils.js';
 
 export function createRestRouter(pool: Pool, sessionManager: SessionManager): Router {
     const router = Router();

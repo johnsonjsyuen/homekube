@@ -44,6 +44,8 @@ spec:
           value: "homekube"
         - name: KEYCLOAK_AUDIENCE
           value: "tts"
+        - name: KAFKA_BROKERS
+          value: "tansu:9092"
         volumeMounts:
         - name: storage
           mountPath: /app/storage

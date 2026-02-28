@@ -1,4 +1,5 @@
 use crate::inference::KokoroModel;
+use crate::kafka::KafkaProducer;
 use jsonwebtoken::DecodingKey;
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
@@ -14,6 +15,7 @@ pub struct AppState {
     pub keycloak_realm: String,
     pub keycloak_audience: String,
     pub kokoro_model: Option<Arc<KokoroModel>>,
+    pub kafka_producer: Option<Arc<KafkaProducer>>,
 }
 
 #[derive(Default)]

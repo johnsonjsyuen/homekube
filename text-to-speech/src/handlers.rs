@@ -1,3 +1,5 @@
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use crate::auth::AuthenticatedUser;
 use crate::metrics as metric_names;
 use crate::state::AppState;
@@ -19,6 +21,7 @@ use uuid::Uuid;
 #[serde(tag = "status", rename_all = "lowercase")]
 #[allow(dead_code)]
 enum JobStatusResponse {
+    Pending,
     Processing,
     Completed,
     Error { message: String },
@@ -85,13 +88,16 @@ pub async fn generate_speech(
     tracing::info!(speed = %speed, voice = %voice, text_size_bytes = text_bytes.len(), "Processing TTS request");
 
     let job_id = Uuid::new_v4();
+    let use_kafka = state.kafka_producer.is_some();
+    let initial_status = if use_kafka { "pending" } else { "processing" };
 
     // Insert into DB with user info
-    tracing::info!(job_id = %job_id, username = %user.username, "Creating job in database");
+    tracing::info!(job_id = %job_id, username = %user.username, status = initial_status, "Creating job in database");
     sqlx::query(
-        "INSERT INTO jobs (id, status, username, voice, speed, input_filename) VALUES ($1, 'processing', $2, $3, $4, $5)"
+        "INSERT INTO jobs (id, status, username, voice, speed, input_filename) VALUES ($1, $2, $3, $4, $5, $6)"
     )
         .bind(job_id)
+        .bind(initial_status)
         .bind(&user.username)
         .bind(&voice)
         .bind(&speed)
@@ -104,49 +110,74 @@ pub async fn generate_speech(
         })?;
 
     metrics::counter!(metric_names::TTS_JOBS_TOTAL, "status" => "queued").increment(1);
-    metrics::gauge!(metric_names::TTS_ACTIVE_JOBS).increment(1);
 
-    let pool = state.pool.clone();
-    let storage_path = state.storage_path.clone();
-
-    tokio::task::spawn_blocking(move || {
-        let rt = tokio::runtime::Handle::current();
-        tracing::info!(job_id = %job_id, "Starting TTS processing in background");
-        if let Err(e) = process_tts(
-            pool.clone(),
-            job_id,
-            text_bytes,
-            speed,
+    if let Some(ref producer) = state.kafka_producer {
+        // Kafka path: produce job message, consumer will process it
+        let msg = crate::kafka::TtsJobMessage {
+            job_id: job_id.to_string(),
+            username: user.username.clone(),
+            text_base64: BASE64.encode(&text_bytes),
             voice,
-            storage_path,
-            &rt,
-        ) {
-            tracing::error!(job_id = %job_id, error = %e, "TTS processing failed");
-            metrics::counter!(metric_names::TTS_JOBS_TOTAL, "status" => "failed").increment(1);
-            metrics::gauge!(metric_names::TTS_ACTIVE_JOBS).decrement(1);
-            rt.block_on(async {
-                let _ = sqlx::query(
-                    "UPDATE jobs SET status = 'error', error_message = $1 WHERE id = $2",
-                )
-                .bind(&e)
+            speed,
+            input_filename,
+            timestamp: Utc::now().to_rfc3339(),
+        };
+        if let Err(e) = producer.produce_tts_job(&msg).await {
+            tracing::error!(job_id = %job_id, error = %e, "Failed to produce TTS job to Kafka");
+            // Clean up orphaned pending row
+            let _ = sqlx::query("UPDATE jobs SET status = 'error', error_message = $1 WHERE id = $2")
+                .bind(format!("Kafka produce failed: {}", e))
                 .bind(job_id)
-                .execute(&pool)
+                .execute(&state.pool)
                 .await;
-            });
-        } else {
-            tracing::info!(job_id = %job_id, "TTS processing completed successfully");
-            metrics::counter!(metric_names::TTS_JOBS_TOTAL, "status" => "completed").increment(1);
-            metrics::gauge!(metric_names::TTS_ACTIVE_JOBS).decrement(1);
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
         }
-    });
+    } else {
+        // Fallback: direct processing via spawn_blocking
+        metrics::gauge!(metric_names::TTS_ACTIVE_JOBS).increment(1);
+
+        let pool = state.pool.clone();
+        let storage_path = state.storage_path.clone();
+
+        tokio::task::spawn_blocking(move || {
+            let rt = tokio::runtime::Handle::current();
+            tracing::info!(job_id = %job_id, "Starting TTS processing in background");
+            if let Err(e) = process_tts(
+                pool.clone(),
+                job_id,
+                text_bytes.to_vec(),
+                speed,
+                voice,
+                storage_path,
+                &rt,
+            ) {
+                tracing::error!(job_id = %job_id, error = %e, "TTS processing failed");
+                metrics::counter!(metric_names::TTS_JOBS_TOTAL, "status" => "failed").increment(1);
+                metrics::gauge!(metric_names::TTS_ACTIVE_JOBS).decrement(1);
+                rt.block_on(async {
+                    let _ = sqlx::query(
+                        "UPDATE jobs SET status = 'error', error_message = $1 WHERE id = $2",
+                    )
+                    .bind(&e)
+                    .bind(job_id)
+                    .execute(&pool)
+                    .await;
+                });
+            } else {
+                tracing::info!(job_id = %job_id, "TTS processing completed successfully");
+                metrics::counter!(metric_names::TTS_JOBS_TOTAL, "status" => "completed").increment(1);
+                metrics::gauge!(metric_names::TTS_ACTIVE_JOBS).decrement(1);
+            }
+        });
+    }
 
     Ok(Json(serde_json::json!({ "id": job_id.to_string() })))
 }
 
-fn process_tts(
+pub fn process_tts(
     pool: Pool<Postgres>,
     job_id: Uuid,
-    text_bytes: axum::body::Bytes,
+    text_bytes: Vec<u8>,
     speed: String,
     voice: String,
     storage_path: String,
@@ -441,6 +472,7 @@ pub async fn check_status(
     tracing::debug!(job_id = %id, status = %status, "Job status retrieved");
 
     match status.as_str() {
+        "pending" => Json(JobStatusResponse::Pending).into_response(),
         "processing" => Json(JobStatusResponse::Processing).into_response(),
         "error" => {
             let msg: String = row.get("error_message");

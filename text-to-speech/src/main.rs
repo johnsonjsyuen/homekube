@@ -2,6 +2,7 @@ mod auth;
 mod cleanup;
 mod handlers;
 mod inference;
+mod kafka;
 mod metrics;
 mod phonemizer;
 mod state;
@@ -58,6 +59,25 @@ async fn main() {
         .await
         .expect("Failed to run migrations");
 
+    // Connect Kafka producer (optional — if KAFKA_BROKERS not set, fall back to spawn_blocking)
+    let kafka_broker = std::env::var("KAFKA_BROKERS").ok();
+    let kafka_producer = match &kafka_broker {
+        Some(broker) => match kafka::KafkaProducer::new(broker).await {
+            Ok(p) => {
+                tracing::info!("Kafka producer ready");
+                Some(Arc::new(p))
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to connect Kafka producer, falling back to spawn_blocking");
+                None
+            }
+        },
+        None => {
+            tracing::info!("KAFKA_BROKERS not set, using spawn_blocking fallback");
+            None
+        }
+    };
+
     let state = AppState {
         pool: pool.clone(),
         storage_path,
@@ -66,6 +86,7 @@ async fn main() {
         keycloak_realm,
         keycloak_audience,
         kokoro_model,
+        kafka_producer,
     };
 
     // Spawn cleanup task
@@ -81,6 +102,15 @@ async fn main() {
             }
         }
     });
+
+    // Spawn Kafka TTS consumer (if broker configured)
+    if let Some(broker) = kafka_broker {
+        let consumer_pool = pool.clone();
+        let consumer_storage = state.storage_path.clone();
+        tokio::spawn(async move {
+            kafka::start_tts_consumer(broker, consumer_pool, consumer_storage).await;
+        });
+    }
 
     // Routes requiring auth middleware
     let authed_routes = Router::new()

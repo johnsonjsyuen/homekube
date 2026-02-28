@@ -6,6 +6,7 @@ import { SessionManager } from './session-manager.js';
 import { createRestRouter } from './routes/rest.js';
 import { setupWebSocket } from './routes/ws.js';
 import { register, httpRequestsTotal, httpRequestDurationSeconds } from './metrics.js';
+import { startDigestConsumer, disconnectConsumer } from './kafka-consumer.js';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
@@ -20,6 +21,13 @@ async function main() {
 
     // Restore existing sessions
     await sessionManager.restoreAllSessions();
+
+    // Start Kafka digest consumer
+    if (process.env.KAFKA_BROKERS) {
+        startDigestConsumer(sessionManager).catch((err) => {
+            console.error('[Kafka] Failed to start digest consumer:', err);
+        });
+    }
 
     // Create Express app
     const app = express();
@@ -59,6 +67,12 @@ async function main() {
 
     // Setup WebSocket handler
     setupWebSocket(server, pool, sessionManager);
+
+    process.on('SIGTERM', async () => {
+        console.log('[Server] SIGTERM received, shutting down...');
+        await disconnectConsumer();
+        process.exit(0);
+    });
 
     // Start server
     server.listen(PORT, '0.0.0.0', () => {
