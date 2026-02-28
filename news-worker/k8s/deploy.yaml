@@ -49,6 +49,8 @@ spec:
           value: "postgres://$(WORKFLOWS_DB_USER):$(WORKFLOWS_DB_PASSWORD)@workflows-db-rw.temporal.svc.cluster.local:5432/workflows"
         - name: WHATSAPP_URL
           value: "http://whatsapp.default.svc.cluster.local"
+        - name: KAFKA_BROKERS
+          value: "tansu.default.svc.cluster.local:9092"
         - name: CLAUDE_CODE_NAMESPACE
           value: "default"
         - name: CLAUDE_CODE_LABEL

@@ -6,11 +6,15 @@ import { authMiddleware } from './auth.js';
 import { createRouter } from './routes.js';
 import pool from './db.js';
 import { register, httpRequestsTotal, httpRequestDurationSeconds } from './metrics.js';
+import { getProducer, disconnectProducer } from './kafka.js';
 
 async function main() {
     // Run database migrations
     await runMigrations();
     console.log('[Server] Migrations complete');
+
+    await getProducer();
+    console.log('[Server] Kafka producer ready');
 
     // Start Express server
     const app = express();
@@ -53,6 +57,12 @@ async function main() {
         activities,
         taskQueue: 'news-digest-queue',
         connection,
+    });
+
+    process.on('SIGTERM', async () => {
+        console.log('[Server] SIGTERM received, shutting down...');
+        await disconnectProducer();
+        process.exit(0);
     });
 
     console.log('[Worker] Starting news-digest worker...');

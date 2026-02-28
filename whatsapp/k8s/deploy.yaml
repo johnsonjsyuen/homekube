@@ -42,6 +42,8 @@ spec:
           value: "homekube"
         - name: KEYCLOAK_AUDIENCE
           value: "whatsapp"
+        - name: KAFKA_BROKERS
+          value: "tansu:9092"
         resources:
           requests:
             memory: "256Mi"
