@@ -129,6 +129,19 @@ All converted count panels follow this pattern:
 }
 ```
 
+## Root Cause: Missing Custom Metrics (TTS + STT)
+
+TTS and STT dashboards showed "No data" on all custom business metric panels (jobs, transcriptions, durations, active sessions). The root cause was a `metrics` crate version mismatch:
+
+- `Cargo.toml` declared `metrics = "0.22"` (resolves to `0.22.x`)
+- `axum-prometheus = "0.7"` depends on `metrics 0.23.x`
+- Cargo compiled BOTH versions as separate crates
+- `axum-prometheus` installed a global recorder for `metrics 0.23`
+- App code `metrics::counter!()` calls used the `0.22` facade, hitting a noop recorder
+- Custom metrics silently dropped; only HTTP metrics (recorded by axum-prometheus middleware) appeared
+
+**Fix:** Changed `metrics = "0.22"` to `metrics = "0.23"` in both `text-to-speech/Cargo.toml` and `speech-to-text/Cargo.toml`, then rebuilt Docker images.
+
 ## Anti-Patterns (DO NOT)
 
 | Don't | Do Instead | Why |
@@ -139,6 +152,7 @@ All converted count panels follow this pattern:
 | Use line charts for discrete count events | Use `drawStyle: "bars"` | Lines imply continuous values; bars show discrete counts |
 | Set `interval` different from `increase()` window | Match `"interval": "1h"` with `increase()[1h]` | Mismatched intervals cause double-counting or gaps |
 | Use `$__rate_interval` with `increase()` | Use explicit `[1h]` window | `$__rate_interval` is designed for `rate()`, not `increase()` |
+| Use a different `metrics` crate version than `axum-prometheus` | Match the version axum-prometheus depends on | Cargo compiles both as separate crates; custom metrics hit noop recorder |
 
 ## References
 
