@@ -1,0 +1,177 @@
+apiVersion: oss.grafana.crossplane.io/v1alpha1
+kind: Dashboard
+metadata:
+  name: news-worker
+spec:
+  forProvider:
+    folderRef:
+      name: homekube
+    configJson: |
+      {
+        "title": "News Worker",
+        "uid": "homekube-news-worker",
+        "tags": ["homekube", "news-worker"],
+        "timezone": "browser",
+        "refresh": "30s",
+        "time": { "from": "now-1h", "to": "now" },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Workflow Runs (24h)",
+            "type": "stat",
+            "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
+            "targets": [
+              {
+                "expr": "sum(increase(workflow_runs_total[24h]))",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+              }
+            },
+            "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
+          },
+          {
+            "id": 2,
+            "title": "Success Rate %",
+            "type": "gauge",
+            "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 },
+            "targets": [
+              {
+                "expr": "sum(increase(workflow_runs_total{status=\"success\"}[24h])) / sum(increase(workflow_runs_total[24h])) * 100",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "min": 0,
+                "max": 100,
+                "unit": "percent",
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 80 }, { "color": "green", "value": 95 }] }
+              }
+            }
+          },
+          {
+            "id": 3,
+            "title": "Runs by Status/Workflow",
+            "type": "timeseries",
+            "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+            "targets": [
+              {
+                "expr": "sum by (workflow, status) (rate(workflow_runs_total[5m]))",
+                "legendFormat": "{{workflow}} - {{status}}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ops",
+                "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" } }
+              }
+            }
+          },
+          {
+            "id": 4,
+            "title": "Workflow Duration p50/p95",
+            "type": "timeseries",
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.50, sum by (le, workflow) (rate(workflow_duration_seconds_bucket[5m])))",
+                "legendFormat": "{{workflow}} p50",
+                "refId": "A"
+              },
+              {
+                "expr": "histogram_quantile(0.95, sum by (le, workflow) (rate(workflow_duration_seconds_bucket[5m])))",
+                "legendFormat": "{{workflow}} p95",
+                "refId": "B"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s",
+                "custom": { "fillOpacity": 10 }
+              }
+            }
+          },
+          {
+            "id": 5,
+            "title": "Articles Fetched",
+            "type": "timeseries",
+            "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
+            "targets": [
+              {
+                "expr": "sum by (workflow) (rate(workflow_articles_fetched_total[5m]))",
+                "legendFormat": "{{workflow}}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ops",
+                "custom": { "fillOpacity": 20 }
+              }
+            }
+          },
+          {
+            "id": 6,
+            "title": "Messages Sent",
+            "type": "timeseries",
+            "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
+            "targets": [
+              {
+                "expr": "sum by (workflow) (rate(workflow_messages_sent_total[5m]))",
+                "legendFormat": "{{workflow}}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ops",
+                "custom": { "fillOpacity": 20 }
+              }
+            }
+          },
+          {
+            "id": 7,
+            "title": "HTTP Request Rate by Status",
+            "type": "timeseries",
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+            "targets": [
+              {
+                "expr": "sum by (status) (rate(http_requests_total{job=\"news-worker\"}[5m]))",
+                "legendFormat": "{{status}}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps",
+                "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" } }
+              }
+            }
+          },
+          {
+            "id": 8,
+            "title": "HTTP Latency p95",
+            "type": "timeseries",
+            "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum by (le, path) (rate(http_request_duration_seconds_bucket{job=\"news-worker\"}[5m])))",
+                "legendFormat": "{{path}}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s",
+                "custom": { "fillOpacity": 10 }
+              }
+            }
+          }
+        ],
+        "schemaVersion": 39
+      }
