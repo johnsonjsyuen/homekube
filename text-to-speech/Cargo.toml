@@ -24,7 +24,7 @@ tower-http = { version = "0.5", features = ["cors"] }
 zip = "2"
 byteorder = "1"
 axum-prometheus = "0.7"
-metrics = "0.22"
+metrics = "0.23"
 
 [dev-dependencies]
 reqwest = { version = "0.12", features = ["blocking", "json", "multipart"] }
