@@ -1,0 +1,7 @@
+apiVersion: oss.grafana.crossplane.io/v1alpha1
+kind: Folder
+metadata:
+  name: homekube
+spec:
+  forProvider:
+    title: Homekube

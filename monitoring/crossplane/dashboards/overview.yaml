@@ -1,0 +1,293 @@
+apiVersion: oss.grafana.crossplane.io/v1alpha1
+kind: Dashboard
+metadata:
+  name: overview
+spec:
+  forProvider:
+    folderRef:
+      name: homekube
+    configJson: |
+      {
+        "title": "Homekube Overview",
+        "uid": "homekube-overview",
+        "tags": ["homekube"],
+        "timezone": "browser",
+        "refresh": "30s",
+        "time": { "from": "now-1h", "to": "now" },
+        "panels": [
+          {
+            "id": 100,
+            "title": "Service Health",
+            "type": "row",
+            "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+            "collapsed": false
+          },
+          {
+            "id": 1,
+            "title": "Text-to-Speech",
+            "type": "stat",
+            "gridPos": { "h": 3, "w": 6, "x": 0, "y": 1 },
+            "targets": [
+              {
+                "expr": "up{job=\"text-to-speech\"}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [
+                  { "type": "value", "options": { "0": { "text": "Down", "color": "red" }, "1": { "text": "Up", "color": "green" } } }
+                ],
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+              }
+            },
+            "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
+          },
+          {
+            "id": 2,
+            "title": "Speech-to-Text",
+            "type": "stat",
+            "gridPos": { "h": 3, "w": 6, "x": 6, "y": 1 },
+            "targets": [
+              {
+                "expr": "up{job=\"speech-to-text\"}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [
+                  { "type": "value", "options": { "0": { "text": "Down", "color": "red" }, "1": { "text": "Up", "color": "green" } } }
+                ],
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+              }
+            },
+            "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
+          },
+          {
+            "id": 3,
+            "title": "WhatsApp",
+            "type": "stat",
+            "gridPos": { "h": 3, "w": 6, "x": 12, "y": 1 },
+            "targets": [
+              {
+                "expr": "up{job=\"whatsapp\"}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [
+                  { "type": "value", "options": { "0": { "text": "Down", "color": "red" }, "1": { "text": "Up", "color": "green" } } }
+                ],
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+              }
+            },
+            "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
+          },
+          {
+            "id": 4,
+            "title": "News Worker",
+            "type": "stat",
+            "gridPos": { "h": 3, "w": 6, "x": 18, "y": 1 },
+            "targets": [
+              {
+                "expr": "up{job=\"news-worker\"}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [
+                  { "type": "value", "options": { "0": { "text": "Down", "color": "red" }, "1": { "text": "Up", "color": "green" } } }
+                ],
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+              }
+            },
+            "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
+          },
+          {
+            "id": 101,
+            "title": "Activity (24h)",
+            "type": "row",
+            "gridPos": { "h": 1, "w": 24, "x": 0, "y": 4 },
+            "collapsed": false
+          },
+          {
+            "id": 5,
+            "title": "TTS Jobs (24h)",
+            "type": "stat",
+            "gridPos": { "h": 4, "w": 6, "x": 0, "y": 5 },
+            "targets": [
+              {
+                "expr": "round(sum(increase(tts_jobs_total[24h])))",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "decimals": 0,
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+              }
+            },
+            "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
+          },
+          {
+            "id": 6,
+            "title": "Transcriptions (24h)",
+            "type": "stat",
+            "gridPos": { "h": 4, "w": 6, "x": 6, "y": 5 },
+            "targets": [
+              {
+                "expr": "round(sum(increase(stt_transcriptions_total[24h])))",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "decimals": 0,
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+              }
+            },
+            "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
+          },
+          {
+            "id": 7,
+            "title": "WhatsApp Messages (24h)",
+            "type": "stat",
+            "gridPos": { "h": 4, "w": 6, "x": 12, "y": 5 },
+            "targets": [
+              {
+                "expr": "round(sum(increase(whatsapp_messages_sent_total[24h])) + sum(increase(whatsapp_messages_received_total[24h])))",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "decimals": 0,
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+              }
+            },
+            "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
+          },
+          {
+            "id": 8,
+            "title": "Workflow Runs (24h)",
+            "type": "stat",
+            "gridPos": { "h": 4, "w": 6, "x": 18, "y": 5 },
+            "targets": [
+              {
+                "expr": "round(sum(increase(workflow_runs_total[24h])))",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "decimals": 0,
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+              }
+            },
+            "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
+          },
+          {
+            "id": 102,
+            "title": "Resource Usage",
+            "type": "row",
+            "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+            "collapsed": false
+          },
+          {
+            "id": 9,
+            "title": "Service CPU Usage (cores)",
+            "type": "timeseries",
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+            "targets": [
+              {
+                "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"default\",pod=~\"(text-to-speech|speech-to-text|whatsapp)-.*\",container!=\"\"}[5m]))",
+                "legendFormat": "{{pod}}",
+                "refId": "A"
+              },
+              {
+                "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"temporal\",pod=~\"news-worker-.*\",container!=\"\"}[5m]))",
+                "legendFormat": "{{pod}}",
+                "refId": "B"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "custom": { "fillOpacity": 20 }
+              }
+            }
+          },
+          {
+            "id": 10,
+            "title": "Service Memory Usage",
+            "type": "timeseries",
+            "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+            "targets": [
+              {
+                "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"default\",pod=~\"(text-to-speech|speech-to-text|whatsapp)-.*\",container!=\"\"})",
+                "legendFormat": "{{pod}}",
+                "refId": "A"
+              },
+              {
+                "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"temporal\",pod=~\"news-worker-.*\",container!=\"\"})",
+                "legendFormat": "{{pod}}",
+                "refId": "B"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "bytes",
+                "custom": { "fillOpacity": 20 }
+              }
+            }
+          },
+          {
+            "id": 103,
+            "title": "Errors (24h)",
+            "type": "row",
+            "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+            "collapsed": false
+          },
+          {
+            "id": 11,
+            "title": "HTTP Errors (24h)",
+            "type": "stat",
+            "gridPos": { "h": 4, "w": 6, "x": 0, "y": 19 },
+            "targets": [
+              {
+                "expr": "round((sum(increase(axum_http_requests_total{status=~\"[45]..\"}[24h])) or vector(0)) + (sum(increase(http_requests_total{status=~\"[45]..\"}[24h])) or vector(0)))",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "decimals": 0,
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 }] }
+              }
+            },
+            "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
+          },
+          {
+            "id": 12,
+            "title": "Failed Workflows (24h)",
+            "type": "stat",
+            "gridPos": { "h": 4, "w": 6, "x": 6, "y": 19 },
+            "targets": [
+              {
+                "expr": "round(sum(increase(workflow_runs_total{status=\"failed\"}[24h])))",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "decimals": 0,
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
+              }
+            },
+            "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" }
+          }
+        ],
+        "schemaVersion": 39
+      }
