@@ -36,7 +36,7 @@ impl KafkaProducer {
         let client = ClientBuilder::new(vec![broker.to_string()]).build().await?;
 
         // Try to create topic (ignore error if it already exists)
-        let controller = client.controller_client().await?;
+        let controller = client.controller_client()?;
         match controller.create_topic(TOPIC, 1, 1, 5_000).await {
             Ok(()) => tracing::info!("Created Kafka topic '{}'", TOPIC),
             Err(e) => tracing::debug!(error = %e, "Topic '{}' creation skipped (may already exist)", TOPIC),
