@@ -1,8 +1,10 @@
 import { getServiceToken, WHATSAPP_URL } from './whatsappClient.js';
+import { workflowMessagesSentTotal } from '../metrics.js';
 
 export interface SendDigestInput {
     digest: string;
     subscribers: Array<{ userId: string; phone: string }>;
+    workflow?: string;
 }
 
 export async function sendDigest(input: SendDigestInput): Promise<void> {
@@ -28,6 +30,7 @@ export async function sendDigest(input: SendDigestInput): Promise<void> {
                 console.error(`[Send] Failed to send to ${subscriber.phone}: ${response.status} ${errorText}`);
             } else {
                 console.log(`[Send] Digest sent to ${subscriber.phone}`);
+                workflowMessagesSentTotal.inc({ workflow: input.workflow ?? 'unknown' });
             }
         } catch (err) {
             console.error(`[Send] Error sending to ${subscriber.phone}:`, err);

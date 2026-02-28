@@ -1,0 +1,63 @@
+# Helm values for kube-prometheus-stack (homelab-sized)
+# Chart: prometheus-community/kube-prometheus-stack
+
+# Prometheus settings
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 250m
+      limits:
+        memory: 2Gi
+    # Watch ServiceMonitors in ALL namespaces (services in default + temporal)
+    serviceMonitorNamespaceSelector: {}
+    serviceMonitorSelector: {}
+    # Watch PodMonitors in ALL namespaces (CNPG PodMonitors)
+    podMonitorNamespaceSelector: {}
+    podMonitorSelector: {}
+
+# Grafana settings
+grafana:
+  initChownData:
+    enabled: false
+  persistence:
+    enabled: true
+    size: 5Gi
+  grafana.ini:
+    server:
+      root_url: "https://grafana.johnsonyuen.com"
+    auth.generic_oauth:
+      enabled: true
+      name: Keycloak
+      client_id: grafana
+      client_secret: ${GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET}
+      scopes: openid profile email
+      auth_url: https://auth.johnsonyuen.com/realms/homekube/protocol/openid-connect/auth
+      token_url: http://keycloak.keycloak.svc.cluster.local/realms/homekube/protocol/openid-connect/token
+      api_url: http://keycloak.keycloak.svc.cluster.local/realms/homekube/protocol/openid-connect/userinfo
+      role_attribute_path: "contains(realm_access.roles[*], 'grafana-admin') && 'Admin' || 'Viewer'"
+      allow_assign_grafana_admin: true
+  envFromSecret: grafana-keycloak-secret
+
+# Disable AlertManager (homelab, not needed yet)
+alertmanager:
+  enabled: false
+
+# Disable components not accessible on k3s
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false

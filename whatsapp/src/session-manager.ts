@@ -4,6 +4,7 @@ import { Boom } from '@hapi/boom';
 import type { Pool } from 'pg';
 import pino from 'pino';
 import { usePostgresAuthState } from './db-auth-state.js';
+import { messagesSentTotal, messagesReceivedTotal, activeSessions, sessionConnectsTotal } from './metrics.js';
 
 const logger = pino({ level: 'silent' });
 
@@ -11,6 +12,7 @@ interface UserSession {
     socket: WASocket;
     messageListeners: Set<(msg: IncomingMessage) => void>;
     latestQr: string | null;
+    wasConnected: boolean;
 }
 
 export interface IncomingMessage {
@@ -57,6 +59,7 @@ export class SessionManager {
             socket,
             messageListeners: new Set(),
             latestQr: null,
+            wasConnected: false,
         };
         this.sessions.set(userId, session);
         this.pairingSessions.add(userId);
@@ -98,6 +101,7 @@ export class SessionManager {
             socket,
             messageListeners: new Set(),
             latestQr: null,
+            wasConnected: false,
         };
         this.sessions.set(userId, session);
         this.pairingSessions.add(userId);
@@ -166,6 +170,12 @@ export class SessionManager {
 
             if (connection === 'open') {
                 console.log(`[Session] ${userId} connected`);
+                sessionConnectsTotal.inc({ status: 'success' });
+                const session = this.sessions.get(userId);
+                if (session && !session.wasConnected) {
+                    activeSessions.inc();
+                    session.wasConnected = true;
+                }
                 this.pairingSessions.delete(userId);
                 const jid = socket.user?.id;
                 await this.pool.query(
@@ -178,6 +188,13 @@ export class SessionManager {
             }
 
             if (connection === 'close') {
+                const session = this.sessions.get(userId);
+                if (session?.wasConnected) {
+                    activeSessions.dec();
+                    session.wasConnected = false;
+                } else {
+                    sessionConnectsTotal.inc({ status: 'failure' });
+                }
                 const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
                 const isPairing = this.pairingSessions.has(userId);
                 // Always reconnect on 515 (restart required) — this is expected after QR pairing
@@ -234,6 +251,8 @@ export class SessionManager {
                         : Date.now() / 1000,
                 };
 
+                messagesReceivedTotal.inc();
+
                 // Store in DB
                 await this.pool.query(
                     `INSERT INTO messages (user_id, direction, remote_jid, message_text, message_id, status, created_at)
@@ -264,6 +283,7 @@ export class SessionManager {
 
         const result = await session.socket.sendMessage(recipientJid, { text });
         const messageId = result?.key?.id || '';
+        messagesSentTotal.inc();
 
         // Store outbound message
         await this.pool.query(
@@ -305,6 +325,7 @@ export class SessionManager {
             socket,
             messageListeners: new Set(),
             latestQr: null,
+            wasConnected: false,
         };
         this.sessions.set(userId, session);
 

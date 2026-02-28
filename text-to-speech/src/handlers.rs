@@ -1,4 +1,5 @@
 use crate::auth::AuthenticatedUser;
+use crate::metrics as metric_names;
 use crate::state::AppState;
 use axum::{
     body::Body,
@@ -102,6 +103,9 @@ pub async fn generate_speech(
             (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
         })?;
 
+    metrics::counter!(metric_names::TTS_JOBS_TOTAL, "status" => "queued").increment(1);
+    metrics::gauge!(metric_names::TTS_ACTIVE_JOBS).increment(1);
+
     let pool = state.pool.clone();
     let storage_path = state.storage_path.clone();
 
@@ -118,6 +122,8 @@ pub async fn generate_speech(
             &rt,
         ) {
             tracing::error!(job_id = %job_id, error = %e, "TTS processing failed");
+            metrics::counter!(metric_names::TTS_JOBS_TOTAL, "status" => "failed").increment(1);
+            metrics::gauge!(metric_names::TTS_ACTIVE_JOBS).decrement(1);
             rt.block_on(async {
                 let _ = sqlx::query(
                     "UPDATE jobs SET status = 'error', error_message = $1 WHERE id = $2",
@@ -129,6 +135,8 @@ pub async fn generate_speech(
             });
         } else {
             tracing::info!(job_id = %job_id, "TTS processing completed successfully");
+            metrics::counter!(metric_names::TTS_JOBS_TOTAL, "status" => "completed").increment(1);
+            metrics::gauge!(metric_names::TTS_ACTIVE_JOBS).decrement(1);
         }
     });
 
@@ -145,6 +153,7 @@ fn process_tts(
     rt: &tokio::runtime::Handle,
 ) -> Result<(), String> {
     tracing::info!(job_id = %job_id, "Starting TTS processing");
+    let generation_start = std::time::Instant::now();
 
     // 1. Write text content to a temp file
     tracing::debug!(job_id = %job_id, "Creating temporary text file");
@@ -312,6 +321,8 @@ fn process_tts(
             ));
         }
     }
+
+    metrics::histogram!(metric_names::TTS_GENERATION_DURATION_SECONDS).record(generation_start.elapsed().as_secs_f64());
 
     let mp3_path_str = mp3_path.to_str().ok_or("Invalid MP3 path")?;
     tracing::info!(job_id = %job_id, wav_path = %wav_path, mp3_path = %mp3_path_str, "Executing ffmpeg to convert WAV to MP3");

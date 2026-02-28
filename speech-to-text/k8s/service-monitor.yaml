@@ -1,0 +1,13 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: speech-to-text
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: speech-to-text
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s

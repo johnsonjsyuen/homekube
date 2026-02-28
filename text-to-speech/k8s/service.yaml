@@ -3,10 +3,13 @@ kind: Service
 metadata:
   name: text-to-speech
   namespace: default
+  labels:
+    app: text-to-speech
 spec:
   selector:
     app: text-to-speech
   ports:
-  - protocol: TCP
+  - name: http
+    protocol: TCP
     port: 80
     targetPort: 3000

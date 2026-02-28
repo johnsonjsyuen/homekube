@@ -3,9 +3,12 @@ kind: Service
 metadata:
   name: news-worker
   namespace: temporal
+  labels:
+    app: news-worker
 spec:
   selector:
     app: news-worker
   ports:
-  - port: 80
+  - name: http
+    port: 80
     targetPort: 3000

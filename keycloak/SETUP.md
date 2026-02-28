@@ -211,6 +211,75 @@ kubectl get secret whatsapp-db-app -o json | \
   kubectl apply -f -
 ```
 
+## 7. Configure Grafana Client (for dashboard access with Keycloak login)
+
+Grafana uses its built-in OAuth2/OIDC support to authenticate users via Keycloak.
+
+### 7.1 Create Client
+
+1. Go to **Clients** in the left menu
+2. Click "Create client"
+
+### General Settings
+
+| Setting | Value |
+|---------|-------|
+| Client type | OpenID Connect |
+| Client ID | `grafana` |
+
+Click "Next"
+
+### Capability Config
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| Client authentication | **ON** | Confidential client — Grafana stores the secret server-side |
+| Authorization | OFF | Not needed |
+| Standard flow | **ON** | Required for browser-based login redirect |
+| Direct access grants | OFF | Not needed |
+| Service accounts roles | OFF | Not needed |
+
+Click "Next"
+
+### Login Settings
+
+| Setting | Value |
+|---------|-------|
+| Root URL | `https://grafana.johnsonyuen.com` |
+| Valid redirect URIs | `https://grafana.johnsonyuen.com/*` |
+| Valid post logout redirect URIs | `https://grafana.johnsonyuen.com/*` |
+| Web origins | `https://grafana.johnsonyuen.com` |
+
+Click "Save"
+
+### 7.2 Create `grafana-admin` Realm Role
+
+1. Go to **Realm roles** in the left menu
+2. Click **Create role**
+3. Set **Role name**: `grafana-admin`
+4. Set **Description**: `Maps to Grafana Admin org role`
+5. Click **Save**
+
+Assign this role to users who should have Grafana Admin access. All other authenticated users get Viewer access by default.
+
+### 7.3 Create Kubernetes Secret
+
+```bash
+# Get the client secret from Keycloak: Clients → grafana → Credentials tab
+kubectl create secret generic grafana-keycloak-secret \
+  --from-literal=GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=<SECRET_FROM_KEYCLOAK> \
+  -n monitoring
+```
+
+### 7.4 Cloudflare Tunnel Route
+
+Add a public hostname route in the Cloudflare dashboard:
+
+| Setting | Value |
+|---------|-------|
+| Subdomain | `grafana.johnsonyuen.com` |
+| Service | `http://grafana-proxy.default.svc.cluster.local` |
+
 ## Summary of Key Settings
 
 ```
