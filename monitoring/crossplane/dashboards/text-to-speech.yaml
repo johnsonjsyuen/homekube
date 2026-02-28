@@ -108,7 +108,7 @@ spec:
             "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
             "targets": [
               {
-                "expr": "histogram_quantile(0.95, sum by (le, endpoint) (rate(axum_http_request_duration_seconds_bucket{job=\"text-to-speech\"}[5m])))",
+                "expr": "histogram_quantile(0.95, sum by (le, endpoint) (rate(axum_http_requests_duration_seconds_bucket{job=\"text-to-speech\"}[5m])))",
                 "legendFormat": "{{endpoint}}",
                 "refId": "A"
               }
