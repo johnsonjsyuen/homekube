@@ -4,6 +4,7 @@
 //! using VAD-based segmentation and double buffering for continuous streaming.
 
 use crate::auth::{extract_token_from_query, validate_ws_token};
+use crate::metrics as metric_names;
 use crate::state::AppState;
 use crate::vad::{VadConfig, VadEvent, VadState};
 use axum::{
@@ -136,6 +137,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, token: Option<String>
     };
 
     tracing::info!(user = %user.username, "WebSocket connection authenticated");
+    metrics::gauge!(metric_names::STT_ACTIVE_SESSIONS).increment(1);
 
     let (client_sink, mut client_stream) = socket.split();
     let client_sink = Arc::new(tokio::sync::Mutex::new(client_sink));
@@ -230,6 +232,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, token: Option<String>
                                         if let Err(e) = segment_tx.send(segment).await {
                                             tracing::error!(error = %e, "Failed to send segment for transcription");
                                         }
+                                        metrics::counter!(metric_names::STT_AUDIO_SEGMENTS_TOTAL).increment(1);
 
                                         // Keep overlap for context
                                         if active_buffer.len() > OVERLAP_BYTES {
@@ -287,6 +290,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, token: Option<String>
                         if let Err(e) = segment_tx.send(segment).await {
                             tracing::error!(error = %e, "Failed to send segment");
                         }
+                        metrics::counter!(metric_names::STT_AUDIO_SEGMENTS_TOTAL).increment(1);
 
                         if active_buffer.len() > OVERLAP_BYTES {
                             active_buffer = active_buffer.split_off(active_buffer.len() - OVERLAP_BYTES);
@@ -313,6 +317,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, token: Option<String>
     let _ = transcription_task.await;
 
     tracing::info!(user = %user.username, "WebSocket session ended");
+    metrics::gauge!(metric_names::STT_ACTIVE_SESSIONS).decrement(1);
 }
 
 /// Background worker that processes audio segments and sends transcriptions
@@ -340,6 +345,8 @@ async fn transcription_worker(
             "Sending segment to Whisper"
         );
 
+        let transcription_start = std::time::Instant::now();
+
         match http_client.post(&whisper_url).json(&request).send().await {
             Ok(response) => {
                 if response.status().is_success() {
@@ -347,6 +354,10 @@ async fn transcription_worker(
                         Ok(whisper_response) => {
                             let text = whisper_response.text.trim().to_string();
                             if !text.is_empty() {
+                                metrics::counter!(metric_names::STT_TRANSCRIPTIONS_TOTAL).increment(1);
+                                metrics::histogram!(metric_names::STT_TRANSCRIPTION_DURATION_SECONDS)
+                                    .record(transcription_start.elapsed().as_secs_f64());
+
                                 let msg = ClientMessage::transcript(text.clone(), segment.is_final);
                                 let mut sink = client_sink.lock().await;
                                 if let Err(e) = sink

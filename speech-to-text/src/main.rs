@@ -1,4 +1,5 @@
 mod auth;
+mod metrics;
 mod state;
 mod transcribe;
 mod vad;
@@ -6,6 +7,7 @@ mod vad;
 use state::{AppState, JwksCache};
 
 use axum::{Router, routing::get};
+use axum_prometheus::PrometheusMetricLayer;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
@@ -36,10 +38,14 @@ async fn main() {
         .allow_methods(Any)
         .allow_headers(Any);
 
+    let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
+
     let app = Router::new()
         .route("/transcribe", get(transcribe::ws_handler))
         .route("/health", get(health_check))
+        .route("/metrics", get(|| async move { metric_handle.render() }))
         .layer(cors)
+        .layer(prometheus_layer)
         .with_state(state);
 
     tracing::info!("Starting Speech-to-Text server on 0.0.0.0:3000");

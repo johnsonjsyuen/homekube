@@ -1,0 +1,13 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: news-worker
+  namespace: temporal
+spec:
+  selector:
+    matchLabels:
+      app: news-worker
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s

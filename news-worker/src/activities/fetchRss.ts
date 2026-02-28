@@ -1,4 +1,5 @@
 import { XMLParser } from 'fast-xml-parser';
+import { workflowArticlesFetchedTotal } from '../metrics.js';
 
 export interface Headline {
     title: string;
@@ -48,5 +49,7 @@ export async function fetchRssHeadlines(): Promise<Headline[]> {
 
     // Sort by date descending, take top 20
     allItems.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
-    return allItems.slice(0, 20);
+    const result = allItems.slice(0, 20);
+    workflowArticlesFetchedTotal.inc({ workflow: 'news' }, result.length);
+    return result;
 }

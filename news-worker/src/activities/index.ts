@@ -8,3 +8,5 @@ export { fetchEconomistHeadlines } from './fetchEconomistRss.js';
 export { scrapeEconomistArticles } from './scrapeEconomistArticles.js';
 export { summariseEconomistWithClaude } from './summariseEconomistWithClaude.js';
 export { getEconomistSubscribers } from './getEconomistSubscribers.js';
+// Metrics
+export { recordWorkflowComplete } from './recordMetrics.js';

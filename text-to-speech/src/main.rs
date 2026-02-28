@@ -2,6 +2,7 @@ mod auth;
 mod cleanup;
 mod handlers;
 mod inference;
+mod metrics;
 mod phonemizer;
 mod state;
 mod ws_handler;
@@ -12,6 +13,7 @@ use axum::{
     Router, middleware,
     routing::{get, post},
 };
+use axum_prometheus::PrometheusMetricLayer;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -93,9 +95,14 @@ async fn main() {
     // WebSocket route - auth is handled via first message, not middleware
     let ws_routes = Router::new().route("/ws/live", get(ws_handler::ws_live_handler));
 
+    let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
+
     let app = Router::new()
         .merge(authed_routes)
         .merge(ws_routes)
+        .route("/health", get(|| async { "OK" }))
+        .route("/metrics", get(|| async move { metric_handle.render() }))
+        .layer(prometheus_layer)
         .with_state(state);
 
     tracing::info!("Starting TTS server on 0.0.0.0:3000");
