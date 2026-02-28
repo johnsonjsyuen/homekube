@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-scraper
+  namespace: temporal
+  labels:
+    app: web-scraper
+spec:
+  selector:
+    app: web-scraper
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000

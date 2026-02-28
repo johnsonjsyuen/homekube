@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-scraper
+  namespace: temporal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-scraper
+  template:
+    metadata:
+      labels:
+        app: web-scraper
+    spec:
+      serviceAccountName: web-scraper
+      containers:
+      - name: web-scraper
+        image: localhost:5000/web-scraper:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        env:
+        - name: TEMPORAL_ADDRESS
+          value: "temporal-frontend:7233"
+        - name: KEYCLOAK_URL
+          value: "http://keycloak.keycloak.svc.cluster.local"
+        - name: KEYCLOAK_REALM
+          value: "homekube"
+        - name: KEYCLOAK_CLIENT_ID
+          value: "web-scraper"
+        - name: KEYCLOAK_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: web-scraper-keycloak
+              key: client-secret
+              optional: true
+        - name: WEB_SCRAPER_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: web-scraper-db-app
+              key: username
+        - name: WEB_SCRAPER_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: web-scraper-db-app
+              key: password
+        - name: DATABASE_URL
+          value: "postgres://$(WEB_SCRAPER_DB_USER):$(WEB_SCRAPER_DB_PASSWORD)@web-scraper-db-rw.temporal.svc.cluster.local:5432/web_scraper"
+        - name: WHATSAPP_URL
+          value: "http://whatsapp.default.svc.cluster.local"
+        - name: KAFKA_BROKERS
+          value: "tansu.default.svc.cluster.local:9092"
+        - name: CLAUDE_CODE_NAMESPACE
+          value: "default"
+        - name: CLAUDE_CODE_LABEL
+          value: "app=claude-code"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
