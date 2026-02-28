@@ -1,4 +1,4 @@
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 WORKDIR /app
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
@@ -6,7 +6,7 @@ COPY . .
 RUN yarn build
 RUN yarn install --production --ignore-scripts --prefer-offline
 
-FROM node:20-slim
+FROM node:22-slim
 WORKDIR /app
 COPY --from=builder /app/build build/
 COPY --from=builder /app/node_modules node_modules/
