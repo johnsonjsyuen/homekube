@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: claude-code-api
+  namespace: default
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: claude-code-api
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
