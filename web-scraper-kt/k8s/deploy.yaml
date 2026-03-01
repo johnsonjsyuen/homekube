@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-scraper
+  namespace: temporal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-scraper
+  template:
+    metadata:
+      labels:
+        app: web-scraper
+    spec:
+      containers:
+      - name: web-scraper
+        image: localhost:5000/web-scraper:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        env:
+        - name: TEMPORAL_ADDRESS
+          value: "temporal-frontend:7233"
+        - name: KEYCLOAK_URL
+          value: "https://auth.johnsonyuen.com"
+        - name: KEYCLOAK_REALM
+          value: "homekube"
+        - name: KEYCLOAK_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: web-scraper-keycloak
+              key: client-secret
+              optional: true
+        - name: WEB_SCRAPER_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: web-scraper-db-app
+              key: username
+        - name: WEB_SCRAPER_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: web-scraper-db-app
+              key: password
+        - name: WHATSAPP_URL
+          value: "http://whatsapp.default.svc.cluster.local"
+        - name: KAFKA_BROKERS
+          value: "tansu.default.svc.cluster.local:9092"
+        - name: CLAUDE_API_URL
+          value: "http://claude-code-api.default.svc.cluster.local"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 3
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 2
+          periodSeconds: 10

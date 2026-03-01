@@ -15,8 +15,11 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
             headers: { 'Authorization': authHeader }
         });
 
-        const data = await response.json();
-        return json(data, { status: response.status });
+        const text = await response.text();
+        if (!text) {
+            return json({ error: 'Unauthorized' }, { status: response.status });
+        }
+        return json(JSON.parse(text), { status: response.status });
     } catch (e) {
         console.error('Error proxying to web-scraper runs:', e);
         return json({ error: 'Internal Server Error' }, { status: 500 });

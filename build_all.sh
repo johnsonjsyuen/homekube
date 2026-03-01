@@ -1,34 +1,25 @@
 #!/bin/bash
 set -e
 
-echo "Building Homepage..."
-cd homepage
-./build.sh
-cd ..
+services=(homepage text-to-speech speech-to-text whatsapp news-worker claude-code claude-code-api web-scraper-kt)
+pids=()
+failures=()
 
-echo "Building Text-to-Speech..."
-cd text-to-speech
-./build.sh
-cd ..
+for svc in "${services[@]}"; do
+  echo "Building ${svc}..."
+  (cd "$svc" && ./build.sh) &
+  pids+=($!)
+done
 
-echo "Building Speech-to-Text..."
-cd speech-to-text
-./build.sh
-cd ..
+for i in "${!pids[@]}"; do
+  if ! wait "${pids[$i]}"; then
+    failures+=("${services[$i]}")
+  fi
+done
 
-echo "Building WhatsApp..."
-cd whatsapp
-./build.sh
-cd ..
-
-echo "Building News Worker..."
-cd news-worker
-./build.sh
-cd ..
-
-echo "Building Claude Code..."
-cd claude-code
-./build.sh
-cd ..
+if [ ${#failures[@]} -gt 0 ]; then
+  echo "Build FAILED for: ${failures[*]}"
+  exit 1
+fi
 
 echo "All builds completed successfully!"

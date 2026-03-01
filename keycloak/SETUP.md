@@ -1,4 +1,4 @@
-# Keycloak Setup Guide for TTS Authentication
+# Keycloak Setup Guide
 
 ## 1. Create Realm
 
@@ -114,6 +114,22 @@ Repeat the same process for the STT service:
 8. Go to **Clients** → `homepage` → **Client scopes** tab
 9. Click **Add client scope** → Select `stt` → **Add** -> **Default**
 
+### 4.5 Add WhatsApp Audience
+
+Repeat the same process for the WhatsApp service:
+
+1. Go to **Client scopes** → **Create client scope**
+2. Set **Name**: `whatsapp`, **Type**: `Default`, click **Save**
+3. Go to **Mappers** tab → **Configure a new mapper** → **Audience**
+4. Set **Name**: `whatsapp-audience`
+5. Set **Included Custom Audience**: `whatsapp`
+6. Set **Add to access token**: **ON**
+7. Click **Save**
+8. Go to **Clients** → `homepage` → **Client scopes** tab
+9. Click **Add client scope** → Select `whatsapp` → **Add** -> **Default**
+
+> This scope also needs to be assigned to service account clients (`news-worker`, `web-scraper`) — see sections 6.4 and 7.4.
+
 ## 5. Configure WhatsApp Service Role (for cross-user access)
 
 Service accounts that need to send WhatsApp messages on behalf of users require the `whatsapp-service` realm role.
@@ -128,7 +144,7 @@ Service accounts that need to send WhatsApp messages on behalf of users require 
 
 ### 5.2 Assign to a Service Account Client
 
-1. Go to **Clients** → select the service client (e.g., `temporal-worker`)
+1. Go to **Clients** → select the service client (e.g., `web-scraper` or `news-worker`)
 2. Ensure **Client authentication**: ON and **Service accounts roles**: ON
 3. Go to the **Service account roles** tab
 4. Click **Assign role**
@@ -144,7 +160,7 @@ The role appears in the service account's JWT as:
 }
 ```
 
-Without this role, the `userId` parameter on `/api/send` and WebSocket `start_conversation` is rejected with 403 for cross-user requests.
+Without this role, `/api/sessions/lookup` is rejected with 403 `"Forbidden: service account required"`, and the `userId` parameter on `/api/send` and WebSocket `start_conversation` is rejected with 403 for cross-user requests.
 
 ## 6. Configure News Worker Client (for daily news digest)
 
@@ -189,7 +205,7 @@ This allows the news-worker to send messages on behalf of other users via the Wh
 1. Go to **Clients** → select `news-worker`
 2. Go to the **Client scopes** tab
 3. Click **Add client scope**
-4. Select `whatsapp` (if it exists as a scope) or ensure the `aud` claim includes `whatsapp`
+4. Select `whatsapp` (created in section 4.5)
 5. Click **Add** → **Default**
 
 ### 6.5 Create Kubernetes Secret
@@ -211,16 +227,69 @@ kubectl get secret whatsapp-db-app -o json | \
   kubectl apply -f -
 ```
 
-## 7. Configure Grafana Client (for dashboard access with Keycloak login)
+## 7. Configure Web Scraper Client (for on-demand web scraping)
 
-Grafana uses its built-in OAuth2/OIDC support to authenticate users via Keycloak.
+The web-scraper service needs a confidential client with service account access to look up WhatsApp sessions and send notifications on behalf of users.
 
 ### 7.1 Create Client
 
 1. Go to **Clients** in the left menu
 2. Click "Create client"
 
-### General Settings
+| Setting | Value | Notes |
+|---------|-------|-------|
+| Client type | OpenID Connect | |
+| Client ID | `web-scraper` | |
+
+Click "Next"
+
+### 7.2 Capability Config
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| Client authentication | **ON** | Confidential client with client secret |
+| Authorization | OFF | Not needed |
+| Standard flow | **ON** | Required for validating incoming user requests |
+| Direct access grants | OFF | Not needed |
+| Service accounts roles | **ON** | Required for client_credentials grant to WhatsApp API |
+
+Click "Next", then "Save"
+
+### 7.3 Assign WhatsApp Service Role
+
+1. Go to **Clients** → select `web-scraper`
+2. Go to the **Service account roles** tab
+3. Click **Assign role**
+4. Select `whatsapp-service`
+5. Click **Assign**
+
+This allows the web-scraper to look up WhatsApp sessions via `/api/sessions/lookup` and send notifications on behalf of users.
+
+### 7.4 Add WhatsApp Client Scope
+
+1. Go to **Clients** → select `web-scraper`
+2. Go to the **Client scopes** tab
+3. Click **Add client scope**
+4. Select `whatsapp` (created in section 4.5)
+5. Click **Add** → **Default**
+
+### 7.5 Create Kubernetes Secret
+
+```bash
+# Get the client secret from Keycloak: Clients → web-scraper → Credentials tab
+kubectl create secret generic web-scraper-keycloak \
+  --from-literal=client-secret=<SECRET_FROM_KEYCLOAK> \
+  -n temporal
+```
+
+## 8. Configure Grafana Client (for dashboard access with Keycloak login)
+
+Grafana uses its built-in OAuth2/OIDC support to authenticate users via Keycloak.
+
+### 8.1 Create Client
+
+1. Go to **Clients** in the left menu
+2. Click "Create client"
 
 | Setting | Value |
 |---------|-------|
@@ -229,7 +298,7 @@ Grafana uses its built-in OAuth2/OIDC support to authenticate users via Keycloak
 
 Click "Next"
 
-### Capability Config
+### 8.2 Capability Config
 
 | Setting | Value | Notes |
 |---------|-------|-------|
@@ -241,7 +310,7 @@ Click "Next"
 
 Click "Next"
 
-### Login Settings
+### 8.3 Login Settings
 
 | Setting | Value |
 |---------|-------|
@@ -252,7 +321,7 @@ Click "Next"
 
 Click "Save"
 
-### 7.2 Create `grafana-admin` Realm Role
+### 8.4 Create `grafana-admin` Realm Role
 
 1. Go to **Realm roles** in the left menu
 2. Click **Create role**
@@ -262,7 +331,7 @@ Click "Save"
 
 Assign this role to users who should have Grafana Admin access. All other authenticated users get Viewer access by default.
 
-### 7.3 Create Kubernetes Secret
+### 8.5 Create Kubernetes Secret
 
 ```bash
 # Get the client secret from Keycloak: Clients → grafana → Credentials tab
@@ -271,7 +340,7 @@ kubectl create secret generic grafana-keycloak-secret \
   -n monitoring
 ```
 
-### 7.4 Cloudflare Tunnel Route
+### 8.6 Cloudflare Tunnel Route
 
 Add a public hostname route in the Cloudflare dashboard:
 
@@ -280,24 +349,55 @@ Add a public hostname route in the Cloudflare dashboard:
 | Subdomain | `grafana.johnsonyuen.com` |
 | Service | `http://grafana-proxy.default.svc.cluster.local` |
 
-## Summary of Key Settings
+## Summary
 
-```
-Realm: homekube
-Client ID: homepage
-Client Type: Public (no authentication)
-Flow: Standard flow with PKCE (automatic with keycloak-js)
-```
+### Realm
 
-## Why These Settings?
+| Setting | Value |
+|---------|-------|
+| Realm name | `homekube` |
+| Internal URL | `http://keycloak.keycloak.svc.cluster.local` |
+| External URL | `https://auth.johnsonyuen.com` |
 
-- **Client authentication OFF**: The frontend runs in the browser and cannot securely store a client secret. Public clients use PKCE instead.
+### Clients
 
-- **Standard flow ON**: This is the OAuth2 Authorization Code flow. The user is redirected to Keycloak to login, then redirected back with a code that gets exchanged for tokens.
+| Client ID | Type | Flow | Service Accounts | Namespace |
+|-----------|------|------|-----------------|-----------|
+| `homepage` | Public | Standard (PKCE) | No | N/A (browser) |
+| `news-worker` | Confidential | Client credentials | Yes | `temporal` |
+| `web-scraper` | Confidential | Standard + Client credentials | Yes | `temporal` |
+| `grafana` | Confidential | Standard | No | `monitoring` |
 
-- **Direct access grants OFF**: This would allow sending username/password directly via API. It's less secure and not needed since we use the standard flow.
+### Client Scopes (Audiences)
 
-- **Web origins `+`**: The `+` means "allow all origins that match the redirect URIs". This enables CORS for token requests from the browser.
+| Scope | Audience | Assigned to |
+|-------|----------|-------------|
+| `tts` | `tts` | `homepage` |
+| `stt` | `stt` | `homepage` |
+| `whatsapp` | `whatsapp` | `homepage`, `news-worker`, `web-scraper` |
+
+### Realm Roles
+
+| Role | Purpose | Assigned to |
+|------|---------|-------------|
+| `whatsapp-service` | Cross-user WhatsApp access | `news-worker`, `web-scraper` |
+| `grafana-admin` | Grafana Admin org role | Individual users |
+
+### Backend Services (token validation only, no Keycloak client needed)
+
+| Service | Validates Audience | Namespace |
+|---------|--------------------|-----------|
+| `text-to-speech` | `tts` | `default` |
+| `speech-to-text` | `stt` | `default` |
+| `whatsapp` | `whatsapp` | `default` |
+
+### Kubernetes Secrets
+
+| Secret | Namespace | Used by |
+|--------|-----------|---------|
+| `news-worker-keycloak` | `temporal` | news-worker |
+| `web-scraper-keycloak` | `temporal` | web-scraper |
+| `grafana-keycloak-secret` | `monitoring` | grafana |
 
 ## Frontend Configuration
 

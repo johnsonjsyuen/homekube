@@ -14,7 +14,11 @@ export const GET: RequestHandler = async ({ request }) => {
             headers: { 'Authorization': authHeader }
         });
 
-        const data = await response.json();
+        const text = await response.text();
+        if (!text) {
+            return json({ error: 'Unauthorized' }, { status: response.status });
+        }
+        const data = JSON.parse(text);
         return json(data, { status: response.status });
     } catch (e) {
         console.error('Error proxying to web-scraper list jobs:', e);
@@ -39,7 +43,11 @@ export const POST: RequestHandler = async ({ request }) => {
             body: JSON.stringify(body),
         });
 
-        const data = await response.json();
+        const text = await response.text();
+        if (!text) {
+            return json({ error: 'Unauthorized' }, { status: response.status });
+        }
+        const data = JSON.parse(text);
         return json(data, { status: response.status });
     } catch (e) {
         console.error('Error proxying to web-scraper create job:', e);

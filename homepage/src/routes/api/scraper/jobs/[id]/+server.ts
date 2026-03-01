@@ -3,6 +3,14 @@ import type { RequestHandler } from './$types';
 
 const BACKEND_URL = 'http://web-scraper.temporal.svc.cluster.local';
 
+async function proxyResponse(response: Response) {
+    const text = await response.text();
+    if (!text) {
+        return json({ error: 'Unauthorized' }, { status: response.status });
+    }
+    return json(JSON.parse(text), { status: response.status });
+}
+
 export const GET: RequestHandler = async ({ request, params }) => {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -14,8 +22,7 @@ export const GET: RequestHandler = async ({ request, params }) => {
             headers: { 'Authorization': authHeader }
         });
 
-        const data = await response.json();
-        return json(data, { status: response.status });
+        return proxyResponse(response);
     } catch (e) {
         console.error('Error proxying to web-scraper get job:', e);
         return json({ error: 'Internal Server Error' }, { status: 500 });
@@ -39,8 +46,7 @@ export const PUT: RequestHandler = async ({ request, params }) => {
             body: JSON.stringify(body),
         });
 
-        const data = await response.json();
-        return json(data, { status: response.status });
+        return proxyResponse(response);
     } catch (e) {
         console.error('Error proxying to web-scraper update job:', e);
         return json({ error: 'Internal Server Error' }, { status: 500 });
@@ -59,8 +65,7 @@ export const DELETE: RequestHandler = async ({ request, params }) => {
             headers: { 'Authorization': authHeader }
         });
 
-        const data = await response.json();
-        return json(data, { status: response.status });
+        return proxyResponse(response);
     } catch (e) {
         console.error('Error proxying to web-scraper delete job:', e);
         return json({ error: 'Internal Server Error' }, { status: 500 });
