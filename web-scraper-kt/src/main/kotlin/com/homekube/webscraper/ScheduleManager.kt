@@ -11,6 +11,8 @@ import io.temporal.client.WorkflowOptions
 import io.temporal.api.enums.v1.ScheduleOverlapPolicy
 import io.temporal.serviceclient.WorkflowServiceStubs
 import jakarta.enterprise.context.ApplicationScoped
+import jakarta.inject.Inject
+import org.eclipse.microprofile.config.inject.ConfigProperty
 import org.jboss.logging.Logger
 
 @ApplicationScoped
@@ -18,10 +20,14 @@ class ScheduleManager {
 
     private val log = Logger.getLogger(ScheduleManager::class.java)
 
-    lateinit var scheduleClient: ScheduleClient
+    @Inject
+    lateinit var serviceStubs: WorkflowServiceStubs
 
-    fun init(serviceStubs: WorkflowServiceStubs) {
-        this.scheduleClient = ScheduleClient.newInstance(serviceStubs)
+    @ConfigProperty(name = "quarkus.temporal.worker.task-queue", defaultValue = "web-scraper-queue")
+    lateinit var taskQueue: String
+
+    private val scheduleClient: ScheduleClient by lazy {
+        ScheduleClient.newInstance(serviceStubs)
     }
 
     private fun scheduleId(jobId: String): String = "web-scraper-$jobId"
@@ -33,7 +39,7 @@ class ScheduleManager {
             .setWorkflowType("WebScraperWorkflow")
             .setOptions(
                 WorkflowOptions.newBuilder()
-                    .setTaskQueue("web-scraper-queue")
+                    .setTaskQueue(taskQueue)
                     .setWorkflowId("web-scraper-$jobId")
                     .build()
             )

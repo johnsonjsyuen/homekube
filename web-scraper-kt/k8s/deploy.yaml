@@ -50,19 +50,19 @@ spec:
           value: "http://claude-code-api.default.svc.cluster.local"
         resources:
           requests:
-            memory: "512Mi"
+            memory: "64Mi"
             cpu: "100m"
           limits:
-            memory: "1Gi"
+            memory: "256Mi"
         livenessProbe:
           httpGet:
             path: /health
             port: 3000
-          initialDelaySeconds: 10
+          initialDelaySeconds: 3
           periodSeconds: 30
         readinessProbe:
           httpGet:
             path: /health
             port: 3000
-          initialDelaySeconds: 5
+          initialDelaySeconds: 2
           periodSeconds: 10

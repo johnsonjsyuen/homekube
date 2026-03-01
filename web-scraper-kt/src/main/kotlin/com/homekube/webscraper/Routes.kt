@@ -49,10 +49,13 @@ class ScraperResource {
     lateinit var metricsService: MetricsService
 
     @Inject
-    lateinit var temporalWorkerLifecycle: TemporalWorkerLifecycle
+    lateinit var workflowClient: WorkflowClient
 
     @ConfigProperty(name = "app.max-jobs-per-user", defaultValue = "10")
     var maxJobsPerUser: Int = 10
+
+    @ConfigProperty(name = "quarkus.temporal.worker.task-queue", defaultValue = "web-scraper-queue")
+    lateinit var taskQueue: String
 
     companion object {
         private val CRON_REGEX = Regex("^([0-9*/,\\-]+\\s+){4}[0-9*/,\\-]+$")
@@ -256,11 +259,10 @@ class ScraperResource {
             val job = jobRepository.findByIdAndUserId(id, userId)
                 ?: return Response.status(404).entity(mapOf("error" to "Job not found")).build()
 
-            val workflowClient = temporalWorkerLifecycle.workflowClient
             val workflowId = "web-scraper-${id}-manual-${System.currentTimeMillis()}"
 
             val options = WorkflowOptions.newBuilder()
-                .setTaskQueue("web-scraper-queue")
+                .setTaskQueue(taskQueue)
                 .setWorkflowId(workflowId)
                 .build()
 

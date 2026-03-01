@@ -1,7 +1,7 @@
 plugins {
     kotlin("jvm") version "2.1.0"
     kotlin("plugin.allopen") version "2.1.0"
-    id("io.quarkus") version "3.17.0"
+    id("io.quarkus") version "3.20.5"
 }
 
 repositories {
@@ -39,8 +39,8 @@ dependencies {
     // HTTP client for Claude API and WhatsApp calls
     implementation("io.quarkus:quarkus-rest-client-jackson")
 
-    // Temporal
-    implementation("io.temporal:temporal-sdk:1.27.0")
+    // Temporal (Quarkiverse extension handles native image + grpc-netty-shaded)
+    implementation("io.quarkiverse.temporal:quarkus-temporal:0.2.3")
 
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
@@ -57,8 +57,10 @@ java {
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    kotlinOptions.jvmTarget = JavaVersion.VERSION_21.toString()
-    kotlinOptions.javaParameters = true
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+        javaParameters.set(true)
+    }
 }
 
 allOpen {
