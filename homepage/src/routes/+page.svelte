@@ -235,6 +235,8 @@
         border: 1px solid rgba(255, 255, 255, 0.06);
         border-radius: 16px;
         gap: 12px;
+        position: relative;
+        z-index: 20;
     }
 
     .header-left {
@@ -247,6 +249,8 @@
         display: flex;
         align-items: center;
         gap: 14px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
     }
 
     .active-tab-label {
@@ -361,6 +365,7 @@
         display: flex;
         align-items: center;
         gap: 8px;
+        flex-shrink: 0;
     }
 
     .location {
@@ -394,6 +399,8 @@
     /* Datetime */
     .datetime-container {
         text-align: right;
+        flex-shrink: 0;
+        white-space: nowrap;
     }
 
     .datetime {
@@ -412,6 +419,7 @@
         display: flex;
         align-items: center;
         gap: 10px;
+        flex-shrink: 0;
     }
 
     .username {
@@ -429,6 +437,8 @@
         font-weight: 600;
         transition: all 0.2s;
         letter-spacing: 0.3px;
+        white-space: nowrap;
+        flex-shrink: 0;
     }
 
     .login-btn {
