@@ -1,13 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import {
-        initKeycloak,
-        login,
-        logout,
-        onAuthStateChange,
-        getToken,
-        type AuthState,
-    } from "$lib/auth";
+    import { getToken } from "$lib/auth";
 
     let ttsFile = $state<FileList | null>(null);
     let ttsVoice = $state("af_heart");
@@ -17,15 +10,6 @@
     );
     let ttsJobId = $state("");
     let ttsError = $state("");
-
-    // Auth state
-    let authState = $state<AuthState>({
-        authenticated: false,
-        token: null,
-        username: null,
-        roles: [],
-    });
-    let authInitialized = $state(false);
 
     // Job history state
     interface Job {
@@ -44,22 +28,7 @@
     let jobsError = $state("");
 
     onMount(() => {
-        // Initialize Keycloak and subscribe to auth state changes
-        initKeycloak().then(() => {
-            authInitialized = true;
-        });
-
-        const unsubscribe = onAuthStateChange((state) => {
-            authState = state;
-            // Fetch jobs when user becomes authenticated
-            if (state.authenticated) {
-                fetchJobs();
-            } else {
-                jobs = [];
-            }
-        });
-
-        return unsubscribe;
+        fetchJobs();
     });
 
     async function fetchJobs() {
@@ -155,21 +124,7 @@
         }
     }
 
-    async function handleLogin() {
-        // Redirect back to the TTS tab after login
-        await login("/?tab=tts");
-    }
-
-    async function handleLogout() {
-        await logout();
-    }
-
     async function generateSpeech() {
-        if (!authState.authenticated) {
-            alert("Please log in to use text-to-speech.");
-            return;
-        }
-
         if (!ttsFile || ttsFile.length === 0) {
             alert("Please select a text file.");
             return;
@@ -212,7 +167,7 @@
 
     // When a new job completes, refresh the job list
     $effect(() => {
-        if (ttsStatus === "completed" && authState.authenticated) {
+        if (ttsStatus === "completed") {
             fetchJobs();
         }
     });
@@ -268,198 +223,177 @@
     <div class="tts-card">
         <h3>Generate Speech</h3>
 
-        {#if !authInitialized}
-            <div class="auth-loading">
-                <span class="spinner">...</span> Loading authentication...
-            </div>
-        {:else if !authState.authenticated}
-            <div class="auth-required">
-                <p>Please log in to use the text-to-speech feature.</p>
-                <button class="login-btn" onclick={handleLogin}>
-                    Log In
-                </button>
-            </div>
-        {:else}
-            <div class="user-info">
-                <span>Logged in as: <strong>{authState.username}</strong></span>
-                <button class="logout-btn" onclick={handleLogout}
-                    >Log Out</button
-                >
-            </div>
-
+        <div class="form-group">
+            <label for="tts-file">Text File</label>
+            <input
+                type="file"
+                id="tts-file"
+                accept=".txt"
+                onchange={(e) => (ttsFile = e.currentTarget.files)}
+            />
+        </div>
+        <div class="form-row">
             <div class="form-group">
-                <label for="tts-file">Text File</label>
+                <label for="tts-voice">Voice</label>
+                <select id="tts-voice" bind:value={ttsVoice}>
+                    <option value="af_heart">Heart (Female)</option>
+                    <option value="af_bella">Bella (Female)</option>
+                    <option value="af_nicole">Nicole (Female)</option>
+                    <option value="af_sky">Sky (Female)</option>
+                    <option value="bm_daniel">Daniel (Male)</option>
+                    <option value="bm_george">George (Male)</option>
+                    <option value="bm_lewis">Lewis (Male)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="tts-speed">Speed (0.5 - 2.0)</label>
                 <input
-                    type="file"
-                    id="tts-file"
-                    accept=".txt"
-                    onchange={(e) => (ttsFile = e.currentTarget.files)}
+                    type="number"
+                    id="tts-speed"
+                    bind:value={ttsSpeed}
+                    step="0.1"
+                    min="0.5"
+                    max="2.0"
                 />
             </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="tts-voice">Voice</label>
-                    <select id="tts-voice" bind:value={ttsVoice}>
-                        <option value="af_heart">Heart (Female)</option>
-                        <option value="af_bella">Bella (Female)</option>
-                        <option value="af_nicole">Nicole (Female)</option>
-                        <option value="af_sky">Sky (Female)</option>
-                        <option value="bm_daniel">Daniel (Male)</option>
-                        <option value="bm_george">George (Male)</option>
-                        <option value="bm_lewis">Lewis (Male)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="tts-speed">Speed (0.5 - 2.0)</label>
-                    <input
-                        type="number"
-                        id="tts-speed"
-                        bind:value={ttsSpeed}
-                        step="0.1"
-                        min="0.5"
-                        max="2.0"
-                    />
-                </div>
-            </div>
+        </div>
 
-            <button
-                class="generate-btn"
-                onclick={generateSpeech}
-                disabled={ttsStatus === "processing"}
-            >
-                {ttsStatus === "processing"
-                    ? "Processing..."
-                    : "Generate Audio"}
-            </button>
+        <button
+            class="generate-btn"
+            onclick={generateSpeech}
+            disabled={ttsStatus === "processing"}
+        >
+            {ttsStatus === "processing"
+                ? "Processing..."
+                : "Generate Audio"}
+        </button>
 
-            {#if ttsStatus === "processing"}
-                <div class="status-msg">
-                    <span class="spinner">...</span> Processing your request...
-                </div>
-            {/if}
-
-            {#if ttsStatus === "completed"}
-                <div class="success-msg">
-                    <p>Audio generated successfully!</p>
-                    <a
-                        href={ttsDownloadUrl}
-                        class="download-btn"
-                        download="{ttsJobId}.mp3"
-                    >
-                        Download MP3
-                    </a>
-                </div>
-            {/if}
-
-            {#if ttsStatus === "error"}
-                <div class="error-msg">
-                    Error: {ttsError}
-                </div>
-            {/if}
-
-            <!-- Job History Section -->
-            <div class="job-history">
-                <div class="job-history-header">
-                    <h4>Job History</h4>
-                    <button
-                        class="refresh-btn"
-                        onclick={fetchJobs}
-                        disabled={jobsLoading}
-                    >
-                        {jobsLoading ? "⟳" : "🔄"} Refresh
-                    </button>
-                </div>
-
-                {#if jobsLoading && jobs.length === 0}
-                    <div class="jobs-loading">
-                        <span class="spinner">...</span> Loading jobs...
-                    </div>
-                {:else if jobsError}
-                    <div class="jobs-error">
-                        Failed to load jobs: {jobsError}
-                    </div>
-                {:else if jobs.length === 0}
-                    <div class="jobs-empty">
-                        No jobs yet. Generate your first audio above!
-                    </div>
-                {:else}
-                    <div class="jobs-table-container">
-                        <table class="jobs-table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>File</th>
-                                    <th>Voice</th>
-                                    <th>Speed</th>
-                                    <th>Duration</th>
-                                    <th>Size</th>
-                                    <th>Status</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {#each jobs as job}
-                                    <tr>
-                                        <td>{formatDate(job.created_at)}</td>
-                                        <td class="filename-cell" title={job.input_filename || "-"}>{job.input_filename || "-"}</td>
-                                        <td>{getVoiceDisplayName(job.voice)}</td
-                                        >
-                                        <td>{job.speed || "1.0"}x</td>
-                                        <td>{formatDuration(job.duration_secs)}</td>
-                                        <td>{formatFileSize(job.output_file_size)}</td>
-                                        <td>
-                                            {#if job.status === "completed"}
-                                                <span
-                                                    class="status-badge status-completed"
-                                                    >✓ Done</span
-                                                >
-                                            {:else if job.status === "processing"}
-                                                <span
-                                                    class="status-badge status-processing"
-                                                    >⟳ Processing</span
-                                                >
-                                            {:else if job.status === "error"}
-                                                <span
-                                                    class="status-badge status-error"
-                                                    title={job.error_message}
-                                                    >✗ Error</span
-                                                >
-                                            {:else}
-                                                <span class="status-badge"
-                                                    >{job.status}</span
-                                                >
-                                            {/if}
-                                        </td>
-                                        <td>
-                                            {#if job.status === "completed"}
-                                                <button
-                                                    class="download-job-btn"
-                                                    onclick={() =>
-                                                        downloadJob(job.id)}
-                                                >
-                                                    ⬇ Download
-                                                </button>
-                                            {:else if job.status === "error"}
-                                                <span
-                                                    class="job-error-hint"
-                                                    title={job.error_message}
-                                                >
-                                                    ⓘ
-                                                </span>
-                                            {:else}
-                                                <span class="job-pending"
-                                                    >-</span
-                                                >
-                                            {/if}
-                                        </td>
-                                    </tr>
-                                {/each}
-                            </tbody>
-                        </table>
-                    </div>
-                {/if}
+        {#if ttsStatus === "processing"}
+            <div class="status-msg">
+                <span class="spinner">...</span> Processing your request...
             </div>
         {/if}
+
+        {#if ttsStatus === "completed"}
+            <div class="success-msg">
+                <p>Audio generated successfully!</p>
+                <a
+                    href={ttsDownloadUrl}
+                    class="download-btn"
+                    download="{ttsJobId}.mp3"
+                >
+                    Download MP3
+                </a>
+            </div>
+        {/if}
+
+        {#if ttsStatus === "error"}
+            <div class="error-msg">
+                Error: {ttsError}
+            </div>
+        {/if}
+
+        <!-- Job History Section -->
+        <div class="job-history">
+            <div class="job-history-header">
+                <h4>Job History</h4>
+                <button
+                    class="refresh-btn"
+                    onclick={fetchJobs}
+                    disabled={jobsLoading}
+                >
+                    {jobsLoading ? "⟳" : "🔄"} Refresh
+                </button>
+            </div>
+
+            {#if jobsLoading && jobs.length === 0}
+                <div class="jobs-loading">
+                    <span class="spinner">...</span> Loading jobs...
+                </div>
+            {:else if jobsError}
+                <div class="jobs-error">
+                    Failed to load jobs: {jobsError}
+                </div>
+            {:else if jobs.length === 0}
+                <div class="jobs-empty">
+                    No jobs yet. Generate your first audio above!
+                </div>
+            {:else}
+                <div class="jobs-table-container">
+                    <table class="jobs-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>File</th>
+                                <th>Voice</th>
+                                <th>Speed</th>
+                                <th>Duration</th>
+                                <th>Size</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#each jobs as job}
+                                <tr>
+                                    <td>{formatDate(job.created_at)}</td>
+                                    <td class="filename-cell" title={job.input_filename || "-"}>{job.input_filename || "-"}</td>
+                                    <td>{getVoiceDisplayName(job.voice)}</td>
+                                    <td>{job.speed || "1.0"}x</td>
+                                    <td>{formatDuration(job.duration_secs)}</td>
+                                    <td>{formatFileSize(job.output_file_size)}</td>
+                                    <td>
+                                        {#if job.status === "completed"}
+                                            <span
+                                                class="status-badge status-completed"
+                                                >Done</span
+                                            >
+                                        {:else if job.status === "processing"}
+                                            <span
+                                                class="status-badge status-processing"
+                                                >Processing</span
+                                            >
+                                        {:else if job.status === "error"}
+                                            <span
+                                                class="status-badge status-error"
+                                                title={job.error_message}
+                                                >Error</span
+                                            >
+                                        {:else}
+                                            <span class="status-badge"
+                                                >{job.status}</span
+                                            >
+                                        {/if}
+                                    </td>
+                                    <td>
+                                        {#if job.status === "completed"}
+                                            <button
+                                                class="download-job-btn"
+                                                onclick={() =>
+                                                    downloadJob(job.id)}
+                                            >
+                                                Download
+                                            </button>
+                                        {:else if job.status === "error"}
+                                            <span
+                                                class="job-error-hint"
+                                                title={job.error_message}
+                                            >
+                                                info
+                                            </span>
+                                        {:else}
+                                            <span class="job-pending"
+                                                >-</span
+                                            >
+                                        {/if}
+                                    </td>
+                                </tr>
+                            {/each}
+                        </tbody>
+                    </table>
+                </div>
+            {/if}
+        </div>
     </div>
 </div>
 
@@ -483,73 +417,6 @@
         margin-bottom: 20px;
         text-align: center;
         color: #fff;
-    }
-
-    .auth-loading {
-        text-align: center;
-        color: #aaa;
-        padding: 20px;
-    }
-
-    .auth-required {
-        text-align: center;
-        padding: 20px;
-    }
-
-    .auth-required p {
-        color: #aaa;
-        margin-bottom: 20px;
-    }
-
-    .login-btn {
-        background: #4a90e2;
-        color: white;
-        border: none;
-        padding: 12px 30px;
-        border-radius: 8px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s;
-    }
-
-    .login-btn:hover {
-        background: #357abd;
-    }
-
-    .user-info {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-        padding: 10px 15px;
-        background: #333;
-        border-radius: 8px;
-        font-size: 0.9rem;
-    }
-
-    .user-info span {
-        color: #aaa;
-    }
-
-    .user-info strong {
-        color: #fff;
-    }
-
-    .logout-btn {
-        background: transparent;
-        color: #f87171;
-        border: 1px solid #f87171;
-        padding: 5px 15px;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 0.85rem;
-        transition: all 0.2s;
-    }
-
-    .logout-btn:hover {
-        background: #f87171;
-        color: #000;
     }
 
     .form-group {

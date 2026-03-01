@@ -1,9 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { initKeycloak, login, logout, onAuthStateChange, getFreshToken, type AuthState } from '$lib/auth';
-
-    let authState = $state<AuthState>({ authenticated: false, token: null, username: null, roles: [] });
-    let authInitialized = $state(false);
+    import { getFreshToken } from '$lib/auth';
 
     interface Job {
         id: string;
@@ -64,13 +61,8 @@
     let triggerResult = $state<Record<string, string>>({});
 
     onMount(() => {
-        initKeycloak().then(() => { authInitialized = true; });
-        const unsubscribe = onAuthStateChange((state) => { authState = state; });
-        return () => { unsubscribe(); };
+        fetchJobs();
     });
-
-    async function handleLogin() { await login('/?tab=scraper'); }
-    async function handleLogout() { await logout(); }
 
     async function fetchJobs() {
         jobsLoading = true;
@@ -292,232 +284,211 @@
         return new Date(dateStr).toLocaleString();
     }
 
-    $effect(() => {
-        if (authState.authenticated) {
-            fetchJobs();
-        }
-    });
 </script>
 
 <div class="scraper-container">
     <div class="scraper-card">
         <h3>Web Scraper</h3>
 
-        {#if !authInitialized}
-            <div class="auth-loading">
-                <span class="spinner">...</span> Loading authentication...
-            </div>
-        {:else if !authState.authenticated}
-            <div class="auth-required">
-                <p>Please log in to manage scraper jobs.</p>
-                <button class="login-btn" onclick={handleLogin}>Log In</button>
-            </div>
-        {:else}
-            <div class="user-info">
-                <span>Logged in as: <strong>{authState.username}</strong></span>
-                <button class="logout-btn" onclick={handleLogout}>Log Out</button>
-            </div>
+        <!-- Create Job Button -->
+        <div class="create-section">
+            <button class="create-btn" onclick={() => showCreateForm = !showCreateForm}>
+                {showCreateForm ? 'Cancel' : '+ New Job'}
+            </button>
+        </div>
 
-            <!-- Create Job Button -->
-            <div class="create-section">
-                <button class="create-btn" onclick={() => showCreateForm = !showCreateForm}>
-                    {showCreateForm ? 'Cancel' : '+ New Job'}
+        <!-- Create Job Form -->
+        {#if showCreateForm}
+            <div class="form-section">
+                <h4>Create New Job</h4>
+                <label class="form-label">
+                    Name
+                    <input type="text" class="form-input" bind:value={createName} placeholder="e.g. Concert Tickets" />
+                </label>
+                <label class="form-label">
+                    URLs (one per line or comma-separated)
+                    <textarea class="form-textarea" bind:value={createUrls} placeholder="https://example.com/events" rows="3"></textarea>
+                </label>
+                <label class="form-label">
+                    Instruction
+                    <textarea class="form-textarea" bind:value={createInstruction} placeholder="e.g. Notify me if Tool or Puscifer tickets announced" rows="2"></textarea>
+                </label>
+                <div class="form-row">
+                    <label class="form-label form-half">
+                        Schedule (cron)
+                        <input type="text" class="form-input" bind:value={createCron} />
+                        <span class="form-hint">{describeCron(createCron)}</span>
+                    </label>
+                    <label class="form-label form-half">
+                        Timezone
+                        <select class="form-select" bind:value={createTimezone}>
+                            <option value="Australia/Sydney">Australia/Sydney</option>
+                            <option value="Australia/Melbourne">Australia/Melbourne</option>
+                            <option value="Australia/Brisbane">Australia/Brisbane</option>
+                            <option value="Asia/Hong_Kong">Asia/Hong Kong</option>
+                            <option value="UTC">UTC</option>
+                        </select>
+                    </label>
+                </div>
+                <button class="submit-btn" onclick={createJob} disabled={createLoading || !createName || !createUrls || !createInstruction}>
+                    {#if createLoading}
+                        <span class="spinner">...</span> Creating...
+                    {:else}
+                        Create Job
+                    {/if}
                 </button>
+                {#if createError}
+                    <div class="error-result">{createError}</div>
+                {/if}
             </div>
+        {/if}
 
-            <!-- Create Job Form -->
-            {#if showCreateForm}
-                <div class="form-section">
-                    <h4>Create New Job</h4>
-                    <label class="form-label">
-                        Name
-                        <input type="text" class="form-input" bind:value={createName} placeholder="e.g. Concert Tickets" />
+        <!-- Edit Job Form -->
+        {#if editingJob}
+            <div class="form-section">
+                <h4>Edit: {editingJob.name}</h4>
+                <label class="form-label">
+                    Name
+                    <input type="text" class="form-input" bind:value={editName} />
+                </label>
+                <label class="form-label">
+                    URLs (one per line or comma-separated)
+                    <textarea class="form-textarea" bind:value={editUrls} rows="3"></textarea>
+                </label>
+                <label class="form-label">
+                    Instruction
+                    <textarea class="form-textarea" bind:value={editInstruction} rows="2"></textarea>
+                </label>
+                <div class="form-row">
+                    <label class="form-label form-half">
+                        Schedule (cron)
+                        <input type="text" class="form-input" bind:value={editCron} />
+                        <span class="form-hint">{describeCron(editCron)}</span>
                     </label>
-                    <label class="form-label">
-                        URLs (one per line or comma-separated)
-                        <textarea class="form-textarea" bind:value={createUrls} placeholder="https://example.com/events" rows="3"></textarea>
+                    <label class="form-label form-half">
+                        Timezone
+                        <select class="form-select" bind:value={editTimezone}>
+                            <option value="Australia/Sydney">Australia/Sydney</option>
+                            <option value="Australia/Melbourne">Australia/Melbourne</option>
+                            <option value="Australia/Brisbane">Australia/Brisbane</option>
+                            <option value="Asia/Hong_Kong">Asia/Hong Kong</option>
+                            <option value="UTC">UTC</option>
+                        </select>
                     </label>
-                    <label class="form-label">
-                        Instruction
-                        <textarea class="form-textarea" bind:value={createInstruction} placeholder="e.g. Notify me if Tool or Puscifer tickets announced" rows="2"></textarea>
-                    </label>
-                    <div class="form-row">
-                        <label class="form-label form-half">
-                            Schedule (cron)
-                            <input type="text" class="form-input" bind:value={createCron} />
-                            <span class="form-hint">{describeCron(createCron)}</span>
-                        </label>
-                        <label class="form-label form-half">
-                            Timezone
-                            <select class="form-select" bind:value={createTimezone}>
-                                <option value="Australia/Sydney">Australia/Sydney</option>
-                                <option value="Australia/Melbourne">Australia/Melbourne</option>
-                                <option value="Australia/Brisbane">Australia/Brisbane</option>
-                                <option value="Asia/Hong_Kong">Asia/Hong Kong</option>
-                                <option value="UTC">UTC</option>
-                            </select>
-                        </label>
-                    </div>
-                    <button class="submit-btn" onclick={createJob} disabled={createLoading || !createName || !createUrls || !createInstruction}>
-                        {#if createLoading}
-                            <span class="spinner">...</span> Creating...
+                </div>
+                <div class="form-actions">
+                    <button class="submit-btn" onclick={saveEdit} disabled={editLoading}>
+                        {#if editLoading}
+                            <span class="spinner">...</span> Saving...
                         {:else}
-                            Create Job
+                            Save Changes
                         {/if}
                     </button>
-                    {#if createError}
-                        <div class="error-result">{createError}</div>
-                    {/if}
+                    <button class="cancel-btn" onclick={cancelEdit}>Cancel</button>
                 </div>
-            {/if}
+                {#if editError}
+                    <div class="error-result">{editError}</div>
+                {/if}
+            </div>
+        {/if}
 
-            <!-- Edit Job Form -->
-            {#if editingJob}
-                <div class="form-section">
-                    <h4>Edit: {editingJob.name}</h4>
-                    <label class="form-label">
-                        Name
-                        <input type="text" class="form-input" bind:value={editName} />
-                    </label>
-                    <label class="form-label">
-                        URLs (one per line or comma-separated)
-                        <textarea class="form-textarea" bind:value={editUrls} rows="3"></textarea>
-                    </label>
-                    <label class="form-label">
-                        Instruction
-                        <textarea class="form-textarea" bind:value={editInstruction} rows="2"></textarea>
-                    </label>
-                    <div class="form-row">
-                        <label class="form-label form-half">
-                            Schedule (cron)
-                            <input type="text" class="form-input" bind:value={editCron} />
-                            <span class="form-hint">{describeCron(editCron)}</span>
-                        </label>
-                        <label class="form-label form-half">
-                            Timezone
-                            <select class="form-select" bind:value={editTimezone}>
-                                <option value="Australia/Sydney">Australia/Sydney</option>
-                                <option value="Australia/Melbourne">Australia/Melbourne</option>
-                                <option value="Australia/Brisbane">Australia/Brisbane</option>
-                                <option value="Asia/Hong_Kong">Asia/Hong Kong</option>
-                                <option value="UTC">UTC</option>
-                            </select>
-                        </label>
+        <!-- Jobs List -->
+        {#if jobsLoading}
+            <div class="loading-indicator">
+                <span class="spinner">...</span> Loading jobs...
+            </div>
+        {:else if jobsError}
+            <div class="error-result">{jobsError}</div>
+        {:else if jobs.length === 0}
+            <div class="empty-state">No scraper jobs yet. Create one to get started.</div>
+        {:else}
+            {#each jobs as job (job.id)}
+                <div class="job-card">
+                    <div class="job-header">
+                        <div class="job-title">
+                            <strong>{job.name}</strong>
+                            <span class="job-meta">{job.urls.length} URL{job.urls.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div class="job-actions">
+                            <button
+                                class="toggle-btn"
+                                class:toggle-on={job.enabled}
+                                class:toggle-off={!job.enabled}
+                                onclick={() => toggleEnabled(job)}
+                                title={job.enabled ? 'Disable' : 'Enable'}
+                            >
+                                {job.enabled ? 'ON' : 'OFF'}
+                            </button>
+                        </div>
                     </div>
-                    <div class="form-actions">
-                        <button class="submit-btn" onclick={saveEdit} disabled={editLoading}>
-                            {#if editLoading}
-                                <span class="spinner">...</span> Saving...
+
+                    <div class="job-details">
+                        <span class="job-schedule">{describeCron(job.schedule_cron)} ({job.timezone})</span>
+                    </div>
+                    <div class="job-instruction">{job.instruction}</div>
+
+                    <div class="job-buttons">
+                        <button class="trigger-btn" onclick={() => triggerJob(job)} disabled={triggerLoading[job.id]}>
+                            {#if triggerLoading[job.id]}
+                                <span class="spinner">...</span>
                             {:else}
-                                Save Changes
+                                Run Now
                             {/if}
                         </button>
-                        <button class="cancel-btn" onclick={cancelEdit}>Cancel</button>
+                        <button class="edit-btn" onclick={() => startEdit(job)}>Edit</button>
+                        <button class="history-btn" onclick={() => toggleRuns(job.id)}>
+                            {expandedJobId === job.id ? 'Hide History' : 'History'}
+                        </button>
+                        <button class="delete-btn" onclick={() => deleteJob(job)}>Delete</button>
                     </div>
-                    {#if editError}
-                        <div class="error-result">{editError}</div>
+
+                    {#if triggerResult[job.id]}
+                        <div class="success-result">{triggerResult[job.id]}</div>
+                    {/if}
+
+                    <!-- Run History -->
+                    {#if expandedJobId === job.id}
+                        <div class="runs-section">
+                            {#if runsLoading[job.id]}
+                                <div class="loading-indicator"><span class="spinner">...</span> Loading...</div>
+                            {:else if (runs[job.id] || []).length === 0}
+                                <div class="empty-state">No runs yet.</div>
+                            {:else}
+                                <table class="runs-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Status</th>
+                                            <th>URLs</th>
+                                            <th>Notified</th>
+                                            <th>Started</th>
+                                            <th>Response</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {#each runs[job.id] as run (run.id)}
+                                            <tr>
+                                                <td>
+                                                    <span class="status-badge"
+                                                        class:status-success={run.status === 'success'}
+                                                        class:status-failure={run.status === 'failure'}
+                                                        class:status-running={run.status === 'running'}
+                                                    >
+                                                        {run.status}
+                                                    </span>
+                                                </td>
+                                                <td>{run.urls_scraped}</td>
+                                                <td>{run.notified ? 'Yes' : 'No'}</td>
+                                                <td>{formatDate(run.started_at)}</td>
+                                                <td class="run-response">{run.error || run.claude_response || '—'}</td>
+                                            </tr>
+                                        {/each}
+                                    </tbody>
+                                </table>
+                            {/if}
+                        </div>
                     {/if}
                 </div>
-            {/if}
-
-            <!-- Jobs List -->
-            {#if jobsLoading}
-                <div class="auth-loading">
-                    <span class="spinner">...</span> Loading jobs...
-                </div>
-            {:else if jobsError}
-                <div class="error-result">{jobsError}</div>
-            {:else if jobs.length === 0}
-                <div class="empty-state">No scraper jobs yet. Create one to get started.</div>
-            {:else}
-                {#each jobs as job (job.id)}
-                    <div class="job-card">
-                        <div class="job-header">
-                            <div class="job-title">
-                                <strong>{job.name}</strong>
-                                <span class="job-meta">{job.urls.length} URL{job.urls.length !== 1 ? 's' : ''}</span>
-                            </div>
-                            <div class="job-actions">
-                                <button
-                                    class="toggle-btn"
-                                    class:toggle-on={job.enabled}
-                                    class:toggle-off={!job.enabled}
-                                    onclick={() => toggleEnabled(job)}
-                                    title={job.enabled ? 'Disable' : 'Enable'}
-                                >
-                                    {job.enabled ? 'ON' : 'OFF'}
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="job-details">
-                            <span class="job-schedule">{describeCron(job.schedule_cron)} ({job.timezone})</span>
-                        </div>
-                        <div class="job-instruction">{job.instruction}</div>
-
-                        <div class="job-buttons">
-                            <button class="trigger-btn" onclick={() => triggerJob(job)} disabled={triggerLoading[job.id]}>
-                                {#if triggerLoading[job.id]}
-                                    <span class="spinner">...</span>
-                                {:else}
-                                    Run Now
-                                {/if}
-                            </button>
-                            <button class="edit-btn" onclick={() => startEdit(job)}>Edit</button>
-                            <button class="history-btn" onclick={() => toggleRuns(job.id)}>
-                                {expandedJobId === job.id ? 'Hide History' : 'History'}
-                            </button>
-                            <button class="delete-btn" onclick={() => deleteJob(job)}>Delete</button>
-                        </div>
-
-                        {#if triggerResult[job.id]}
-                            <div class="success-result">{triggerResult[job.id]}</div>
-                        {/if}
-
-                        <!-- Run History -->
-                        {#if expandedJobId === job.id}
-                            <div class="runs-section">
-                                {#if runsLoading[job.id]}
-                                    <div class="auth-loading"><span class="spinner">...</span> Loading...</div>
-                                {:else if (runs[job.id] || []).length === 0}
-                                    <div class="empty-state">No runs yet.</div>
-                                {:else}
-                                    <table class="runs-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Status</th>
-                                                <th>URLs</th>
-                                                <th>Notified</th>
-                                                <th>Started</th>
-                                                <th>Response</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {#each runs[job.id] as run (run.id)}
-                                                <tr>
-                                                    <td>
-                                                        <span class="status-badge"
-                                                            class:status-success={run.status === 'success'}
-                                                            class:status-failure={run.status === 'failure'}
-                                                            class:status-running={run.status === 'running'}
-                                                        >
-                                                            {run.status}
-                                                        </span>
-                                                    </td>
-                                                    <td>{run.urls_scraped}</td>
-                                                    <td>{run.notified ? 'Yes' : 'No'}</td>
-                                                    <td>{formatDate(run.started_at)}</td>
-                                                    <td class="run-response">{run.error || run.claude_response || '—'}</td>
-                                                </tr>
-                                            {/each}
-                                        </tbody>
-                                    </table>
-                                {/if}
-                            </div>
-                        {/if}
-                    </div>
-                {/each}
-            {/if}
+            {/each}
         {/if}
     </div>
 </div>
@@ -544,71 +515,10 @@
         color: #fff;
     }
 
-    .auth-loading {
+    .loading-indicator {
         text-align: center;
         color: #aaa;
         padding: 20px;
-    }
-
-    .auth-required {
-        text-align: center;
-        padding: 20px;
-    }
-
-    .auth-required p {
-        color: #aaa;
-        margin-bottom: 20px;
-    }
-
-    .login-btn {
-        background: #4a90e2;
-        color: white;
-        border: none;
-        padding: 12px 30px;
-        border-radius: 8px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s;
-    }
-
-    .login-btn:hover {
-        background: #357abd;
-    }
-
-    .user-info {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-        padding: 10px 15px;
-        background: #333;
-        border-radius: 8px;
-        font-size: 0.9rem;
-    }
-
-    .user-info span {
-        color: #aaa;
-    }
-
-    .user-info strong {
-        color: #fff;
-    }
-
-    .logout-btn {
-        background: transparent;
-        color: #f87171;
-        border: 1px solid #f87171;
-        padding: 5px 15px;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 0.85rem;
-        transition: all 0.2s;
-    }
-
-    .logout-btn:hover {
-        background: #f87171;
-        color: #000;
     }
 
     .create-section {

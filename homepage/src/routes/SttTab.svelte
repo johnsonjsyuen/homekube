@@ -1,22 +1,6 @@
 <script lang="ts">
-    import { onMount, onDestroy } from "svelte";
-    import {
-        initKeycloak,
-        login,
-        logout,
-        onAuthStateChange,
-        getToken,
-        type AuthState,
-    } from "$lib/auth";
-
-    // Auth state
-    let authState = $state<AuthState>({
-        authenticated: false,
-        token: null,
-        username: null,
-        roles: [],
-    });
-    let authInitialized = $state(false);
+    import { onDestroy } from "svelte";
+    import { getToken } from "$lib/auth";
 
     // Recording state
     let isRecording = $state(false);
@@ -60,30 +44,10 @@
         return `${protocol}//stt.${hostname}/transcribe`;
     }
 
-    onMount(() => {
-        initKeycloak().then(() => {
-            authInitialized = true;
-        });
-
-        const unsubscribe = onAuthStateChange((state) => {
-            authState = state;
-        });
-
-        return unsubscribe;
-    });
-
     onDestroy(() => {
         stopRecording();
         disconnectWebSocket();
     });
-
-    async function handleLogin() {
-        await login("/?tab=stt");
-    }
-
-    async function handleLogout() {
-        await logout();
-    }
 
     function connectWebSocket() {
         const token = getToken();
@@ -154,11 +118,6 @@
     }
 
     async function startRecording() {
-        if (!authState.authenticated) {
-            alert("Please log in to use speech-to-text.");
-            return;
-        }
-
         errorMessage = "";
 
         // Connect WebSocket first
@@ -323,107 +282,87 @@
     <div class="stt-card">
         <h3>Speech to Text</h3>
 
-        {#if !authInitialized}
-            <div class="auth-loading">
-                <span class="spinner">...</span> Loading authentication...
-            </div>
-        {:else if !authState.authenticated}
-            <div class="auth-required">
-                <p>Please log in to use the speech-to-text feature.</p>
-                <button class="login-btn" onclick={handleLogin}>
-                    Log In
-                </button>
-            </div>
-        {:else}
-            <div class="user-info">
-                <span>Logged in as: <strong>{authState.username}</strong></span>
-                <button class="logout-btn" onclick={handleLogout}
-                    >Log Out</button
-                >
-            </div>
-
-            <!-- Recording Controls -->
-            <div class="recording-section">
-                <div class="recording-controls">
-                    {#if !isRecording}
-                        <button
-                            class="record-btn start"
-                            onclick={startRecording}
-                            disabled={connectionStatus === "connecting"}
-                        >
-                            <span class="mic-icon">🎤</span>
-                            {connectionStatus === "connecting"
-                                ? "Connecting..."
-                                : "Start Recording"}
-                        </button>
-                    {:else}
-                        <button class="record-btn stop" onclick={stopRecording}>
-                            <span class="stop-icon">⏹</span>
-                            Stop Recording
-                        </button>
-                    {/if}
-                </div>
-
-                {#if isRecording}
-                    <div class="recording-indicator">
-                        <span class="pulse-dot"></span>
-                        Recording...
-                    </div>
+        <!-- Recording Controls -->
+        <div class="recording-section">
+            <div class="recording-controls">
+                {#if !isRecording}
+                    <button
+                        class="record-btn start"
+                        onclick={startRecording}
+                        disabled={connectionStatus === "connecting"}
+                    >
+                        <span class="mic-icon">🎤</span>
+                        {connectionStatus === "connecting"
+                            ? "Connecting..."
+                            : "Start Recording"}
+                    </button>
+                {:else}
+                    <button class="record-btn stop" onclick={stopRecording}>
+                        <span class="stop-icon">⏹</span>
+                        Stop Recording
+                    </button>
                 {/if}
-
-                <div class="connection-status">
-                    Status:
-                    <span class="status-badge status-{connectionStatus}">
-                        {connectionStatus}
-                    </span>
-                </div>
             </div>
 
-            <!-- Transcript Display -->
-            <div class="transcript-section">
-                <div class="transcript-header">
-                    <h4>Transcript</h4>
-                    <div class="transcript-actions">
-                        <button
-                            class="action-btn copy-btn"
-                            onclick={copyToClipboard}
-                            disabled={!transcript}
-                        >
-                            {copyFeedback ? "✓ Copied!" : "📋 Copy All"}
-                        </button>
-                        <button
-                            class="action-btn clear-btn"
-                            onclick={clearTranscript}
-                            disabled={!transcript}
-                        >
-                            🗑️ Clear
-                        </button>
-                    </div>
-                </div>
-
-                <div class="transcript-box">
-                    {#if transcript || partialTranscript}
-                        <p>
-                            {transcript}{#if partialTranscript}<span
-                                    class="partial-text"
-                                    >{transcript
-                                        ? " "
-                                        : ""}{partialTranscript}</span
-                                >{/if}
-                        </p>
-                    {:else}
-                        <p class="placeholder">
-                            Your transcription will appear here...
-                        </p>
-                    {/if}
-                </div>
-            </div>
-
-            {#if errorMessage}
-                <div class="error-msg">
-                    Error: {errorMessage}
+            {#if isRecording}
+                <div class="recording-indicator">
+                    <span class="pulse-dot"></span>
+                    Recording...
                 </div>
             {/if}
+
+            <div class="connection-status">
+                Status:
+                <span class="status-badge status-{connectionStatus}">
+                    {connectionStatus}
+                </span>
+            </div>
+        </div>
+
+        <!-- Transcript Display -->
+        <div class="transcript-section">
+            <div class="transcript-header">
+                <h4>Transcript</h4>
+                <div class="transcript-actions">
+                    <button
+                        class="action-btn copy-btn"
+                        onclick={copyToClipboard}
+                        disabled={!transcript}
+                    >
+                        {copyFeedback ? "✓ Copied!" : "📋 Copy All"}
+                    </button>
+                    <button
+                        class="action-btn clear-btn"
+                        onclick={clearTranscript}
+                        disabled={!transcript}
+                    >
+                        🗑️ Clear
+                    </button>
+                </div>
+            </div>
+
+            <div class="transcript-box">
+                {#if transcript || partialTranscript}
+                    <p>
+                        {transcript}{#if partialTranscript}<span
+                                class="partial-text"
+                                >{transcript
+                                    ? " "
+                                    : ""}{partialTranscript}</span
+                            >{/if}
+                    </p>
+                {:else}
+                    <p class="placeholder">
+                        Your transcription will appear here...
+                    </p>
+                {/if}
+            </div>
+        </div>
+
+        {#if errorMessage}
+            <div class="error-msg">
+                Error: {errorMessage}
+            </div>
         {/if}
     </div>
 </div>
@@ -448,73 +387,6 @@
         margin-bottom: 20px;
         text-align: center;
         color: #fff;
-    }
-
-    .auth-loading {
-        text-align: center;
-        color: #aaa;
-        padding: 20px;
-    }
-
-    .auth-required {
-        text-align: center;
-        padding: 20px;
-    }
-
-    .auth-required p {
-        color: #aaa;
-        margin-bottom: 20px;
-    }
-
-    .login-btn {
-        background: #4a90e2;
-        color: white;
-        border: none;
-        padding: 12px 30px;
-        border-radius: 8px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s;
-    }
-
-    .login-btn:hover {
-        background: #357abd;
-    }
-
-    .user-info {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-        padding: 10px 15px;
-        background: #333;
-        border-radius: 8px;
-        font-size: 0.9rem;
-    }
-
-    .user-info span {
-        color: #aaa;
-    }
-
-    .user-info strong {
-        color: #fff;
-    }
-
-    .logout-btn {
-        background: transparent;
-        color: #f87171;
-        border: 1px solid #f87171;
-        padding: 5px 15px;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 0.85rem;
-        transition: all 0.2s;
-    }
-
-    .logout-btn:hover {
-        background: #f87171;
-        color: #000;
     }
 
     .recording-section {
@@ -731,8 +603,4 @@
         border: 1px solid rgba(248, 113, 113, 0.3);
     }
 
-    .spinner {
-        display: inline-block;
-        animation: pulse 1s ease-in-out infinite;
-    }
 </style>

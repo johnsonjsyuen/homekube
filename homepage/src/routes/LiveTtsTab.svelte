@@ -1,22 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
-    import {
-        initKeycloak,
-        login,
-        logout,
-        onAuthStateChange,
-        getFreshToken,
-        type AuthState,
-    } from "$lib/auth";
-
-    // Auth state
-    let authState = $state<AuthState>({
-        authenticated: false,
-        token: null,
-        username: null,
-        roles: [],
-    });
-    let authInitialized = $state(false);
+    import { getFreshToken } from "$lib/auth";
 
     // TTS state
     let text = $state("");
@@ -80,16 +64,7 @@
     });
 
     onMount(() => {
-        initKeycloak().then(() => {
-            authInitialized = true;
-        });
-
-        const unsubscribe = onAuthStateChange((state) => {
-            authState = state;
-        });
-
         return () => {
-            unsubscribe();
             cleanup();
         };
     });
@@ -104,14 +79,6 @@
         }
         stopSendTimer();
         stopPlayback();
-    }
-
-    async function handleLogin() {
-        await login("/?tab=live-tts");
-    }
-
-    async function handleLogout() {
-        await logout();
     }
 
     function startKaraokeLoop() {
@@ -183,11 +150,6 @@
     }
 
     async function start() {
-        if (!authState.authenticated) {
-            alert("Please log in first.");
-            return;
-        }
-
         connectionStatus = "connecting";
         errorMessage = "";
         sentLength = 0;
@@ -373,103 +335,83 @@
     <div class="live-tts-card">
         <h3>Live Text-to-Speech</h3>
 
-        {#if !authInitialized}
-            <div class="auth-loading">
-                <span class="spinner">...</span> Loading authentication...
-            </div>
-        {:else if !authState.authenticated}
-            <div class="auth-required">
-                <p>Please log in to use live text-to-speech.</p>
-                <button class="login-btn" onclick={handleLogin}>
-                    Log In
-                </button>
-            </div>
-        {:else}
-            <div class="user-info">
-                <span>Logged in as: <strong>{authState.username}</strong></span>
-                <button class="logout-btn" onclick={handleLogout}
-                    >Log Out</button
-                >
-            </div>
+        <div class="form-group">
+            <label for="live-text">Text to speak</label>
+            <textarea
+                id="live-text"
+                bind:value={text}
+                placeholder="Start typing and your text will be spoken as you type..."
+                rows="4"
+            ></textarea>
+        </div>
 
+        <div class="form-row">
             <div class="form-group">
-                <label for="live-text">Text to speak</label>
-                <textarea
-                    id="live-text"
-                    bind:value={text}
-                    placeholder="Start typing and your text will be spoken as you type..."
-                    rows="4"
-                ></textarea>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="live-voice">Voice</label>
-                    <select
-                        id="live-voice"
-                        bind:value={voice}
-                        disabled={isActive}
-                    >
-                        <option value="af_heart">Heart (Female)</option>
-                        <option value="af_bella">Bella (Female)</option>
-                        <option value="af_nicole">Nicole (Female)</option>
-                        <option value="af_sky">Sky (Female)</option>
-                        <option value="bm_daniel">Daniel (Male)</option>
-                        <option value="bm_george">George (Male)</option>
-                        <option value="bm_lewis">Lewis (Male)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="live-speed">Speed: {speed.toFixed(1)}x</label>
-                    <input
-                        type="range"
-                        id="live-speed"
-                        bind:value={speed}
-                        min="0.5"
-                        max="2.0"
-                        step="0.1"
-                        disabled={isActive}
-                    />
-                </div>
-            </div>
-
-            <div class="button-row">
-                <button
-                    class="toggle-btn"
-                    class:active={isActive}
-                    onclick={toggleActive}
-                    disabled={connectionStatus === "connecting"}
+                <label for="live-voice">Voice</label>
+                <select
+                    id="live-voice"
+                    bind:value={voice}
+                    disabled={isActive}
                 >
-                    {#if connectionStatus === "connecting"}
-                        <span class="spinner">...</span> Connecting...
-                    {:else if isActive}
-                        <span class="pulse-dot"></span> Active — Stop
-                    {:else}
-                        🔊 Start Live TTS
-                    {/if}
-                </button>
+                    <option value="af_heart">Heart (Female)</option>
+                    <option value="af_bella">Bella (Female)</option>
+                    <option value="af_nicole">Nicole (Female)</option>
+                    <option value="af_sky">Sky (Female)</option>
+                    <option value="bm_daniel">Daniel (Male)</option>
+                    <option value="bm_george">George (Male)</option>
+                    <option value="bm_lewis">Lewis (Male)</option>
+                </select>
             </div>
-
-            <div class="connection-status">
-                Status:
-                <span class="status-badge status-{connectionStatus}">
-                    {connectionStatus}
-                </span>
+            <div class="form-group">
+                <label for="live-speed">Speed: {speed.toFixed(1)}x</label>
+                <input
+                    type="range"
+                    id="live-speed"
+                    bind:value={speed}
+                    min="0.5"
+                    max="2.0"
+                    step="0.1"
+                    disabled={isActive}
+                />
             </div>
+        </div>
 
-            {#if errorMessage}
-                <div class="error-msg">
-                    Error: {errorMessage}
-                </div>
-            {/if}
+        <div class="button-row">
+            <button
+                class="toggle-btn"
+                class:active={isActive}
+                onclick={toggleActive}
+                disabled={connectionStatus === "connecting"}
+            >
+                {#if connectionStatus === "connecting"}
+                    <span class="spinner">...</span> Connecting...
+                {:else if isActive}
+                    <span class="pulse-dot"></span> Active — Stop
+                {:else}
+                    Start Live TTS
+                {/if}
+            </button>
+        </div>
 
-            {#if words.length > 0}
-                <div class="karaoke-display">
-                    {#each words as word}
-                        <span class="word {word.status}">{word.text}</span>
-                    {/each}
-                </div>
-            {/if}
+        <div class="connection-status">
+            Status:
+            <span class="status-badge status-{connectionStatus}">
+                {connectionStatus}
+            </span>
+        </div>
+
+        {#if errorMessage}
+            <div class="error-msg">
+                Error: {errorMessage}
+            </div>
+        {/if}
+
+        {#if words.length > 0}
+            <div class="karaoke-display">
+                {#each words as word}
+                    <span class="word {word.status}">{word.text}</span>
+                {/each}
+            </div>
         {/if}
     </div>
 </div>
@@ -494,73 +436,6 @@
         margin-bottom: 20px;
         text-align: center;
         color: #fff;
-    }
-
-    .auth-loading {
-        text-align: center;
-        color: #aaa;
-        padding: 20px;
-    }
-
-    .auth-required {
-        text-align: center;
-        padding: 20px;
-    }
-
-    .auth-required p {
-        color: #aaa;
-        margin-bottom: 20px;
-    }
-
-    .login-btn {
-        background: #4a90e2;
-        color: white;
-        border: none;
-        padding: 12px 30px;
-        border-radius: 8px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s;
-    }
-
-    .login-btn:hover {
-        background: #357abd;
-    }
-
-    .user-info {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-        padding: 10px 15px;
-        background: #333;
-        border-radius: 8px;
-        font-size: 0.9rem;
-    }
-
-    .user-info span {
-        color: #aaa;
-    }
-
-    .user-info strong {
-        color: #fff;
-    }
-
-    .logout-btn {
-        background: transparent;
-        color: #f87171;
-        border: 1px solid #f87171;
-        padding: 5px 15px;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 0.85rem;
-        transition: all 0.2s;
-    }
-
-    .logout-btn:hover {
-        background: #f87171;
-        color: #000;
     }
 
     .form-group {
