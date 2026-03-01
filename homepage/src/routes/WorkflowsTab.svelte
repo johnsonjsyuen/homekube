@@ -1,9 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { initKeycloak, login, logout, onAuthStateChange, getFreshToken, type AuthState } from '$lib/auth';
-
-    let authState = $state<AuthState>({ authenticated: false, token: null, username: null, roles: [] });
-    let authInitialized = $state(false);
+    import { getFreshToken } from '$lib/auth';
 
     let newsSubscribed = $state(false);
     let newsLoading = $state(false);
@@ -21,13 +18,9 @@
     let econTriggerError = $state('');
 
     onMount(() => {
-        initKeycloak().then(() => { authInitialized = true; });
-        const unsubscribe = onAuthStateChange((state) => { authState = state; });
-        return () => { unsubscribe(); };
+        fetchSubscriptionStatus();
+        fetchEconSubscriptionStatus();
     });
-
-    async function handleLogin() { await login('/?tab=workflows'); }
-    async function handleLogout() { await logout(); }
 
     async function fetchSubscriptionStatus() {
         try {
@@ -153,32 +146,11 @@
         }
     }
 
-    $effect(() => {
-        if (authState.authenticated) {
-            fetchSubscriptionStatus();
-            fetchEconSubscriptionStatus();
-        }
-    });
 </script>
 
 <div class="workflows-container">
     <div class="workflows-card">
         <h3>Workflows</h3>
-
-        {#if !authInitialized}
-            <div class="auth-loading">
-                <span class="spinner">...</span> Loading authentication...
-            </div>
-        {:else if !authState.authenticated}
-            <div class="auth-required">
-                <p>Please log in to manage workflow subscriptions.</p>
-                <button class="login-btn" onclick={handleLogin}>Log In</button>
-            </div>
-        {:else}
-            <div class="user-info">
-                <span>Logged in as: <strong>{authState.username}</strong></span>
-                <button class="logout-btn" onclick={handleLogout}>Log Out</button>
-            </div>
 
             <div class="section">
                 <h4>Daily News Digest</h4>
@@ -271,7 +243,6 @@
                     {/if}
                 </div>
             </div>
-        {/if}
     </div>
 </div>
 
@@ -295,73 +266,6 @@
         margin-bottom: 20px;
         text-align: center;
         color: #fff;
-    }
-
-    .auth-loading {
-        text-align: center;
-        color: #aaa;
-        padding: 20px;
-    }
-
-    .auth-required {
-        text-align: center;
-        padding: 20px;
-    }
-
-    .auth-required p {
-        color: #aaa;
-        margin-bottom: 20px;
-    }
-
-    .login-btn {
-        background: #4a90e2;
-        color: white;
-        border: none;
-        padding: 12px 30px;
-        border-radius: 8px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s;
-    }
-
-    .login-btn:hover {
-        background: #357abd;
-    }
-
-    .user-info {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-        padding: 10px 15px;
-        background: #333;
-        border-radius: 8px;
-        font-size: 0.9rem;
-    }
-
-    .user-info span {
-        color: #aaa;
-    }
-
-    .user-info strong {
-        color: #fff;
-    }
-
-    .logout-btn {
-        background: transparent;
-        color: #f87171;
-        border: 1px solid #f87171;
-        padding: 5px 15px;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 0.85rem;
-        transition: all 0.2s;
-    }
-
-    .logout-btn:hover {
-        background: #f87171;
-        color: #000;
     }
 
     .section {

@@ -1,10 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { initKeycloak, login, logout, onAuthStateChange, getFreshToken, type AuthState } from '$lib/auth';
-
-    // Auth state
-    let authState = $state<AuthState>({ authenticated: false, token: null, username: null, roles: [] });
-    let authInitialized = $state(false);
+    import { getFreshToken } from '$lib/auth';
 
     // Registration state
     let phoneNumber = $state('');
@@ -27,9 +23,8 @@
     let qrInterval: ReturnType<typeof setInterval> | null = null;
 
     onMount(() => {
-        initKeycloak().then(() => { authInitialized = true; });
-        const unsubscribe = onAuthStateChange((state) => { authState = state; });
-        return () => { unsubscribe(); cleanup(); };
+        fetchStatus();
+        return () => { cleanup(); };
     });
 
     onDestroy(() => { cleanup(); });
@@ -38,9 +33,6 @@
         if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }
         if (qrInterval) { clearInterval(qrInterval); qrInterval = null; }
     }
-
-    async function handleLogin() { await login('/?tab=whatsapp'); }
-    async function handleLogout() { await logout(); }
 
     async function fetchStatus() {
         try {
@@ -219,162 +211,140 @@
         }
     }
 
-    // Fetch initial status when authenticated
-    $effect(() => {
-        if (authState.authenticated) {
-            fetchStatus();
-        }
-    });
 </script>
 
 <div class="whatsapp-container">
     <div class="whatsapp-card">
         <h3>WhatsApp</h3>
 
-        {#if !authInitialized}
-            <div class="auth-loading">
-                <span class="spinner">...</span> Loading authentication...
-            </div>
-        {:else if !authState.authenticated}
-            <div class="auth-required">
-                <p>Please log in to link your WhatsApp account.</p>
-                <button class="login-btn" onclick={handleLogin}>Log In</button>
-            </div>
-        {:else}
-            <div class="user-info">
-                <span>Logged in as: <strong>{authState.username}</strong></span>
-                <button class="logout-btn" onclick={handleLogout}>Log Out</button>
+        <!-- Registration Section -->
+        <div class="section">
+            <h4>Account Status</h4>
+            <div class="connection-status">
+                Status: <span class="status-badge status-{sessionStatus}">{sessionStatus}</span>
             </div>
 
-            <!-- Registration Section -->
-            <div class="section">
-                <h4>Account Status</h4>
-                <div class="connection-status">
-                    Status: <span class="status-badge status-{sessionStatus}">{sessionStatus}</span>
-                </div>
-
-                {#if sessionStatus === 'connected'}
-                    <div class="connected-info">
-                        {#if whatsappJid}
-                            <p>WhatsApp JID: <code>{whatsappJid}</code></p>
-                        {/if}
-                        <button class="disconnect-btn" onclick={disconnect}>Disconnect</button>
-                    </div>
-                {:else if sessionStatus === 'pairing' && linkMode === 'qr'}
-                    <div class="pairing-info">
-                        <p>Scan with WhatsApp to link your account:</p>
-                        <div class="qr-container">
-                            {#if qrDataUrl}
-                                <img src={qrDataUrl} alt="QR Code" class="qr-image" />
-                            {:else}
-                                <div class="qr-placeholder">
-                                    <span class="spinner">...</span> Waiting for QR code...
-                                </div>
-                            {/if}
-                        </div>
-                        <ol class="pairing-steps">
-                            <li>Open WhatsApp on your phone</li>
-                            <li>Go to <strong>Settings &gt; Linked Devices</strong></li>
-                            <li>Tap <strong>Link a Device</strong></li>
-                            <li>Scan the QR code above</li>
-                        </ol>
-                        <div class="link-actions">
-                            <button class="cancel-btn" onclick={disconnect}>Cancel</button>
-                            <button class="switch-btn" onclick={() => { disconnect().then(() => { linkMode = 'pairing'; sessionStatus = 'disconnected'; }); }}>Use pairing code instead</button>
-                        </div>
-                    </div>
-                {:else if sessionStatus === 'pairing' && linkMode === 'pairing'}
-                    <div class="pairing-info">
-                        <p>Enter this code on your phone:</p>
-                        <div class="pairing-code">{pairingCode}</div>
-                        <ol class="pairing-steps">
-                            <li>Open WhatsApp on your phone</li>
-                            <li>Go to <strong>Settings &gt; Linked Devices</strong></li>
-                            <li>Tap <strong>Link a Device</strong></li>
-                            <li>Tap <strong>Link with phone number instead</strong></li>
-                            <li>Enter the code above</li>
-                        </ol>
-                        <div class="link-actions">
-                            <button class="cancel-btn" onclick={disconnect}>Cancel</button>
-                            <button class="switch-btn" onclick={() => { disconnect().then(() => { linkMode = 'qr'; sessionStatus = 'disconnected'; }); }}>Use QR code instead</button>
-                        </div>
-                    </div>
-                {:else}
-                    <div class="register-form">
-                        {#if linkMode === 'qr'}
-                            <button class="link-btn" onclick={linkViaQr} disabled={linking}>
-                                {#if linking}
-                                    <span class="spinner">...</span> Starting...
-                                {:else}
-                                    Link WhatsApp (Scan QR)
-                                {/if}
-                            </button>
-                            <button class="switch-link" onclick={() => { linkMode = 'pairing'; }}>Use pairing code instead</button>
-                        {:else}
-                            <div class="form-group">
-                                <label for="phone">Your WhatsApp phone number</label>
-                                <input
-                                    id="phone"
-                                    type="tel"
-                                    bind:value={phoneNumber}
-                                    placeholder="e.g. 0412345678 or +61412345678"
-                                />
-                            </div>
-                            <button class="link-btn" onclick={linkViaPairingCode} disabled={!phoneNumber || linking}>
-                                {#if linking}
-                                    <span class="spinner">...</span> Starting...
-                                {:else}
-                                    Link WhatsApp (Pairing Code)
-                                {/if}
-                            </button>
-                            <button class="switch-link" onclick={() => { linkMode = 'qr'; }}>Use QR code instead</button>
-                        {/if}
-                    </div>
-                {/if}
-            </div>
-
-            <!-- Test Messaging Section (only when connected) -->
             {#if sessionStatus === 'connected'}
-                <div class="section">
-                    <h4>Send Message</h4>
-                    <div class="form-group">
-                        <label for="recipient">Recipient Phone</label>
-                        <input
-                            id="recipient"
-                            type="tel"
-                            bind:value={recipientPhone}
-                            placeholder="61412345678"
-                        />
-                    </div>
-                    <div class="form-group">
-                        <label for="message">Message</label>
-                        <textarea
-                            id="message"
-                            bind:value={messageText}
-                            placeholder="Type your message..."
-                            rows="3"
-                        ></textarea>
-                    </div>
-                    <button class="send-btn" onclick={sendMessage} disabled={sending || !recipientPhone || !messageText}>
-                        {#if sending}
-                            <span class="spinner">...</span> Sending...
+                <div class="connected-info">
+                    {#if whatsappJid}
+                        <p>WhatsApp JID: <code>{whatsappJid}</code></p>
+                    {/if}
+                    <button class="disconnect-btn" onclick={disconnect}>Disconnect</button>
+                </div>
+            {:else if sessionStatus === 'pairing' && linkMode === 'qr'}
+                <div class="pairing-info">
+                    <p>Scan with WhatsApp to link your account:</p>
+                    <div class="qr-container">
+                        {#if qrDataUrl}
+                            <img src={qrDataUrl} alt="QR Code" class="qr-image" />
                         {:else}
-                            Send Message
+                            <div class="qr-placeholder">
+                                <span class="spinner">...</span> Waiting for QR code...
+                            </div>
                         {/if}
-                    </button>
-                    {#if sendResult}
-                        <div class="send-result" class:error={sendResult.startsWith('Error')}>
-                            {sendResult}
+                    </div>
+                    <ol class="pairing-steps">
+                        <li>Open WhatsApp on your phone</li>
+                        <li>Go to <strong>Settings &gt; Linked Devices</strong></li>
+                        <li>Tap <strong>Link a Device</strong></li>
+                        <li>Scan the QR code above</li>
+                    </ol>
+                    <div class="link-actions">
+                        <button class="cancel-btn" onclick={disconnect}>Cancel</button>
+                        <button class="switch-btn" onclick={() => { disconnect().then(() => { linkMode = 'pairing'; sessionStatus = 'disconnected'; }); }}>Use pairing code instead</button>
+                    </div>
+                </div>
+            {:else if sessionStatus === 'pairing' && linkMode === 'pairing'}
+                <div class="pairing-info">
+                    <p>Enter this code on your phone:</p>
+                    <div class="pairing-code">{pairingCode}</div>
+                    <ol class="pairing-steps">
+                        <li>Open WhatsApp on your phone</li>
+                        <li>Go to <strong>Settings &gt; Linked Devices</strong></li>
+                        <li>Tap <strong>Link a Device</strong></li>
+                        <li>Tap <strong>Link with phone number instead</strong></li>
+                        <li>Enter the code above</li>
+                    </ol>
+                    <div class="link-actions">
+                        <button class="cancel-btn" onclick={disconnect}>Cancel</button>
+                        <button class="switch-btn" onclick={() => { disconnect().then(() => { linkMode = 'qr'; sessionStatus = 'disconnected'; }); }}>Use QR code instead</button>
+                    </div>
+                </div>
+            {:else}
+                <div class="register-form">
+                    {#if linkMode === 'qr'}
+                        <button class="link-btn" onclick={linkViaQr} disabled={linking}>
+                            {#if linking}
+                                <span class="spinner">...</span> Starting...
+                            {:else}
+                                Link WhatsApp (Scan QR)
+                            {/if}
+                        </button>
+                        <button class="switch-link" onclick={() => { linkMode = 'pairing'; }}>Use pairing code instead</button>
+                    {:else}
+                        <div class="form-group">
+                            <label for="phone">Your WhatsApp phone number</label>
+                            <input
+                                id="phone"
+                                type="tel"
+                                bind:value={phoneNumber}
+                                placeholder="e.g. 0412345678 or +61412345678"
+                            />
                         </div>
+                        <button class="link-btn" onclick={linkViaPairingCode} disabled={!phoneNumber || linking}>
+                            {#if linking}
+                                <span class="spinner">...</span> Starting...
+                            {:else}
+                                Link WhatsApp (Pairing Code)
+                            {/if}
+                        </button>
+                        <button class="switch-link" onclick={() => { linkMode = 'qr'; }}>Use QR code instead</button>
                     {/if}
                 </div>
             {/if}
+        </div>
 
-            {#if errorMessage}
-                <div class="error-msg">
-                    Error: {errorMessage}
+        <!-- Test Messaging Section (only when connected) -->
+        {#if sessionStatus === 'connected'}
+            <div class="section">
+                <h4>Send Message</h4>
+                <div class="form-group">
+                    <label for="recipient">Recipient Phone</label>
+                    <input
+                        id="recipient"
+                        type="tel"
+                        bind:value={recipientPhone}
+                        placeholder="61412345678"
+                    />
                 </div>
-            {/if}
+                <div class="form-group">
+                    <label for="message">Message</label>
+                    <textarea
+                        id="message"
+                        bind:value={messageText}
+                        placeholder="Type your message..."
+                        rows="3"
+                    ></textarea>
+                </div>
+                <button class="send-btn" onclick={sendMessage} disabled={sending || !recipientPhone || !messageText}>
+                    {#if sending}
+                        <span class="spinner">...</span> Sending...
+                    {:else}
+                        Send Message
+                    {/if}
+                </button>
+                {#if sendResult}
+                    <div class="send-result" class:error={sendResult.startsWith('Error')}>
+                        {sendResult}
+                    </div>
+                {/if}
+            </div>
+        {/if}
+
+        {#if errorMessage}
+            <div class="error-msg">
+                Error: {errorMessage}
+            </div>
         {/if}
     </div>
 </div>
@@ -399,73 +369,6 @@
         margin-bottom: 20px;
         text-align: center;
         color: #fff;
-    }
-
-    .auth-loading {
-        text-align: center;
-        color: #aaa;
-        padding: 20px;
-    }
-
-    .auth-required {
-        text-align: center;
-        padding: 20px;
-    }
-
-    .auth-required p {
-        color: #aaa;
-        margin-bottom: 20px;
-    }
-
-    .login-btn {
-        background: #4a90e2;
-        color: white;
-        border: none;
-        padding: 12px 30px;
-        border-radius: 8px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s;
-    }
-
-    .login-btn:hover {
-        background: #357abd;
-    }
-
-    .user-info {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-        padding: 10px 15px;
-        background: #333;
-        border-radius: 8px;
-        font-size: 0.9rem;
-    }
-
-    .user-info span {
-        color: #aaa;
-    }
-
-    .user-info strong {
-        color: #fff;
-    }
-
-    .logout-btn {
-        background: transparent;
-        color: #f87171;
-        border: 1px solid #f87171;
-        padding: 5px 15px;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 0.85rem;
-        transition: all 0.2s;
-    }
-
-    .logout-btn:hover {
-        background: #f87171;
-        color: #000;
     }
 
     .section {
