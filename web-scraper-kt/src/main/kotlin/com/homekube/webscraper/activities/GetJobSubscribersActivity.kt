@@ -29,6 +29,7 @@ class GetJobSubscribersActivity {
     lateinit var objectMapper: ObjectMapper
 
     private val httpClient: HttpClient = HttpClient.newBuilder()
+        .version(HttpClient.Version.HTTP_1_1)
         .connectTimeout(Duration.ofSeconds(15))
         .build()
 

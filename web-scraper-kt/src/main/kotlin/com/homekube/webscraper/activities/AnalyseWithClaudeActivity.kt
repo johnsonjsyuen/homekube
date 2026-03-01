@@ -29,6 +29,7 @@ class AnalyseWithClaudeActivity {
     }
 
     private val httpClient: HttpClient = HttpClient.newBuilder()
+        .version(HttpClient.Version.HTTP_1_1)
         .connectTimeout(Duration.ofSeconds(30))
         .build()
 

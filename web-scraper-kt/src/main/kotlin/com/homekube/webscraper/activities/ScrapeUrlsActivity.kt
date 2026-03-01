@@ -21,6 +21,7 @@ class ScrapeUrlsActivity {
     }
 
     private val httpClient: HttpClient = HttpClient.newBuilder()
+        .version(HttpClient.Version.HTTP_1_1)
         .connectTimeout(Duration.ofSeconds(TIMEOUT_SECONDS))
         .followRedirects(HttpClient.Redirect.NORMAL)
         .build()
