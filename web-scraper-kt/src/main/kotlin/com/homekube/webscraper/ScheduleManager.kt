@@ -5,9 +5,10 @@ import io.temporal.client.schedules.Schedule
 import io.temporal.client.schedules.ScheduleActionStartWorkflow
 import io.temporal.client.schedules.ScheduleClient
 import io.temporal.client.schedules.ScheduleOptions
-import io.temporal.client.schedules.ScheduleOverlapPolicy
 import io.temporal.client.schedules.SchedulePolicy
 import io.temporal.client.schedules.ScheduleSpec
+import io.temporal.client.WorkflowOptions
+import io.temporal.api.enums.v1.ScheduleOverlapPolicy
 import io.temporal.serviceclient.WorkflowServiceStubs
 import jakarta.enterprise.context.ApplicationScoped
 import org.jboss.logging.Logger
@@ -30,18 +31,22 @@ class ScheduleManager {
 
         val action = ScheduleActionStartWorkflow.newBuilder()
             .setWorkflowType("WebScraperWorkflow")
-            .setTaskQueue("web-scraper-queue")
-            .setWorkflowId("web-scraper-$jobId")
+            .setOptions(
+                WorkflowOptions.newBuilder()
+                    .setTaskQueue("web-scraper-queue")
+                    .setWorkflowId("web-scraper-$jobId")
+                    .build()
+            )
             .setArguments(WebScraperInput(jobId))
             .build()
 
         val spec = ScheduleSpec.newBuilder()
             .setCronExpressions(listOf(cron))
-            .setTimeZone(timezone)
+            .setTimeZoneName(timezone)
             .build()
 
         val policy = SchedulePolicy.newBuilder()
-            .setOverlap(ScheduleOverlapPolicy.SKIP)
+            .setOverlap(ScheduleOverlapPolicy.SCHEDULE_OVERLAP_POLICY_SKIP)
             .build()
 
         val schedule = Schedule.newBuilder()

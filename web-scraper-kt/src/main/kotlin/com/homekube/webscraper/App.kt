@@ -36,7 +36,6 @@ class TemporalWorkerLifecycle {
     private lateinit var serviceStubs: WorkflowServiceStubs
 
     lateinit var workflowClient: WorkflowClient
-        private set
 
     fun onStart(@Observes event: StartupEvent) {
         log.infof("Connecting to Temporal at %s", temporalAddress)

@@ -242,7 +242,7 @@
                 triggerResult = { ...triggerResult, [job.id]: `Error: ${data.error}` };
                 return;
             }
-            triggerResult = { ...triggerResult, [job.id]: `Started: ${data.workflowId}` };
+            triggerResult = { ...triggerResult, [job.id]: `Started: ${data.workflow_id}` };
         } catch (err: any) {
             triggerResult = { ...triggerResult, [job.id]: `Error: ${err.message}` };
         } finally {

@@ -106,18 +106,18 @@ data class TriggerResponse(val workflowId: String)
 // --- Workflow/Activity DTOs ---
 
 /** Workflow input DTO used by both schedule creation and manual trigger. */
-data class WebScraperInput(val jobId: String)
+data class WebScraperInput(val jobId: String = "")
 
 /** Serialization-safe DTO for ScrapeJob (avoids sending JPA entities over the Temporal boundary). */
 data class ScrapeJobDto(
-    val id: String,
-    val userId: String,
-    val name: String,
-    val urls: List<String>,
-    val instruction: String,
-    val scheduleCron: String,
-    val timezone: String,
-    val enabled: Boolean,
+    val id: String = "",
+    val userId: String = "",
+    val name: String = "",
+    val urls: List<String> = emptyList(),
+    val instruction: String = "",
+    val scheduleCron: String = "",
+    val timezone: String = "",
+    val enabled: Boolean = false,
 )
 
 fun ScrapeJob.toDto() = ScrapeJobDto(
@@ -132,39 +132,39 @@ fun ScrapeJob.toDto() = ScrapeJobDto(
 )
 
 data class ScrapedContent(
-    val url: String,
-    val text: String,
+    val url: String = "",
+    val text: String = "",
 )
 
 data class AnalysisInput(
-    val instruction: String,
-    val scrapedContent: List<ScrapedContent>,
+    val instruction: String = "",
+    val scrapedContent: List<ScrapedContent> = emptyList(),
 )
 
 data class AnalysisResult(
-    val shouldNotify: Boolean,
-    val message: String,
+    val shouldNotify: Boolean = false,
+    val message: String = "",
 )
 
 data class Subscriber(
-    val userId: String,
-    val phone: String,
+    val userId: String = "",
+    val phone: String = "",
 )
 
 data class SendNotificationInput(
-    val message: String,
-    val subscribers: List<Subscriber>,
-    val workflow: String,
-    val jobName: String,
+    val message: String = "",
+    val subscribers: List<Subscriber> = emptyList(),
+    val workflow: String = "",
+    val jobName: String = "",
 )
 
 data class RecordRunInput(
-    val jobId: String,
-    val jobName: String,
-    val status: String,
-    val urlsScraped: Int,
-    val notified: Boolean,
+    val jobId: String = "",
+    val jobName: String = "",
+    val status: String = "",
+    val urlsScraped: Int = 0,
+    val notified: Boolean = false,
     val claudeResponse: String? = null,
     val error: String? = null,
-    val durationMs: Long,
+    val durationMs: Long = 0,
 )

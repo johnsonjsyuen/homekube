@@ -23,7 +23,7 @@ spec:
         - name: TEMPORAL_ADDRESS
           value: "temporal-frontend:7233"
         - name: KEYCLOAK_URL
-          value: "http://keycloak.keycloak.svc.cluster.local"
+          value: "https://auth.johnsonyuen.com"
         - name: KEYCLOAK_REALM
           value: "homekube"
         - name: KEYCLOAK_CLIENT_SECRET
