@@ -219,25 +219,22 @@
 </div>
 
 <style>
-    :global(body) {
-        margin: 0;
-        font-family: "Inter", sans-serif;
-        background-color: #1a1a1a;
-        color: #e0e0e0;
-    }
-
     .container {
-        max-width: 800px;
+        max-width: 900px;
         margin: 0 auto;
-        padding: 20px;
     }
 
     .header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 30px;
-        gap: 15px;
+        margin-bottom: 2rem;
+        padding: 14px 20px;
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 16px;
+        gap: 12px;
     }
 
     .header-left {
@@ -249,13 +246,14 @@
     .header-right {
         display: flex;
         align-items: center;
-        gap: 15px;
+        gap: 14px;
     }
 
     .active-tab-label {
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         font-weight: 600;
         color: #e0e0e0;
+        letter-spacing: 0.3px;
     }
 
     /* Hamburger menu button */
@@ -264,28 +262,29 @@
     }
 
     .menu-btn {
-        background: none;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
         padding: 8px;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 40px;
-        height: 40px;
-        transition: background 0.2s;
+        width: 38px;
+        height: 38px;
+        transition: all 0.2s;
     }
 
     .menu-btn:hover {
         background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.18);
     }
 
     .menu-icon {
         display: flex;
         flex-direction: column;
         gap: 4px;
-        width: 20px;
+        width: 18px;
         transition: all 0.3s;
     }
 
@@ -293,7 +292,7 @@
         display: block;
         height: 2px;
         width: 100%;
-        background: #e0e0e0;
+        background: #b0b0c8;
         border-radius: 1px;
         transition: all 0.3s;
         transform-origin: center;
@@ -320,15 +319,15 @@
 
     .menu-dropdown {
         position: absolute;
-        top: calc(100% + 8px);
+        top: calc(100% + 10px);
         left: 0;
-        background: #2a2a2a;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
+        background: linear-gradient(160deg, #252538 0%, #1e1e30 100%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
         padding: 6px;
-        min-width: 200px;
+        min-width: 210px;
         z-index: 10;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03);
     }
 
     .menu-item {
@@ -337,22 +336,23 @@
         text-align: left;
         background: none;
         border: none;
-        color: #aaa;
+        color: #8b8b9e;
         padding: 10px 14px;
-        border-radius: 8px;
+        border-radius: 10px;
         cursor: pointer;
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         font-weight: 500;
         transition: all 0.15s;
+        letter-spacing: 0.2px;
     }
 
     .menu-item:hover {
         background: rgba(255, 255, 255, 0.06);
-        color: #fff;
+        color: #e0e0e0;
     }
 
     .menu-item.active {
-        background: #4a90e2;
+        background: linear-gradient(135deg, #4a90e2, #357abd);
         color: white;
     }
 
@@ -364,18 +364,31 @@
     }
 
     .location {
-        font-size: 0.95rem;
+        font-size: 0.85rem;
         font-weight: 500;
         color: #8b8b9e;
+        letter-spacing: 0.5px;
     }
 
     .location-select {
-        background: #333;
-        color: #fff;
-        border: 1px solid #444;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #b0b0c8;
         padding: 5px 10px;
-        border-radius: 5px;
-        font-size: 0.85rem;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .location-select:hover {
+        border-color: rgba(255, 255, 255, 0.2);
+        color: #e0e0e0;
+    }
+
+    .location-select option {
+        background: #1e1e30;
+        color: #e0e0e0;
     }
 
     /* Datetime */
@@ -384,13 +397,13 @@
     }
 
     .datetime {
-        font-size: 0.9rem;
-        color: #888;
+        font-size: 0.85rem;
+        color: #6b6b7e;
     }
 
     .fetched-at {
-        font-size: 0.75rem;
-        color: #666;
+        font-size: 0.7rem;
+        color: #555;
         margin-top: 2px;
     }
 
@@ -402,46 +415,56 @@
     }
 
     .username {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         color: #8b8b9e;
+        font-weight: 500;
     }
 
     .auth-btn {
         border: none;
-        padding: 8px 16px;
+        padding: 7px 14px;
         border-radius: 8px;
         cursor: pointer;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         font-weight: 600;
         transition: all 0.2s;
+        letter-spacing: 0.3px;
     }
 
     .login-btn {
-        background: #4a90e2;
+        background: linear-gradient(135deg, #4a90e2, #357abd);
         color: white;
+        box-shadow: 0 2px 8px rgba(74, 144, 226, 0.25);
     }
 
     .login-btn:hover {
-        background: #357abd;
+        box-shadow: 0 4px 16px rgba(74, 144, 226, 0.35);
+        transform: translateY(-1px);
     }
 
     .logout-btn {
-        background: rgba(255, 255, 255, 0.08);
-        color: #aaa;
+        background: rgba(255, 255, 255, 0.06);
+        color: #8b8b9e;
+        border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .logout-btn:hover {
-        background: rgba(255, 82, 82, 0.15);
-        color: #ff5252;
+        background: rgba(255, 82, 82, 0.12);
+        color: #ff6b6b;
+        border-color: rgba(255, 82, 82, 0.2);
     }
 
     @media (max-width: 600px) {
         .header {
             flex-wrap: wrap;
+            padding: 12px 14px;
         }
         .header-right {
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 8px;
+        }
+        .active-tab-label {
+            font-size: 0.95rem;
         }
     }
 </style>
