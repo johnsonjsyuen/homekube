@@ -43,7 +43,7 @@ Add HTTP error panels showing `increase()` of 4xx/5xx responses. Uses `status=~"
 |-------|--------|
 | Service health (id 1-4) | No change (up/down mappings work correctly) |
 | 24h stat panels (id 5-8) | Wrap in `round()`, add `"decimals": 0` |
-| NEW: Service CPU | `sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="default",pod=~"(text-to-speech\|speech-to-text\|whatsapp).*",container!=""}[5m]))` + news-worker in temporal namespace |
+| NEW: Service CPU | `sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="default",pod=~"(text-to-speech\|speech-to-text\|whatsapp).*",container!=""}[5m]))` + workflows-worker in temporal namespace |
 | NEW: Service Memory | `sum by (pod) (container_memory_working_set_bytes{namespace="default",pod=~"(text-to-speech\|speech-to-text\|whatsapp).*",container!=""})` |
 | NEW: HTTP Errors (24h) | `round(sum by (job) (increase(http_requests_total{status=~"[45].."}[24h])))` + axum variant |
 
@@ -76,7 +76,7 @@ Add HTTP error panels showing `increase()` of 4xx/5xx responses. Uses `status=~"
 | 5 "HTTP Request Rate" | `rate()[5m]` unit=reqps | `round(increase()[1h])` renamed "HTTP Requests per Hour", bars |
 | 1, 6 | Keep as-is | No change |
 
-### News Worker Dashboard
+### Workflows Worker Dashboard (formerly News Worker)
 
 | Panel ID | Current | New |
 |----------|---------|-----|
@@ -161,5 +161,6 @@ TTS and STT dashboards showed "No data" on all custom business metric panels (jo
 | Current dashboard YAMLs | [monitoring/crossplane/dashboards/](../monitoring/crossplane/dashboards/) |
 | Monitoring implementation spec | [docs/monitoring-spec.md](monitoring-spec.md) |
 | Metric definitions (Rust) | [text-to-speech/src/metrics.rs](../text-to-speech/src/metrics.rs), [speech-to-text/src/metrics.rs](../speech-to-text/src/metrics.rs) |
-| Metric definitions (Node.js) | [whatsapp/src/metrics.ts](../whatsapp/src/metrics.ts), [news-worker/src/metrics.ts](../news-worker/src/metrics.ts) |
+| Metric definitions (Node.js) | [whatsapp/src/metrics.ts](../whatsapp/src/metrics.ts) |
+| Metric definitions (Kotlin/Quarkus) | [web-scraper-kt/](../web-scraper-kt/) (workflows-worker Micrometer metrics) |
 | Crossplane dashboard README | [monitoring/crossplane/README.md](../monitoring/crossplane/README.md) |

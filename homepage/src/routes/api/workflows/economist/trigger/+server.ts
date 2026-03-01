@@ -8,7 +8,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     try {
-        const response = await fetch('http://news-worker.temporal.svc.cluster.local/api/economist/trigger', {
+        const response = await fetch('http://workflows-worker.temporal.svc.cluster.local/api/economist/trigger', {
             method: 'POST',
             headers: { 'Authorization': authHeader }
         });

@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
-const BACKEND_URL = 'http://web-scraper.temporal.svc.cluster.local';
+const BACKEND_URL = 'http://workflows-worker.temporal.svc.cluster.local';
 
 export const GET: RequestHandler = async ({ request, params, url }) => {
     const authHeader = request.headers.get('Authorization');
@@ -21,7 +21,7 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
         }
         return json(JSON.parse(text), { status: response.status });
     } catch (e) {
-        console.error('Error proxying to web-scraper runs:', e);
+        console.error('Error proxying to workflows-worker runs:', e);
         return json({ error: 'Internal Server Error' }, { status: 500 });
     }
 };

@@ -209,13 +209,15 @@ let app = Router::new()
     .with_state(state);
 ```
 
-## 3. Node.js Service Instrumentation (WhatsApp + news-worker)
+## 3. Node.js Service Instrumentation (WhatsApp) + Kotlin/Quarkus (workflows-worker)
 
-Both Node.js services use Express. The `prom-client` library provides default process metrics (GC, event loop lag, memory) and an API for custom metrics.
+> **Note:** The `news-worker` (TypeScript/Node.js) has been merged into `workflows-worker` (Kotlin/Quarkus). The WhatsApp service remains Node.js/Express and uses `prom-client`. The `workflows-worker` uses Quarkus Micrometer for metrics (see Section 12 of the [Workflows Worker spec](rewrite/02-web-scraper-rewrite-spec.md)).
+
+The WhatsApp Node.js service uses Express. The `prom-client` library provides default process metrics (GC, event loop lag, memory) and an API for custom metrics.
 
 ### Dependency
 
-Add to both `whatsapp/package.json` and `news-worker/package.json`:
+Add to `whatsapp/package.json` (workflows-worker uses Quarkus Micrometer instead):
 
 ```json
 "prom-client": "^15.1.3"
@@ -314,9 +316,11 @@ Increment these in the relevant handlers:
 - `whatsappActiveSessions.inc()` / `.dec()` in session connect/disconnect callbacks
 - `whatsappSessionConnects.inc()` in session connect callback
 
-### news-worker Custom Metrics
+### workflows-worker Custom Metrics
 
-Define in `news-worker/src/metrics.ts`:
+> **Note:** These metrics are now implemented in `workflows-worker` (Kotlin/Quarkus) using Micrometer. The TypeScript `prom-client` code below is retained for reference. See Section 12 of the [Workflows Worker spec](rewrite/02-web-scraper-rewrite-spec.md) for the Kotlin implementation.
+
+Originally defined in `news-worker/src/metrics.ts`:
 
 ```typescript
 import { Counter, Histogram } from 'prom-client';
@@ -360,9 +364,9 @@ export const workflowMessagesSent = new Counter({
 
 ### Critical Constraint: Temporal Sandbox
 
-**All `prom-client` calls MUST happen inside activity functions, NOT inside workflow functions.**
+**All metrics calls MUST happen inside activity functions, NOT inside workflow functions.**
 
-Temporal workflows run in a deterministic sandbox that forbids non-deterministic operations (network I/O, timers, global state). Importing `prom-client` or calling `.inc()` inside a workflow function will cause a non-determinism error at runtime.
+Temporal workflows run in a deterministic sandbox that forbids non-deterministic operations (network I/O, timers, global state). In the Kotlin/Quarkus `workflows-worker`, this means Micrometer `MeterRegistry` calls must only occur in activity implementations, not in workflow classes. The same principle applied to the former TypeScript `news-worker` with `prom-client`.
 
 ```typescript
 // WRONG -- will fail in Temporal sandbox
@@ -426,7 +430,7 @@ Apply the same changes to:
 | text-to-speech | `text-to-speech/k8s/service.yaml` | `default` |
 | speech-to-text | `speech-to-text/k8s/service.yaml` | `default` |
 | whatsapp | `whatsapp/k8s/service.yaml` | `default` |
-| news-worker | `news-worker/k8s/service.yaml` | `temporal` |
+| workflows-worker | `web-scraper-kt/k8s/service.yaml` | `temporal` |
 
 ### ServiceMonitor CRDs
 
@@ -495,21 +499,21 @@ spec:
     interval: 30s
 ```
 
-#### news-worker ServiceMonitor
+#### workflows-worker ServiceMonitor
 
 ```yaml
-# news-worker/k8s/service-monitor.yaml
+# web-scraper-kt/k8s/service-monitor.yaml
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: news-worker
+  name: workflows-worker
   namespace: temporal
   labels:
-    app: news-worker
+    app: workflows-worker
 spec:
   selector:
     matchLabels:
-      app: news-worker
+      app: workflows-worker
   endpoints:
   - port: http
     path: /metrics
@@ -556,7 +560,7 @@ curl -s localhost:3002/metrics | head -20
 kubectl port-forward svc/whatsapp 3003:80 -n default &
 curl -s localhost:3003/metrics | head -20
 
-kubectl port-forward svc/news-worker 3004:80 -n temporal &
+kubectl port-forward svc/workflows-worker 3004:80 -n temporal &
 curl -s localhost:3004/metrics | head -20
 ```
 
@@ -600,9 +604,9 @@ workflow_runs_total
 
 ## 6. Anti-patterns
 
-### Do Not Put prom-client in Temporal Workflow Code
+### Do Not Put Metrics Calls in Temporal Workflow Code
 
-Temporal workflows execute inside a deterministic sandbox. Any import of `prom-client` or call to a metric's `.inc()` method inside a workflow function will cause a non-determinism error. All metric instrumentation must live in activity functions, which run outside the sandbox.
+Temporal workflows execute inside a deterministic sandbox. Any metrics call (whether `prom-client` in TypeScript or Micrometer in Kotlin) inside a workflow function will cause a non-determinism error. All metric instrumentation must live in activity functions, which run outside the sandbox.
 
 ### Do Not Create ServiceMonitors in the monitoring Namespace
 
@@ -634,9 +638,8 @@ The 512 MiB request is appropriate for startup, but Prometheus memory usage grow
 | WhatsApp entry point | [whatsapp/src/index.ts](../whatsapp/src/index.ts) |
 | WhatsApp K8s service | [whatsapp/k8s/service.yaml](../whatsapp/k8s/service.yaml) |
 | WhatsApp CNPG database | [whatsapp/k8s/db.yaml](../whatsapp/k8s/db.yaml) |
-| news-worker entry point | [news-worker/src/index.ts](../news-worker/src/index.ts) |
-| news-worker activities | [news-worker/src/activities/index.ts](../news-worker/src/activities/index.ts) |
-| news-worker K8s service | [news-worker/k8s/service.yaml](../news-worker/k8s/service.yaml) |
+| workflows-worker source | [web-scraper-kt/](../web-scraper-kt/) (Kotlin/Quarkus) |
+| workflows-worker K8s service | [web-scraper-kt/k8s/service.yaml](../web-scraper-kt/k8s/service.yaml) |
 | kube-prometheus-stack chart | [https://github.com/prometheus-community/helm-charts](https://github.com/prometheus-community/helm-charts) |
 | axum-prometheus crate | [https://crates.io/crates/axum-prometheus](https://crates.io/crates/axum-prometheus) |
 | prom-client npm | [https://www.npmjs.com/package/prom-client](https://www.npmjs.com/package/prom-client) |

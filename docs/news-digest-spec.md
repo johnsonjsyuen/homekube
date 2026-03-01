@@ -1,5 +1,7 @@
 # Daily ABC News Digest Implementation Spec (Implementation)
 
+> **Migration Note (completed):** The `news-worker` (TypeScript/Node.js) has been merged into `workflows-worker` (Kotlin/Quarkus) in the `web-scraper-kt/` directory. The news digest workflow now runs as a Temporal workflow within `workflows-worker`, using the `workflows-worker-queue` task queue. Claude Code is invoked via HTTP POST to `claude-code-api` instead of kubectl exec. The database is `workflows_worker` (package `com.homekube.worker`). The original TypeScript implementation details below are retained for historical reference but are no longer the active implementation.
+
 ## 1. Database Schema
 
 Add a `news_subscriptions` table to the WhatsApp Postgres database via a new migration file:
@@ -174,7 +176,7 @@ All three endpoints use `getCallerUserId(user)` -- no `userId` body parameter, s
 
 ## 4. Homepage Proxy Routes
 
-Three SvelteKit server routes under `homepage/src/routes/api/workflows/news/` that proxy to the news-worker service, passing the Keycloak Bearer token through:
+Three SvelteKit server routes under `homepage/src/routes/api/workflows/news/` that proxy to the workflows-worker service, passing the Keycloak Bearer token through:
 
 ### `src/routes/api/workflows/news/subscribe/+server.ts`
 
@@ -381,7 +383,7 @@ export async function DailyNewsDigestWorkflow(): Promise<void> {
     log.info(`Scraping ${headlines.length} articles`);
     const articles = await scrapeArticles(headlines.slice(0, 20));
 
-    // Step 3: Summarize with Claude via kubectl exec
+    // Step 3: Summarize with Claude (via claude-code-api HTTP in workflows-worker)
     log.info('Generating AI summary');
     const digest = await summarizeWithClaude(articles);
 
@@ -595,7 +597,7 @@ Calls the existing WhatsApp `/api/send` endpoint using a Keycloak service accoun
 const WHATSAPP_URL = process.env.WHATSAPP_URL || 'http://whatsapp.whatsapp.svc.cluster.local:3000';
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL || 'http://keycloak.keycloak.svc.cluster.local';
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM || 'homekube';
-const CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID || 'news-worker';
+const CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID || 'workflows-worker';
 const CLIENT_SECRET = process.env.KEYCLOAK_CLIENT_SECRET!;
 const SENDER_USER_ID = process.env.NEWS_SENDER_USER_ID!;
 
@@ -643,13 +645,15 @@ export async function sendWhatsAppMessage(phoneNumber: string, message: string):
 }
 ```
 
-The service account (`news-worker`) must have the `whatsapp-service` Keycloak realm role to use the `userId` parameter for cross-user sending via `resolveUserId()`.
+The service account (`workflows-worker`, formerly `news-worker`) must have the `whatsapp-service` Keycloak realm role to use the `userId` parameter for cross-user sending via `resolveUserId()`.
 
 ## 7. Kubernetes Deployment
 
-### ServiceAccount + RBAC
+> **Note:** The news digest now runs within `workflows-worker` (Kotlin/Quarkus). The separate `news-digest-worker` deployment, ServiceAccount, and RBAC below are no longer needed. The `workflows-worker` calls `claude-code-api` via HTTP instead of kubectl exec.
 
-The worker needs `kubectl exec` access to invoke Claude Code in a pod:
+### ServiceAccount + RBAC (historical -- no longer needed)
+
+The worker formerly needed `kubectl exec` access to invoke Claude Code in a pod:
 
 ```yaml
 # k8s/news-digest-worker/rbac.yaml
@@ -727,7 +731,7 @@ spec:
             - name: KEYCLOAK_REALM
               value: "homekube"
             - name: KEYCLOAK_CLIENT_ID
-              value: "news-worker"
+              value: "workflows-worker"
             - name: KEYCLOAK_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -773,7 +777,9 @@ CMD ["node", "dist/worker.js"]
 
 ## 8. Schedule Registration
 
-Register the Temporal schedule using the TypeScript SDK:
+> **Note:** The schedule now uses `workflows-worker-queue` as the task queue (was `news-digest`). Registration is handled within the `workflows-worker` Kotlin service.
+
+Register the Temporal schedule (original TypeScript version for reference):
 
 ```typescript
 // scripts/register-schedule.ts
@@ -812,7 +818,7 @@ async function main() {
         action: {
             type: 'startWorkflow',
             workflowType: 'DailyNewsDigestWorkflow',
-            taskQueue: 'news-digest',
+            taskQueue: 'workflows-worker-queue',
         },
         policies: {
             overlap: ScheduleOverlapPolicy.SKIP,
@@ -838,11 +844,13 @@ main().catch(console.error);
 
 ## 9. Keycloak Configuration
 
-### Create `news-worker` Confidential Client
+> **Note:** The Keycloak client is now `workflows-worker` (was `news-worker`). The `workflows-worker` client consolidates the permissions formerly held by both `web-scraper` and `news-worker` clients.
+
+### Create `workflows-worker` Confidential Client (was `news-worker`)
 
 1. Go to **Clients** in left menu
 2. Click **Create client**
-3. Set **Client ID**: `news-worker`
+3. Set **Client ID**: `workflows-worker`
 4. Set **Client authentication**: ON (confidential)
 5. Enable **Service accounts roles** (under Authentication flow)
 6. Click **Save**
@@ -850,14 +858,14 @@ main().catch(console.error);
 
 ### Assign `whatsapp-service` Realm Role
 
-1. Go to **Clients** -> `news-worker` -> **Service account roles** tab
+1. Go to **Clients** -> `workflows-worker` -> **Service account roles** tab
 2. Click **Assign role**
 3. Select `whatsapp-service` (the role created during whatsapp-authz setup)
 4. Click **Assign**
 
 ### Add `whatsapp` Client Scope
 
-1. Go to **Clients** -> `news-worker` -> **Client scopes** tab
+1. Go to **Clients** -> `workflows-worker` -> **Client scopes** tab
 2. Click **Add client scope**
 3. Select `whatsapp` scope
 4. Click **Add** (as Default)
@@ -874,6 +882,8 @@ The role appears in the JWT as:
 ```
 
 ## 10. File Change Summary
+
+> **Note:** The `news-digest-worker/` files below have been migrated into `web-scraper-kt/` (the `workflows-worker` Kotlin/Quarkus service). The TypeScript implementations no longer exist as separate files.
 
 | File | Change Type | Description |
 |------|-------------|-------------|

@@ -13,6 +13,10 @@ spec:
       labels:
         app: claude-code-api
     spec:
+      volumes:
+      - name: claude-config
+        persistentVolumeClaim:
+          claimName: claude-code-config
       containers:
       - name: claude-code-api
         image: localhost:5000/claude-code-api:latest
@@ -21,6 +25,9 @@ spec:
         env:
         - name: RUST_LOG
           value: "info"
+        volumeMounts:
+        - name: claude-config
+          mountPath: /root/.claude
         resources:
           requests:
             memory: "256Mi"

@@ -83,7 +83,7 @@
                 triggerError = data.error || 'Failed to trigger workflow';
                 return;
             }
-            triggerResult = `Workflow started: ${data.workflowId}`;
+            triggerResult = `Workflow started: ${data.workflow_id}`;
         } catch (err: any) {
             triggerError = err.message;
         } finally {
@@ -145,7 +145,7 @@
                 econTriggerError = data.error || 'Failed to trigger workflow';
                 return;
             }
-            econTriggerResult = `Workflow started: ${data.workflowId}`;
+            econTriggerResult = `Workflow started: ${data.workflow_id}`;
         } catch (err: any) {
             econTriggerError = err.message;
         } finally {

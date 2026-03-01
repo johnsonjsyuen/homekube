@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-services=(homepage text-to-speech speech-to-text whatsapp news-worker claude-code claude-code-api web-scraper-kt)
+services=(homepage text-to-speech speech-to-text whatsapp claude-code claude-code-api workflows-worker)
 pids=()
 failures=()
 

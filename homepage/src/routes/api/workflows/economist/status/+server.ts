@@ -8,7 +8,7 @@ export const GET: RequestHandler = async ({ request }) => {
     }
 
     try {
-        const response = await fetch('http://news-worker.temporal.svc.cluster.local/api/economist/subscription-status', {
+        const response = await fetch('http://workflows-worker.temporal.svc.cluster.local/api/economist/subscription-status', {
             headers: { 'Authorization': authHeader }
         });
 

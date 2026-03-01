@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: workflows-worker
+  namespace: temporal
+  labels:
+    app: workflows-worker
+spec:
+  selector:
+    app: workflows-worker
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000

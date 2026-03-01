@@ -2,7 +2,7 @@
 
 ## Context
 
-A Rust/Axum HTTP service that wraps the Claude Code CLI, providing a JSON API for AI analysis requests. Replaces the current kubectl exec pattern used by web-scraper and news-worker.
+A Rust/Axum HTTP service that wraps the Claude Code CLI, providing a JSON API for AI analysis requests. Replaces the current kubectl exec pattern formerly used by the web-scraper and news-worker (now consolidated into `workflows-worker`).
 
 Deployed to the `default` namespace as a ClusterIP service. No external authentication — internal service only.
 
@@ -111,7 +111,7 @@ metrics = "0.23"
 | 502 | `{ "error": "claude process failed: <stderr>" }` | Non-zero exit code |
 | 503 | `{ "error": "claude command not found" }` | CLI not installed |
 
-**Implementation Implication:** The endpoint is intentionally generic — it accepts any prompt and returns raw Claude output. The caller (web-scraper, news-worker) is responsible for constructing the prompt and parsing the response. This keeps the API service simple and reusable.
+**Implementation Implication:** The endpoint is intentionally generic -- it accepts any prompt and returns raw Claude output. The caller (`workflows-worker`) is responsible for constructing the prompt and parsing the response. This keeps the API service simple and reusable.
 
 ### GET `/health`
 
@@ -393,7 +393,7 @@ spec:
 | Topic | Location |
 |-------|----------|
 | Strategic blueprint | [00-strategic-blueprint.md](./00-strategic-blueprint.md) |
-| Web scraper rewrite spec | [02-web-scraper-rewrite-spec.md](./02-web-scraper-rewrite-spec.md) |
+| Workflows Worker spec | [02-web-scraper-rewrite-spec.md](./02-web-scraper-rewrite-spec.md) |
 | Existing Rust/Axum service pattern | `speech-to-text/src/main.rs` |
 | Existing Rust Cargo.toml pattern | `speech-to-text/Cargo.toml` |
 | Existing Prometheus metrics pattern | `speech-to-text/Cargo.toml` (axum-prometheus) |

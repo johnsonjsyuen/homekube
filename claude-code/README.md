@@ -1,6 +1,6 @@
 # Claude Code Service
 
-Persistent Claude Code pod for the news-worker to `kubectl exec` into for AI summarisation.
+Persistent Claude Code pod for the workflows-worker to `kubectl exec` into for AI summarisation.
 
 ## Build & Deploy
 
@@ -25,14 +25,14 @@ Alternatively, create a secret with an API key (optional):
 kubectl create secret generic claude-code-api-key --from-literal=api-key=YOUR_KEY
 ```
 
-## How News-Worker Uses It
+## How Workflows-Worker Uses It
 
-The news-worker finds this pod via label selector (`app=claude-code` in namespace `default`) and runs:
+The workflows-worker finds this pod via label selector (`app=claude-code` in namespace `default`) and runs:
 
 ```bash
 kubectl exec <pod> -- claude -p "summarise these articles..." --output-format text
 ```
 
-Environment variables in news-worker deployment:
+Environment variables in workflows-worker deployment:
 - `CLAUDE_CODE_NAMESPACE=default`
 - `CLAUDE_CODE_LABEL=app=claude-code`

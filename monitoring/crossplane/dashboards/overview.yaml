@@ -87,12 +87,12 @@ spec:
           },
           {
             "id": 4,
-            "title": "News Worker",
+            "title": "Workflows Worker",
             "type": "stat",
             "gridPos": { "h": 3, "w": 6, "x": 18, "y": 1 },
             "targets": [
               {
-                "expr": "up{job=\"news-worker\"}",
+                "expr": "up{job=\"workflows-worker\"}",
                 "refId": "A"
               }
             ],
@@ -208,7 +208,7 @@ spec:
                 "refId": "A"
               },
               {
-                "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"temporal\",pod=~\"news-worker-.*\",container!=\"\"}[5m]))",
+                "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"temporal\",pod=~\"workflows-worker-.*\",container!=\"\"}[5m]))",
                 "legendFormat": "{{pod}}",
                 "refId": "B"
               }
@@ -231,7 +231,7 @@ spec:
                 "refId": "A"
               },
               {
-                "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"temporal\",pod=~\"news-worker-.*\",container!=\"\"})",
+                "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"temporal\",pod=~\"workflows-worker-.*\",container!=\"\"})",
                 "legendFormat": "{{pod}}",
                 "refId": "B"
               }
