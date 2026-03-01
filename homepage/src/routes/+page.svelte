@@ -129,25 +129,46 @@
 <div class="container" data-hydrated={hydrated ? '' : undefined}>
     <header class="header">
         <div class="header-left">
-            {#if authState.authenticated}
-                <div class="menu-wrapper">
-                    <button
-                        class="menu-btn"
-                        onclick={() => (menuOpen = !menuOpen)}
-                        aria-label="Menu"
-                        aria-expanded={menuOpen}
-                    >
-                        <span class="menu-icon" class:open={menuOpen}>
-                            <span></span>
-                            <span></span>
-                            <span></span>
-                        </span>
-                    </button>
-                    {#if menuOpen}
-                        <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-                        <div class="menu-backdrop" onclick={() => (menuOpen = false)}></div>
-                        <nav class="menu-dropdown">
-                            {#each Object.entries(tabLabels) as [key, label]}
+            <div class="menu-wrapper">
+                <button
+                    class="menu-btn"
+                    onclick={() => (menuOpen = !menuOpen)}
+                    aria-label="Menu"
+                    aria-expanded={menuOpen}
+                >
+                    <span class="menu-icon" class:open={menuOpen}>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </span>
+                </button>
+                {#if menuOpen}
+                    <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+                    <div class="menu-backdrop" onclick={() => (menuOpen = false)}></div>
+                    <nav class="menu-dropdown">
+                        {#if authInitialized}
+                            <div class="menu-auth">
+                                {#if authState.authenticated}
+                                    <span class="menu-username">{authState.username}</span>
+                                    <button class="menu-auth-btn menu-logout-btn" onclick={() => { menuOpen = false; handleLogout(); }}>
+                                        Log Out
+                                    </button>
+                                {:else}
+                                    <button class="menu-auth-btn menu-login-btn" onclick={() => { menuOpen = false; handleLogin(); }}>
+                                        Log In
+                                    </button>
+                                {/if}
+                            </div>
+                            <div class="menu-divider"></div>
+                        {/if}
+                        <button
+                            class="menu-item {activeTab === 'weather' ? 'active' : ''}"
+                            onclick={() => selectTab('weather')}
+                        >
+                            Weather
+                        </button>
+                        {#if authState.authenticated}
+                            {#each Object.entries(tabLabels).filter(([key]) => key !== 'weather') as [key, label]}
                                 <button
                                     class="menu-item {activeTab === key ? 'active' : ''}"
                                     onclick={() => selectTab(key)}
@@ -155,10 +176,10 @@
                                     {label}
                                 </button>
                             {/each}
-                        </nav>
-                    {/if}
-                </div>
-            {/if}
+                        {/if}
+                    </nav>
+                {/if}
+            </div>
             <span class="active-tab-label">{tabLabels[activeTab]}</span>
         </div>
 
@@ -186,16 +207,6 @@
                     </div>
                 {/if}
             </div>
-            {#if authInitialized}
-                {#if authState.authenticated}
-                    <div class="auth-info">
-                        <span class="username">{authState.username}</span>
-                        <button class="auth-btn logout-btn" onclick={handleLogout}>Log Out</button>
-                    </div>
-                {:else}
-                    <button class="auth-btn login-btn" onclick={handleLogin}>Log In</button>
-                {/if}
-            {/if}
         </div>
     </header>
 
@@ -360,6 +371,61 @@
         color: white;
     }
 
+    /* Menu auth section */
+    .menu-auth {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 14px;
+        gap: 10px;
+    }
+
+    .menu-username {
+        font-size: 0.85rem;
+        color: #b0b0c8;
+        font-weight: 500;
+    }
+
+    .menu-auth-btn {
+        border: none;
+        padding: 6px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: 600;
+        transition: all 0.2s;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+    }
+
+    .menu-login-btn {
+        background: linear-gradient(135deg, #4a90e2, #357abd);
+        color: white;
+        width: 100%;
+    }
+
+    .menu-login-btn:hover {
+        box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
+    }
+
+    .menu-logout-btn {
+        background: rgba(255, 255, 255, 0.06);
+        color: #8b8b9e;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .menu-logout-btn:hover {
+        background: rgba(255, 82, 82, 0.12);
+        color: #ff6b6b;
+        border-color: rgba(255, 82, 82, 0.2);
+    }
+
+    .menu-divider {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.06);
+        margin: 4px 10px;
+    }
+
     /* Location */
     .location-container {
         display: flex;
@@ -412,56 +478,6 @@
         font-size: 0.7rem;
         color: #555;
         margin-top: 2px;
-    }
-
-    /* Auth buttons */
-    .auth-info {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-shrink: 0;
-    }
-
-    .username {
-        font-size: 0.8rem;
-        color: #8b8b9e;
-        font-weight: 500;
-    }
-
-    .auth-btn {
-        border: none;
-        padding: 7px 14px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 0.8rem;
-        font-weight: 600;
-        transition: all 0.2s;
-        letter-spacing: 0.3px;
-        white-space: nowrap;
-        flex-shrink: 0;
-    }
-
-    .login-btn {
-        background: linear-gradient(135deg, #4a90e2, #357abd);
-        color: white;
-        box-shadow: 0 2px 8px rgba(74, 144, 226, 0.25);
-    }
-
-    .login-btn:hover {
-        box-shadow: 0 4px 16px rgba(74, 144, 226, 0.35);
-        transform: translateY(-1px);
-    }
-
-    .logout-btn {
-        background: rgba(255, 255, 255, 0.06);
-        color: #8b8b9e;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .logout-btn:hover {
-        background: rgba(255, 82, 82, 0.12);
-        color: #ff6b6b;
-        border-color: rgba(255, 82, 82, 0.2);
     }
 
     @media (max-width: 600px) {

@@ -46,7 +46,9 @@
                 const currentHour = hourPart ? parseInt(hourPart.value, 10) % 24 : 0;
                 const card = hourlyScrollEl.children[currentHour] as HTMLElement;
                 if (card) {
-                    card.scrollIntoView({ inline: 'start', behavior: 'instant', block: 'nearest' });
+                    const containerRect = hourlyScrollEl.getBoundingClientRect();
+                    const cardRect = card.getBoundingClientRect();
+                    hourlyScrollEl.scrollLeft += cardRect.left - containerRect.left;
                 }
             });
         } else if (!isToday && hasData) {
