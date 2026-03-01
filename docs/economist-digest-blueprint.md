@@ -1,10 +1,12 @@
 # Economist Digest Workflow (Strategic)
 
+> **Migration Note (completed):** The Economist digest workflow has been merged into `workflows-worker` (Kotlin/Quarkus) along with the web scraper and news digest. The `news-worker` (TypeScript/Node.js) no longer exists as a separate service. Claude Code is invoked via HTTP to `claude-code-api` instead of kubectl exec.
+
 ## 1. Problem Statement
 
 Users want a daily curated summary of The Economist's top articles delivered via WhatsApp, similar to the existing ABC News digest. The Economist publishes high-quality analysis across multiple sections (Leaders, Finance, Business, etc.) but articles are behind a paywall and Cloudflare protection.
 
-**Implementation Implication:** Use Economist RSS feeds (which are publicly accessible and return titles + descriptions) as the primary source. Attempt full article scraping using `get-article.ts` logic with "Lamarr" user agent; fall back to RSS descriptions when scraping fails (Cloudflare 403). Add a second Temporal workflow to the existing `news-worker` service.
+**Implementation Implication:** Use Economist RSS feeds (which are publicly accessible and return titles + descriptions) as the primary source. Attempt full article scraping with "Lamarr" user agent; fall back to RSS descriptions when scraping fails (Cloudflare 403). The Economist digest workflow is now part of the `workflows-worker` (Kotlin/Quarkus) service.
 
 ## 2. Success Metrics
 
@@ -15,23 +17,23 @@ Users want a daily curated summary of The Economist's top articles delivered via
 - Independent subscription from ABC News (users can subscribe to either or both)
 - Manual trigger available from homepage UI
 
-**Implementation Implication:** Separate subscription table (`economist_subscriptions`) and separate Temporal schedule (`economist-digest`). Reuse existing infrastructure: Temporal worker, Keycloak auth, WhatsApp delivery.
+**Implementation Implication:** Separate subscription table (`economist_subscriptions`) and separate Temporal schedule (`economist-digest`). All within the `workflows-worker` service, reusing existing infrastructure: Temporal worker, Keycloak auth, WhatsApp delivery.
 
 ## 3. Architecture Decision
 
-Extend the existing `news-worker` service with a second workflow:
+The Economist digest workflow is part of the `workflows-worker` service (formerly split across `news-worker` and `web-scraper`):
 
 | Component | Approach | Rationale |
 |-----------|----------|-----------|
 | Source | Economist RSS feeds | RSS works without Cloudflare; articles behind protection |
-| Scraping | `get-article.ts` logic with fallback | Attempt full text; fall back to RSS description |
-| Workflow | New `EconomistDigestWorkflow` in same worker | Share infrastructure, avoid deploying a second service |
+| Scraping | Article scraping logic with fallback | Attempt full text; fall back to RSS description |
+| Workflow | `EconomistDigestWorkflow` in `workflows-worker` | Share infrastructure with web scraper and news digest |
 | Subscriptions | Separate `economist_subscriptions` table | Independent from ABC News subscriptions |
-| Task queue | Same `news-digest-queue` | One worker, multiple workflow types |
+| Task queue | `workflows-worker-queue` | One worker, multiple workflow types |
 | Schedule | Separate `economist-digest` schedule | Independent trigger timing |
 | Delivery | Reuse `sendDigest` activity | Same Keycloak + WhatsApp pipeline |
 
-**Decision:** Add to existing `news-worker` rather than creating a new service. The worker already has Temporal, Keycloak, DB, and kubectl exec capabilities. Adding a second workflow is minimal overhead.
+**Decision:** Include in `workflows-worker` (Kotlin/Quarkus) which consolidates all Temporal workflows. The worker has Temporal, Keycloak, DB, and HTTP access to claude-code-api. Adding workflows is minimal overhead.
 
 ## 4. What We're Building (MVP)
 
@@ -50,7 +52,7 @@ Extend the existing `news-worker` service with a second workflow:
 
 - Full paywall bypass or login-based scraping
 - Per-section subscription (all 3 sections bundled)
-- Separate Kubernetes deployment (reusing news-worker)
+- Separate Kubernetes deployment (part of workflows-worker)
 - Article caching or deduplication across days
 - Custom delivery timing per user
 
@@ -72,13 +74,10 @@ Extend the existing `news-worker` service with a second workflow:
 
 | Topic | Location |
 |-------|----------|
-| Existing news-worker workflow | [news-worker/src/workflow.ts](../news-worker/src/workflow.ts) |
-| Existing activities | [news-worker/src/activities/](../news-worker/src/activities/) |
-| DB + migrations | [news-worker/src/db.ts](../news-worker/src/db.ts) |
-| Auth middleware | [news-worker/src/auth.ts](../news-worker/src/auth.ts) |
-| Routes | [news-worker/src/routes.ts](../news-worker/src/routes.ts) |
+| Workflows Worker source | [web-scraper-kt/](../web-scraper-kt/) (Kotlin/Quarkus implementation) |
+| Workflows Worker spec | [rewrite/02-web-scraper-rewrite-spec.md](rewrite/02-web-scraper-rewrite-spec.md) |
 | Homepage WorkflowsTab | [homepage/src/routes/WorkflowsTab.svelte](../homepage/src/routes/WorkflowsTab.svelte) |
-| Homepage proxy routes | [homepage/src/routes/api/workflows/news/](../homepage/src/routes/api/workflows/news/) |
+| Homepage proxy routes | [homepage/src/routes/api/workflows/](../homepage/src/routes/api/workflows/) |
 | get-article.ts | [get-article.ts](../get-article.ts) |
 | ABC News blueprint | [news-digest-blueprint.md](news-digest-blueprint.md) |
 | ABC News spec | [news-digest-spec.md](news-digest-spec.md) |

@@ -1,8 +1,10 @@
 # Economist Digest Implementation Spec (Implementation)
 
+> **Migration Note (completed):** The `news-worker` (TypeScript/Node.js) has been merged into `workflows-worker` (Kotlin/Quarkus) in the `web-scraper-kt/` directory. The Economist digest workflow now runs as a Temporal workflow within `workflows-worker`, using the `workflows-worker-queue` task queue. Claude Code is invoked via HTTP POST to `claude-code-api` instead of kubectl exec. The database is `workflows_worker` (package `com.homekube.worker`). The original TypeScript implementation details below are retained for historical reference but are no longer the active implementation.
+
 ## 1. Database Migration
 
-New migration file: `news-worker/src/migrations/002_economist_subscriptions.sql`
+New migration file (originally `news-worker/src/migrations/002_economist_subscriptions.sql`, now a Flyway migration in `web-scraper-kt/`):
 
 ```sql
 CREATE TABLE IF NOT EXISTS economist_subscriptions (
@@ -27,7 +29,7 @@ Identical schema to `news_subscriptions`. Separate table so users subscribe inde
 
 ## 2. Activities
 
-All new activities go in `news-worker/src/activities/`. Follow the existing pattern: one file per activity, all re-exported from `index.ts`.
+All activities are now implemented in `web-scraper-kt/` (the `workflows-worker` Kotlin/Quarkus service) under `com.homekube.worker.activities`. The original TypeScript implementations below are retained for reference.
 
 ### 2.1 `fetchEconomistHeadlines` — `news-worker/src/activities/fetchEconomistRss.ts`
 
@@ -184,9 +186,11 @@ export async function scrapeEconomistArticles(headlines: EconomistHeadline[]): P
 
 ### 2.3 `summariseEconomistWithClaude` — reuse `summariseWithClaude` with different prompt
 
-Rather than creating a separate activity, add an optional `source` parameter to the existing `summariseWithClaude` or create a thin wrapper:
+> **Note:** In `workflows-worker`, this activity calls `claude-code-api` via HTTP POST instead of kubectl exec.
 
-New file: `news-worker/src/activities/summariseEconomistWithClaude.ts`
+Rather than creating a separate activity, add an optional `source` parameter to the existing `summariseWithClaude` or create a thin wrapper.
+
+Original TypeScript file (for reference): `news-worker/src/activities/summariseEconomistWithClaude.ts`
 
 ```typescript
 import { execFile } from 'child_process';
@@ -381,7 +385,9 @@ export { EconomistDigestWorkflow } from './economistWorkflow.js';
 
 ## 4. Routes
 
-Add Economist routes to `news-worker/src/routes.ts`:
+> **Note:** These routes are now served by `workflows-worker` (Kotlin/Quarkus JAX-RS endpoints) instead of the former `news-worker` Express routes.
+
+Add Economist routes (original TypeScript for reference from `news-worker/src/routes.ts`):
 
 ```typescript
 // POST /economist/subscribe
@@ -454,7 +460,7 @@ router.post('/economist/trigger', async (req, res) => {
         const client = new Client({ connection });
         const workflowId = `economist-digest-manual-${Date.now()}`;
         const handle = await client.workflow.start('EconomistDigestWorkflow', {
-            taskQueue: 'news-digest-queue',
+            taskQueue: 'workflows-worker-queue',
             workflowId,
         });
         res.json({ workflowId: handle.workflowId, message: 'Economist workflow started' });
@@ -482,7 +488,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     try {
-        const response = await fetch('http://news-worker.temporal.svc.cluster.local/api/economist/subscribe', {
+        const response = await fetch('http://workflows-worker.temporal.svc.cluster.local/api/economist/subscribe', {
             method: 'POST',
             headers: { 'Authorization': authHeader }
         });
@@ -509,7 +515,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     try {
-        const response = await fetch('http://news-worker.temporal.svc.cluster.local/api/economist/unsubscribe', {
+        const response = await fetch('http://workflows-worker.temporal.svc.cluster.local/api/economist/unsubscribe', {
             method: 'POST',
             headers: { 'Authorization': authHeader }
         });
@@ -536,7 +542,7 @@ export const GET: RequestHandler = async ({ request }) => {
     }
 
     try {
-        const response = await fetch('http://news-worker.temporal.svc.cluster.local/api/economist/subscription-status', {
+        const response = await fetch('http://workflows-worker.temporal.svc.cluster.local/api/economist/subscription-status', {
             headers: { 'Authorization': authHeader }
         });
 
@@ -562,7 +568,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     try {
-        const response = await fetch('http://news-worker.temporal.svc.cluster.local/api/economist/trigger', {
+        const response = await fetch('http://workflows-worker.temporal.svc.cluster.local/api/economist/trigger', {
             method: 'POST',
             headers: { 'Authorization': authHeader }
         });
@@ -722,7 +728,7 @@ No new CSS needed — reuses existing `.section`, `.subscribe-btn`, `.unsubscrib
 
 ## 7. Schedule Registration
 
-Add a new schedule in `news-worker/src/schedules/register.ts`:
+Add a new schedule (now registered within `workflows-worker`; original TypeScript reference from `news-worker/src/schedules/register.ts`):
 
 ```typescript
 // After existing daily-news-digest schedule creation:
@@ -746,7 +752,7 @@ await client.schedule.create({
     action: {
         type: 'startWorkflow',
         workflowType: 'EconomistDigestWorkflow',
-        taskQueue: 'news-digest-queue',
+        taskQueue: 'workflows-worker-queue',
     },
     policies: {
         overlap: ScheduleOverlapPolicy.SKIP,
@@ -768,19 +774,14 @@ No other new dependencies — `fast-xml-parser`, `pg`, `express`, `@temporalio/*
 
 ## 9. File Change Summary
 
+> **Note:** The `news-worker/` files below have been migrated into `web-scraper-kt/` (the `workflows-worker` Kotlin/Quarkus service). The TypeScript file paths are retained for historical reference.
+
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `news-worker/src/migrations/002_economist_subscriptions.sql` | Create | New migration: `economist_subscriptions` table |
-| `news-worker/src/activities/fetchEconomistRss.ts` | Create | Fetch Economist RSS headlines |
-| `news-worker/src/activities/scrapeEconomistArticles.ts` | Create | Scrape articles with `get-article.ts` logic + RSS fallback |
-| `news-worker/src/activities/summariseEconomistWithClaude.ts` | Create | Claude summarization with Economist prompt |
-| `news-worker/src/activities/getEconomistSubscribers.ts` | Create | Query `economist_subscriptions` table |
-| `news-worker/src/activities/index.ts` | Modify | Add exports for 4 new activities |
-| `news-worker/src/economistWorkflow.ts` | Create | `EconomistDigestWorkflow` definition |
-| `news-worker/src/workflow.ts` | Modify | Re-export `EconomistDigestWorkflow` |
-| `news-worker/src/routes.ts` | Modify | Add 4 Economist routes |
-| `news-worker/src/schedules/register.ts` | Modify | Add `economist-digest` schedule |
-| `news-worker/package.json` | Modify | Add `linkedom` dependency |
+| `web-scraper-kt/src/main/resources/db/migration/` | Create | Flyway migration for `economist_subscriptions` table |
+| `web-scraper-kt/src/main/kotlin/com/homekube/worker/activities/` | Create | Economist activities (fetch RSS, scrape, summarize, get subscribers) |
+| `web-scraper-kt/src/main/kotlin/com/homekube/worker/workflow/` | Create | `EconomistDigestWorkflow` definition |
+| `web-scraper-kt/src/main/kotlin/com/homekube/worker/Routes.kt` | Modify | Add Economist subscription and trigger routes |
 | `homepage/src/routes/WorkflowsTab.svelte` | Modify | Add Economist section |
 | `homepage/src/routes/api/workflows/economist/subscribe/+server.ts` | Create | Proxy route |
 | `homepage/src/routes/api/workflows/economist/unsubscribe/+server.ts` | Create | Proxy route |
@@ -793,9 +794,9 @@ No other new dependencies — `fast-xml-parser`, `pg`, `express`, `@temporalio/*
 |-------|------------|-----|
 | Hardcode Economist article URLs | Use RSS feeds as source of truth | Articles change daily, RSS is the canonical list |
 | Fail entire workflow if scraping fails | Fall back to RSS description per article | Cloudflare blocks are expected; RSS descriptions are usable |
-| Create a separate K8s deployment | Add to existing news-worker | Avoids infrastructure duplication |
+| Create a separate K8s deployment | Include in workflows-worker | Avoids infrastructure duplication |
 | Share subscription table with ABC | Use separate `economist_subscriptions` table | Users subscribe independently to each digest |
-| Create a new Temporal task queue | Reuse `news-digest-queue` | One worker process handles both workflows |
+| Create a new Temporal task queue | Reuse `workflows-worker-queue` | One worker process handles all workflows |
 | Duplicate `sendDigest` logic | Reuse existing `sendDigest` activity | Same Keycloak + WhatsApp pipeline |
 | Skip user agent on RSS requests | Always send `User-Agent: Lamarr` | Economist may block requests without user agent |
 
@@ -827,7 +828,7 @@ No other new dependencies — `fast-xml-parser`, `pg`, `express`, `@temporalio/*
 | RSS feed parse error | XMLParser exception | Skip that feed | Use remaining feeds | ERROR |
 | Cloudflare 403 on article | HTTP 403 status | Use RSS description | RSS description text | WARN (expected) |
 | Article scrape timeout | fetch timeout (30s) | Skip article | Use RSS description | WARN |
-| Claude Code pod not found | Empty kubectl output | Throw, Temporal retries (3x) | None | ERROR |
+| Claude Code API unreachable | HTTP connection error | Throw, Temporal retries (3x) | None | ERROR |
 | Claude returns empty | Empty stdout | Throw, Temporal retries (3x) | None | ERROR |
 | No subscribers | Empty query result | Return early, skip delivery | None | WARN |
 | WhatsApp send failure | HTTP error from /api/send | Log, continue to next subscriber | None | ERROR |
@@ -839,13 +840,8 @@ No other new dependencies — `fast-xml-parser`, `pg`, `express`, `@temporalio/*
 | Topic | Location |
 |-------|----------|
 | Strategic blueprint | [economist-digest-blueprint.md](economist-digest-blueprint.md) |
-| Existing ABC News workflow | [news-worker/src/workflow.ts](../news-worker/src/workflow.ts) |
-| Existing activities | [news-worker/src/activities/](../news-worker/src/activities/) |
-| get-article.ts logic | [get-article.ts](../get-article.ts) |
-| DB + migrations | [news-worker/src/db.ts](../news-worker/src/db.ts) |
-| Auth middleware | [news-worker/src/auth.ts](../news-worker/src/auth.ts) |
-| Routes | [news-worker/src/routes.ts](../news-worker/src/routes.ts) |
+| Workflows Worker source | [web-scraper-kt/](../web-scraper-kt/) (Kotlin/Quarkus implementation) |
+| Workflows Worker spec | [rewrite/02-web-scraper-rewrite-spec.md](rewrite/02-web-scraper-rewrite-spec.md) |
 | Homepage WorkflowsTab | [homepage/src/routes/WorkflowsTab.svelte](../homepage/src/routes/WorkflowsTab.svelte) |
-| Existing proxy routes | [homepage/src/routes/api/workflows/news/](../homepage/src/routes/api/workflows/news/) |
-| Schedule registration | [news-worker/src/schedules/register.ts](../news-worker/src/schedules/register.ts) |
-| K8s deployment | [news-worker/k8s/deploy.yaml](../news-worker/k8s/deploy.yaml) |
+| Existing proxy routes | [homepage/src/routes/api/workflows/](../homepage/src/routes/api/workflows/) |
+| get-article.ts logic | [get-article.ts](../get-article.ts) |

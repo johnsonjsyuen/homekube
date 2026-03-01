@@ -128,7 +128,7 @@ Repeat the same process for the WhatsApp service:
 8. Go to **Clients** → `homepage` → **Client scopes** tab
 9. Click **Add client scope** → Select `whatsapp` → **Add** -> **Default**
 
-> This scope also needs to be assigned to service account clients (`news-worker`, `web-scraper`) — see sections 6.4 and 7.4.
+> This scope also needs to be assigned to the `workflows-worker` service account client — see section 6.4.
 
 ## 5. Configure WhatsApp Service Role (for cross-user access)
 
@@ -144,7 +144,7 @@ Service accounts that need to send WhatsApp messages on behalf of users require 
 
 ### 5.2 Assign to a Service Account Client
 
-1. Go to **Clients** → select the service client (e.g., `web-scraper` or `news-worker`)
+1. Go to **Clients** → select the service client (e.g., `workflows-worker`)
 2. Ensure **Client authentication**: ON and **Service accounts roles**: ON
 3. Go to the **Service account roles** tab
 4. Click **Assign role**
@@ -162,9 +162,9 @@ The role appears in the service account's JWT as:
 
 Without this role, `/api/sessions/lookup` is rejected with 403 `"Forbidden: service account required"`, and the `userId` parameter on `/api/send` and WebSocket `start_conversation` is rejected with 403 for cross-user requests.
 
-## 6. Configure News Worker Client (for daily news digest)
+## 6. Configure Workflows Worker Client (for web scraping and daily news digest)
 
-The news-worker service needs a confidential client with service account access to send WhatsApp messages on behalf of a designated sender.
+The workflows-worker service (combines the former web-scraper and news-worker) needs a confidential client with service account access to validate incoming user requests, look up WhatsApp sessions, and send notifications on behalf of users.
 
 ### 6.1 Create Client
 
@@ -174,76 +174,11 @@ The news-worker service needs a confidential client with service account access 
 | Setting | Value | Notes |
 |---------|-------|-------|
 | Client type | OpenID Connect | |
-| Client ID | `news-worker` | |
+| Client ID | `workflows-worker` | |
 
 Click "Next"
 
 ### 6.2 Capability Config
-
-| Setting | Value | Notes |
-|---------|-------|-------|
-| Client authentication | **ON** | Confidential client with client secret |
-| Authorization | OFF | Not needed |
-| Standard flow | OFF | Not needed - service account only |
-| Direct access grants | OFF | Not needed |
-| Service accounts roles | **ON** | Required for client_credentials grant |
-
-Click "Next", then "Save"
-
-### 6.3 Assign WhatsApp Service Role
-
-1. Go to **Clients** → select `news-worker`
-2. Go to the **Service account roles** tab
-3. Click **Assign role**
-4. Select `whatsapp-service`
-5. Click **Assign**
-
-This allows the news-worker to send messages on behalf of other users via the WhatsApp `/api/send` endpoint.
-
-### 6.4 Add WhatsApp Client Scope
-
-1. Go to **Clients** → select `news-worker`
-2. Go to the **Client scopes** tab
-3. Click **Add client scope**
-4. Select `whatsapp` (created in section 4.5)
-5. Click **Add** → **Default**
-
-### 6.5 Create Kubernetes Secret
-
-```bash
-# Get the client secret from Keycloak: Clients → news-worker → Credentials tab
-kubectl create secret generic news-worker-keycloak \
-  --from-literal=client-secret=<SECRET_FROM_KEYCLOAK> \
-  -n temporal
-```
-
-### 6.6 Mirror WhatsApp DB Secret to Temporal Namespace
-
-The news-worker reads subscriber data from the WhatsApp database. Mirror the CNPG-generated secret:
-
-```bash
-kubectl get secret whatsapp-db-app -o json | \
-  jq '.metadata.namespace = "temporal" | del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp)' | \
-  kubectl apply -f -
-```
-
-## 7. Configure Web Scraper Client (for on-demand web scraping)
-
-The web-scraper service needs a confidential client with service account access to look up WhatsApp sessions and send notifications on behalf of users.
-
-### 7.1 Create Client
-
-1. Go to **Clients** in the left menu
-2. Click "Create client"
-
-| Setting | Value | Notes |
-|---------|-------|-------|
-| Client type | OpenID Connect | |
-| Client ID | `web-scraper` | |
-
-Click "Next"
-
-### 7.2 Capability Config
 
 | Setting | Value | Notes |
 |---------|-------|-------|
@@ -255,38 +190,48 @@ Click "Next"
 
 Click "Next", then "Save"
 
-### 7.3 Assign WhatsApp Service Role
+### 6.3 Assign WhatsApp Service Role
 
-1. Go to **Clients** → select `web-scraper`
+1. Go to **Clients** → select `workflows-worker`
 2. Go to the **Service account roles** tab
 3. Click **Assign role**
 4. Select `whatsapp-service`
 5. Click **Assign**
 
-This allows the web-scraper to look up WhatsApp sessions via `/api/sessions/lookup` and send notifications on behalf of users.
+This allows the workflows-worker to look up WhatsApp sessions via `/api/sessions/lookup` and send messages on behalf of users.
 
-### 7.4 Add WhatsApp Client Scope
+### 6.4 Add WhatsApp Client Scope
 
-1. Go to **Clients** → select `web-scraper`
+1. Go to **Clients** → select `workflows-worker`
 2. Go to the **Client scopes** tab
 3. Click **Add client scope**
 4. Select `whatsapp` (created in section 4.5)
 5. Click **Add** → **Default**
 
-### 7.5 Create Kubernetes Secret
+### 6.5 Create Kubernetes Secret
 
 ```bash
-# Get the client secret from Keycloak: Clients → web-scraper → Credentials tab
-kubectl create secret generic web-scraper-keycloak \
+# Get the client secret from Keycloak: Clients → workflows-worker → Credentials tab
+kubectl create secret generic workflows-worker-keycloak \
   --from-literal=client-secret=<SECRET_FROM_KEYCLOAK> \
   -n temporal
 ```
 
-## 8. Configure Grafana Client (for dashboard access with Keycloak login)
+### 6.6 Mirror WhatsApp DB Secret to Temporal Namespace
+
+The workflows-worker reads subscriber data from the WhatsApp database. Mirror the CNPG-generated secret:
+
+```bash
+kubectl get secret whatsapp-db-app -o json | \
+  jq '.metadata.namespace = "temporal" | del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp)' | \
+  kubectl apply -f -
+```
+
+## 7. Configure Grafana Client (for dashboard access with Keycloak login)
 
 Grafana uses its built-in OAuth2/OIDC support to authenticate users via Keycloak.
 
-### 8.1 Create Client
+### 7.1 Create Client
 
 1. Go to **Clients** in the left menu
 2. Click "Create client"
@@ -298,7 +243,7 @@ Grafana uses its built-in OAuth2/OIDC support to authenticate users via Keycloak
 
 Click "Next"
 
-### 8.2 Capability Config
+### 7.2 Capability Config
 
 | Setting | Value | Notes |
 |---------|-------|-------|
@@ -310,7 +255,7 @@ Click "Next"
 
 Click "Next"
 
-### 8.3 Login Settings
+### 7.3 Login Settings
 
 | Setting | Value |
 |---------|-------|
@@ -321,7 +266,7 @@ Click "Next"
 
 Click "Save"
 
-### 8.4 Create `grafana-admin` Realm Role
+### 7.4 Create `grafana-admin` Realm Role
 
 1. Go to **Realm roles** in the left menu
 2. Click **Create role**
@@ -331,7 +276,7 @@ Click "Save"
 
 Assign this role to users who should have Grafana Admin access. All other authenticated users get Viewer access by default.
 
-### 8.5 Create Kubernetes Secret
+### 7.5 Create Kubernetes Secret
 
 ```bash
 # Get the client secret from Keycloak: Clients → grafana → Credentials tab
@@ -340,7 +285,7 @@ kubectl create secret generic grafana-keycloak-secret \
   -n monitoring
 ```
 
-### 8.6 Cloudflare Tunnel Route
+### 7.6 Cloudflare Tunnel Route
 
 Add a public hostname route in the Cloudflare dashboard:
 
@@ -364,8 +309,7 @@ Add a public hostname route in the Cloudflare dashboard:
 | Client ID | Type | Flow | Service Accounts | Namespace |
 |-----------|------|------|-----------------|-----------|
 | `homepage` | Public | Standard (PKCE) | No | N/A (browser) |
-| `news-worker` | Confidential | Client credentials | Yes | `temporal` |
-| `web-scraper` | Confidential | Standard + Client credentials | Yes | `temporal` |
+| `workflows-worker` | Confidential | Standard + Client credentials | Yes | `temporal` |
 | `grafana` | Confidential | Standard | No | `monitoring` |
 
 ### Client Scopes (Audiences)
@@ -374,13 +318,13 @@ Add a public hostname route in the Cloudflare dashboard:
 |-------|----------|-------------|
 | `tts` | `tts` | `homepage` |
 | `stt` | `stt` | `homepage` |
-| `whatsapp` | `whatsapp` | `homepage`, `news-worker`, `web-scraper` |
+| `whatsapp` | `whatsapp` | `homepage`, `workflows-worker` |
 
 ### Realm Roles
 
 | Role | Purpose | Assigned to |
 |------|---------|-------------|
-| `whatsapp-service` | Cross-user WhatsApp access | `news-worker`, `web-scraper` |
+| `whatsapp-service` | Cross-user WhatsApp access | `workflows-worker` |
 | `grafana-admin` | Grafana Admin org role | Individual users |
 
 ### Backend Services (token validation only, no Keycloak client needed)
@@ -395,8 +339,7 @@ Add a public hostname route in the Cloudflare dashboard:
 
 | Secret | Namespace | Used by |
 |--------|-----------|---------|
-| `news-worker-keycloak` | `temporal` | news-worker |
-| `web-scraper-keycloak` | `temporal` | web-scraper |
+| `workflows-worker-keycloak` | `temporal` | workflows-worker |
 | `grafana-keycloak-secret` | `monitoring` | grafana |
 
 ## Frontend Configuration

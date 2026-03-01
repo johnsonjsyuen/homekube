@@ -59,7 +59,7 @@ All count-based timeseries use `increase()[1h]` with bar charts instead of `rate
 | **Text-to-Speech** | 6 | Active jobs, jobs per hour (bars), generation duration, HTTP requests/hour, latency, HTTP errors |
 | **Speech-to-Text** | 6 | Active sessions, transcriptions/hour (bars), duration, audio segments/hour, HTTP requests/hour, latency |
 | **WhatsApp** | 6 | Active sessions, session connects, messages/hour (bars), 24h totals, HTTP requests/hour, latency |
-| **News Worker** | 8 | Workflow runs (24h), success rate %, runs/hour (bars), duration, articles/hour, messages/hour, HTTP requests/hour, latency |
+| **Workflows Worker** | 8 | Workflow runs (24h), success rate %, runs/hour (bars), duration, articles/hour, messages/hour, HTTP requests/hour, latency |
 
 ## Adding a new dashboard
 
@@ -126,5 +126,5 @@ monitoring/crossplane/
     text-to-speech.yaml   # TTS job and HTTP metrics
     speech-to-text.yaml   # STT session and HTTP metrics
     whatsapp.yaml         # WhatsApp message and HTTP metrics
-    news-worker.yaml      # Workflow and HTTP metrics
+    workflows-worker.yaml # Workflow and HTTP metrics
 ```

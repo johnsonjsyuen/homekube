@@ -7,7 +7,7 @@ The homekube k3s cluster has zero observability. There are no metrics, no dashbo
 Specific gaps:
 
 - **No metrics collection.** CNPG database clusters already declare `enablePodMonitor: true` across six databases (text-to-speech, whatsapp, keycloak, tansu, speedtest, temporal), but no Prometheus instance exists to scrape them.
-- **No application metrics.** The four custom services (TTS, STT, WhatsApp, news-worker) expose no `/metrics` endpoints. There is no way to track request rates, latencies, or error counts.
+- **No application metrics.** The four custom services (TTS, STT, WhatsApp, workflows-worker) expose no `/metrics` endpoints. There is no way to track request rates, latencies, or error counts.
 - **No business metrics.** There is no visibility into TTS job throughput, STT transcription counts, WhatsApp message volumes, or Temporal workflow success rates.
 - **No dashboards.** Node-level resource usage (CPU, memory, disk) requires manual `kubectl top` or SSH access to the host.
 
@@ -15,17 +15,17 @@ Specific gaps:
 
 ## 2. Success Metrics
 
-- All four services expose `/metrics` endpoints returning Prometheus exposition format
+- All four services (TTS, STT, WhatsApp, workflows-worker) expose `/metrics` endpoints returning Prometheus exposition format
 - Prometheus scrapes all targets (4 services + CNPG databases) and all show status UP
 - Grafana provides default dashboards for node metrics, Kubernetes resources, and CoreDNS
 - Custom business metrics are queryable in Prometheus:
   - TTS: job counts by status, generation duration, active jobs
   - STT: transcription counts, transcription duration, active sessions
   - WhatsApp: messages sent/received, active sessions, session connects
-  - news-worker: workflow run counts, workflow duration, articles fetched, messages sent
+  - workflows-worker: workflow run counts, workflow duration, articles fetched, messages sent
 - 15-day metric retention with homelab-sized resource usage (under 2 GiB RAM for Prometheus)
 
-**Implementation Implication:** Rust services use the `metrics` crate ecosystem. Node.js services use `prom-client`. ServiceMonitor CRDs handle Prometheus target discovery.
+**Implementation Implication:** Rust services use the `metrics` crate ecosystem. The WhatsApp Node.js service uses `prom-client`. The `workflows-worker` (Kotlin/Quarkus) uses Micrometer. ServiceMonitor CRDs handle Prometheus target discovery.
 
 ## 3. Architecture Decision
 
@@ -39,7 +39,8 @@ Use `kube-prometheus-stack` (the most widely adopted Helm chart for Kubernetes m
 | K8s metrics | kube-state-metrics (via kube-prometheus-stack) | Pod, deployment, and resource object states |
 | Rust HTTP metrics | `axum-prometheus` crate | Automatic request duration/count histograms on axum routes |
 | Rust business metrics | `metrics` crate | Custom counters, gauges, and histograms |
-| Node.js metrics | `prom-client` | Default process metrics + custom counters/histograms |
+| Node.js metrics (WhatsApp) | `prom-client` | Default process metrics + custom counters/histograms |
+| Kotlin/Quarkus metrics (workflows-worker) | Micrometer | Quarkus built-in metrics via `quarkus-micrometer-registry-prometheus` |
 | Service discovery | ServiceMonitor CRDs | Prometheus auto-discovers scrape targets by label selectors |
 | Database metrics | CNPG PodMonitor | Already declared, activates when Prometheus operator is present |
 
@@ -48,7 +49,7 @@ Use `kube-prometheus-stack` (the most widely adopted Helm chart for Kubernetes m
 ## 4. What We're Building (MVP)
 
 1. **kube-prometheus-stack Helm chart** in a `monitoring` namespace with homelab-sized resource limits
-2. **`/metrics` endpoints** on all four services (TTS, STT, WhatsApp, news-worker)
+2. **`/metrics` endpoints** on all four services (TTS, STT, WhatsApp, workflows-worker)
 3. **Custom business metrics** -- TTS jobs, STT transcriptions, WhatsApp messages, workflow runs
 4. **ServiceMonitor CRDs** for each service (deployed in the service's own namespace)
 5. **CNPG PodMonitor auto-discovery** -- already configured, activates on Prometheus install
@@ -69,7 +70,7 @@ Use `kube-prometheus-stack` (the most widely adopted Helm chart for Kubernetes m
 |--------------|----------|
 | Helm chart configuration | [Implementation Spec, Section 1](monitoring-spec.md#1-helm-chart-configuration) |
 | Rust instrumentation | [Implementation Spec, Section 2](monitoring-spec.md#2-rust-service-instrumentation-tts--stt) |
-| Node.js instrumentation | [Implementation Spec, Section 3](monitoring-spec.md#3-nodejs-service-instrumentation-whatsapp--news-worker) |
+| Node.js + Kotlin instrumentation | [Implementation Spec, Section 3](monitoring-spec.md#3-nodejs-service-instrumentation-whatsapp--kotlinquarkus-workflows-worker) |
 | Kubernetes manifests | [Implementation Spec, Section 4](monitoring-spec.md#4-kubernetes-manifests) |
 | Verification checklist | [Implementation Spec, Section 5](monitoring-spec.md#5-verification-checklist) |
 | Anti-patterns | [Implementation Spec, Section 6](monitoring-spec.md#6-anti-patterns) |
@@ -88,8 +89,7 @@ Use `kube-prometheus-stack` (the most widely adopted Helm chart for Kubernetes m
 | WhatsApp entry point | [whatsapp/src/index.ts](../whatsapp/src/index.ts) |
 | WhatsApp K8s service | [whatsapp/k8s/service.yaml](../whatsapp/k8s/service.yaml) |
 | WhatsApp CNPG database | [whatsapp/k8s/db.yaml](../whatsapp/k8s/db.yaml) |
-| news-worker entry point | [news-worker/src/index.ts](../news-worker/src/index.ts) |
-| news-worker activities | [news-worker/src/activities/index.ts](../news-worker/src/activities/index.ts) |
-| news-worker K8s service | [news-worker/k8s/service.yaml](../news-worker/k8s/service.yaml) |
+| workflows-worker source | [web-scraper-kt/](../web-scraper-kt/) (Kotlin/Quarkus) |
+| workflows-worker K8s manifests | [web-scraper-kt/k8s/](../web-scraper-kt/k8s/) |
 
 *This document provides strategic overview. See [Implementation Spec](monitoring-spec.md) for technical details.*

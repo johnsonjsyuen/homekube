@@ -8,14 +8,14 @@ export const GET: RequestHandler = async ({ request }) => {
     }
 
     try {
-        const response = await fetch('http://news-worker.temporal.svc.cluster.local/api/news/subscription-status', {
+        const response = await fetch('http://workflows-worker.temporal.svc.cluster.local/api/news/subscription-status', {
             headers: { 'Authorization': authHeader }
         });
 
         const data = await response.json();
         return json(data, { status: response.status });
     } catch (e) {
-        console.error('Error proxying to news-worker status:', e);
+        console.error('Error proxying to workflows-worker status:', e);
         return json({ error: 'Internal Server Error' }, { status: 500 });
     }
 };

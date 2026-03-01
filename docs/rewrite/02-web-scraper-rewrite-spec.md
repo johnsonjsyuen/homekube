@@ -1,8 +1,10 @@
-# Web Scraper v2 (Quarkus Kotlin) — Implementation Spec (Implementation)
+# Workflows Worker (Quarkus Kotlin) — Implementation Spec (Implementation)
+
+> **Migration Note (completed):** The original `web-scraper` (TypeScript) and `news-worker` (TypeScript/Node.js) have been merged into a single service called `workflows-worker` (Kotlin/Quarkus). The directory remains `web-scraper-kt/` but the service name, Docker image, k8s deployment, database, and package have all been renamed. The service uses jOOQ for database access (not Hibernate ORM Panache). This spec has been updated to reflect the current state.
 
 ## Context
 
-A Quarkus Kotlin rewrite of the TypeScript web-scraper service. Identical REST API surface, identical Temporal workflow behavior, identical integrations (PostgreSQL, Kafka, Keycloak, Temporal). The only behavioral change: calls the new `claude-code-api` HTTP service instead of kubectl exec.
+A Quarkus Kotlin service that consolidates the former TypeScript web-scraper and news-worker into a single `workflows-worker` service. Provides the web scraper REST API, web scraper Temporal workflow, news digest workflow, and economist digest workflow. Integrates with PostgreSQL, Kafka, Keycloak, and Temporal. Calls the `claude-code-api` HTTP service instead of kubectl exec.
 
 ---
 
@@ -15,12 +17,12 @@ A Quarkus Kotlin rewrite of the TypeScript web-scraper service. Identical REST A
 | Build tool | Gradle (Kotlin DSL) |
 | Port | 3000 |
 | Namespace | `temporal` |
-| Service name | `web-scraper` (same as current) |
-| Image | `localhost:5000/web-scraper:latest` |
-| Temporal task queue | `web-scraper-queue` |
-| Database | PostgreSQL `web_scraper` (existing CNPG cluster) |
+| Service name | `workflows-worker` |
+| Image | `localhost:5000/workflows-worker:latest` |
+| Temporal task queue | `workflows-worker-queue` |
+| Database | PostgreSQL `workflows_worker` (CNPG cluster) |
 
-**Implementation Implication:** The service name, port, task queue, and database are unchanged. This is a drop-in replacement — Kubernetes manifests point to the same names. The homepage SvelteKit proxy routes remain unchanged.
+**Implementation Implication:** The service has been renamed from `web-scraper` to `workflows-worker` to reflect its expanded scope (web scraper + news digest + economist digest). The homepage SvelteKit proxy routes remain unchanged.
 
 ---
 
@@ -36,12 +38,12 @@ web-scraper-kt/
 ├── src/
 │   └── main/
 │       ├── kotlin/
-│       │   └── com/homekube/webscraper/
+│       │   └── com/homekube/worker/
 │       │       ├── App.kt                    # Application entry + Temporal worker startup
 │       │       ├── Routes.kt                 # JAX-RS resource (7 REST endpoints)
 │       │       ├── Models.kt                 # Data classes (Job, Run, request/response DTOs)
-│       │       ├── JobRepository.kt          # Panache repository for scrape_jobs
-│       │       ├── RunRepository.kt          # Panache repository for scrape_runs
+│       │       ├── JobRepository.kt          # jOOQ repository for scrape_jobs
+│       │       ├── RunRepository.kt          # jOOQ repository for scrape_runs
 │       │       ├── ScheduleManager.kt        # Temporal schedule CRUD
 │       │       ├── workflow/
 │       │       │   ├── WebScraperWorkflow.kt  # Workflow interface + implementation
@@ -60,11 +62,11 @@ web-scraper-kt/
 └── k8s/
     ├── deploy.yaml
     ├── service.yaml
-    ├── db.yaml                               # Same CNPG cluster definition
+    ├── db.yaml                               # CNPG cluster definition
     └── service-monitor.yaml
 ```
 
-**Implementation Implication:** Standard Quarkus project layout. Package `com.homekube.webscraper`. Flyway replaces the custom migration runner. No `serviceaccount.yaml` needed — no kubectl exec.
+**Implementation Implication:** Standard Quarkus project layout. Package `com.homekube.worker`. Uses jOOQ for database access. Flyway replaces the custom migration runner. No `serviceaccount.yaml` needed — no kubectl exec.
 
 ---
 
@@ -84,7 +86,7 @@ dependencies {
     implementation("io.quarkus:quarkus-rest")
 
     // Database
-    implementation("io.quarkus:quarkus-hibernate-orm-panache-kotlin")
+    implementation("io.quarkiverse.jooq:quarkus-jooq")
     implementation("io.quarkus:quarkus-jdbc-postgresql")
     implementation("io.quarkus:quarkus-flyway")
 
@@ -115,7 +117,7 @@ dependencies {
 }
 ```
 
-**Implementation Implication:** Quarkus extensions handle most infrastructure concerns declaratively (OIDC, health, metrics, Kafka, Flyway). Temporal SDK is the only non-Quarkus dependency. `quarkus-rest-client-jackson` provides the typed HTTP client for calling claude-code-api and WhatsApp services.
+**Implementation Implication:** Quarkus extensions handle most infrastructure concerns declaratively (OIDC, health, metrics, Kafka, Flyway). jOOQ provides type-safe SQL queries without the overhead of a full ORM. Temporal SDK is managed via the Quarkiverse Temporal extension. `quarkus-rest-client-jackson` provides the typed HTTP client for calling claude-code-api and WhatsApp services.
 
 ---
 
@@ -127,23 +129,22 @@ quarkus.http.port=3000
 
 # Database
 quarkus.datasource.db-kind=postgresql
-quarkus.datasource.jdbc.url=jdbc:postgresql://web-scraper-db-rw.temporal.svc.cluster.local:5432/web_scraper
-quarkus.datasource.username=${WEB_SCRAPER_DB_USER}
-quarkus.datasource.password=${WEB_SCRAPER_DB_PASSWORD}
-quarkus.hibernate-orm.database.generation=none
+quarkus.datasource.jdbc.url=jdbc:postgresql://workflows-worker-db-rw.temporal.svc.cluster.local:5432/workflows_worker
+quarkus.datasource.username=${WORKFLOWS_WORKER_DB_USER}
+quarkus.datasource.password=${WORKFLOWS_WORKER_DB_PASSWORD}
 
 # Flyway
 quarkus.flyway.migrate-at-start=true
 
 # OIDC (Keycloak)
 quarkus.oidc.auth-server-url=${KEYCLOAK_URL:http://keycloak.keycloak.svc.cluster.local}/realms/${KEYCLOAK_REALM:homekube}
-quarkus.oidc.client-id=web-scraper
+quarkus.oidc.client-id=workflows-worker
 quarkus.oidc.credentials.secret=${KEYCLOAK_CLIENT_SECRET}
-quarkus.oidc.token.audience=web-scraper
+quarkus.oidc.token.audience=workflows-worker
 
 # OIDC Client (for service-to-service calls to WhatsApp API)
 quarkus.oidc-client.auth-server-url=${KEYCLOAK_URL:http://keycloak.keycloak.svc.cluster.local}/realms/${KEYCLOAK_REALM:homekube}
-quarkus.oidc-client.client-id=web-scraper
+quarkus.oidc-client.client-id=workflows-worker
 quarkus.oidc-client.credentials.secret=${KEYCLOAK_CLIENT_SECRET}
 quarkus.oidc-client.grant.type=client_credentials
 
@@ -162,13 +163,13 @@ quarkus.micrometer.export.prometheus.path=/metrics
 
 # Custom properties
 app.temporal.address=${TEMPORAL_ADDRESS:temporal-frontend:7233}
-app.temporal.task-queue=web-scraper-queue
+app.temporal.task-queue=workflows-worker-queue
 app.claude-api.url=${CLAUDE_API_URL:http://claude-code-api.default.svc.cluster.local}
 app.whatsapp.url=${WHATSAPP_URL:http://whatsapp.default.svc.cluster.local}
 app.max-jobs-per-user=10
 ```
 
-**Implementation Implication:** Quarkus OIDC extension replaces the entire `auth.ts` (76 LOC → 4 lines of config). Flyway replaces the custom migration runner. SmallRye Kafka replaces the KafkaJS producer singleton. Health and metrics are zero-code extensions.
+**Implementation Implication:** Quarkus OIDC extension replaces the entire `auth.ts` (76 LOC -> 4 lines of config). Flyway replaces the custom migration runner. jOOQ replaces Hibernate ORM Panache for type-safe SQL without ORM overhead. SmallRye Kafka replaces the KafkaJS producer singleton. Health and metrics are zero-code extensions.
 
 ---
 
@@ -212,36 +213,30 @@ CREATE TABLE IF NOT EXISTS scrape_runs (
 ## 6. Data Models (Models.kt)
 
 ```kotlin
-// Entity classes (Panache)
-@Entity
-@Table(name = "scrape_jobs")
+// Data classes (mapped from jOOQ query results)
 data class ScrapeJob(
-    @Id val id: UUID = UUID.randomUUID(),
-    @Column(name = "user_id") val userId: String = "",
+    val id: UUID = UUID.randomUUID(),
+    val userId: String = "",
     val name: String = "",
-    @Column(name = "urls", columnDefinition = "text[]")
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    val urls: Array<String> = emptyArray(),
+    val urls: List<String> = emptyList(),
     val instruction: String = "",
-    @Column(name = "schedule_cron") val scheduleCron: String = "0 */3 * * *",
+    val scheduleCron: String = "0 */3 * * *",
     val timezone: String = "Australia/Sydney",
     val enabled: Boolean = true,
-    @Column(name = "created_at") val createdAt: Instant = Instant.now(),
-    @Column(name = "updated_at") val updatedAt: Instant = Instant.now(),
+    val createdAt: Instant = Instant.now(),
+    val updatedAt: Instant = Instant.now(),
 )
 
-@Entity
-@Table(name = "scrape_runs")
 data class ScrapeRun(
-    @Id val id: UUID = UUID.randomUUID(),
-    @Column(name = "job_id") val jobId: UUID = UUID.randomUUID(),
+    val id: UUID = UUID.randomUUID(),
+    val jobId: UUID = UUID.randomUUID(),
     val status: String = "running",
-    @Column(name = "urls_scraped") val urlsScraped: Int = 0,
+    val urlsScraped: Int = 0,
     val notified: Boolean = false,
-    @Column(name = "claude_response") val claudeResponse: String? = null,
+    val claudeResponse: String? = null,
     val error: String? = null,
-    @Column(name = "started_at") val startedAt: Instant = Instant.now(),
-    @Column(name = "completed_at") val completedAt: Instant? = null,
+    val startedAt: Instant = Instant.now(),
+    val completedAt: Instant? = null,
 )
 
 // Request/Response DTOs
@@ -269,7 +264,7 @@ data class DeleteResponse(val deleted: Boolean = true)
 data class TriggerResponse(val workflowId: String)
 ```
 
-**Implementation Implication:** Panache entities require default values for all fields (Kotlin data class + JPA constraint). The `urls` field uses `@JdbcTypeCode(SqlTypes.ARRAY)` (Hibernate 6.2+, included in Quarkus 3.x) to map PostgreSQL `text[]` to Kotlin `Array<String>`. Import `org.hibernate.annotations.JdbcTypeCode` and `org.hibernate.type.SqlTypes`. JSON serialization uses Jackson (via `quarkus-rest-jackson`), which maps Kotlin data classes automatically.
+**Implementation Implication:** Plain Kotlin data classes -- no JPA annotations needed. jOOQ maps query results to these data classes directly. The `urls` field uses jOOQ's PostgreSQL array support to map `text[]` to `List<String>`. JSON serialization uses Jackson (via `quarkus-rest-jackson`), which maps Kotlin data classes automatically.
 
 ---
 
@@ -320,7 +315,7 @@ class ScraperResource {
 | `GET /api/jobs/:id` | — | — | 200, 404 |
 | `PUT /api/jobs/:id` | cron validated if provided; urls non-empty if provided | Update/recreate schedule if cron/tz changed; pause/unpause if enabled changed | 200, 400, 404, 500 |
 | `DELETE /api/jobs/:id` | — | Delete Temporal schedule; update active_jobs gauge | 200, 404, 500 |
-| `POST /api/jobs/:id/trigger` | — | Start workflow `web-scraper-{id}-manual-{timestamp}` | 200, 404, 500 |
+| `POST /api/jobs/:id/trigger` | — | Start workflow `workflows-worker-{id}-manual-{timestamp}` | 200, 404, 500 |
 | `GET /api/jobs/:id/runs` | limit: 1-100 | — | 200, 404, 500 |
 
 **Implementation Implication:** User ID extraction: `securityContext.userPrincipal.name` maps to Keycloak's `preferred_username` (same as current behavior). All job queries are filtered by `userId = currentUser`.
@@ -496,7 +491,7 @@ Uses Temporal Java SDK `ScheduleClient`:
 | Pause | `scheduleHandle.pause("Job disabled")` | PUT /api/jobs/:id (enabled=false) |
 | Unpause | `scheduleHandle.unpause("Job enabled")` | PUT /api/jobs/:id (enabled=true) |
 
-**Schedule ID convention:** `web-scraper-{jobId}` (same as TypeScript)
+**Schedule ID convention:** `workflows-worker-{jobId}`
 
 **Overlap policy:** `SKIP` (same as TypeScript)
 
@@ -522,7 +517,7 @@ class TemporalWorkerLifecycle(
         val client = WorkflowClient.newInstance(connection)
         factory = WorkerFactory.newInstance(client)
 
-        val worker = factory.newWorker("web-scraper-queue")
+        val worker = factory.newWorker("workflows-worker-queue")
         worker.registerWorkflowImplementationTypes(WebScraperWorkflowImpl::class.java)
         worker.registerActivitiesImplementations(activities)
         factory.start()
@@ -606,18 +601,18 @@ env:
 - name: KEYCLOAK_CLIENT_SECRET
   valueFrom:
     secretKeyRef:
-      name: web-scraper-keycloak
+      name: workflows-worker-keycloak
       key: client-secret
       optional: true
-- name: WEB_SCRAPER_DB_USER
+- name: WORKFLOWS_WORKER_DB_USER
   valueFrom:
     secretKeyRef:
-      name: web-scraper-db-app
+      name: workflows-worker-db-app
       key: username
-- name: WEB_SCRAPER_DB_PASSWORD
+- name: WORKFLOWS_WORKER_DB_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: web-scraper-db-app
+      name: workflows-worker-db-app
       key: password
 - name: WHATSAPP_URL
   value: "http://whatsapp.default.svc.cluster.local"
@@ -651,8 +646,8 @@ No longer needed. The Quarkus service does not kubectl exec into any pods.
 | `KEYCLOAK_URL` | `http://keycloak.keycloak.svc.cluster.local` | no | Keycloak base URL |
 | `KEYCLOAK_REALM` | `homekube` | no | Keycloak realm |
 | `KEYCLOAK_CLIENT_SECRET` | — | yes | OIDC client secret |
-| `WEB_SCRAPER_DB_USER` | — | yes | PostgreSQL username |
-| `WEB_SCRAPER_DB_PASSWORD` | — | yes | PostgreSQL password |
+| `WORKFLOWS_WORKER_DB_USER` | — | yes | PostgreSQL username |
+| `WORKFLOWS_WORKER_DB_PASSWORD` | — | yes | PostgreSQL password |
 | `WHATSAPP_URL` | `http://whatsapp.default.svc.cluster.local` | no | WhatsApp service URL |
 | `KAFKA_BROKERS` | `tansu.default.svc.cluster.local:9092` | no | Kafka bootstrap servers |
 | `CLAUDE_API_URL` | `http://claude-code-api.default.svc.cluster.local` | no | Claude Code API URL |
@@ -666,6 +661,7 @@ No longer needed. The Quarkus service does not kubectl exec into any pods.
 | Use Spring Boot | Use Quarkus | Quarkus is chosen for fast startup, native-image readiness, and built-in extensions |
 | Use Java instead of Kotlin | Use Kotlin throughout | Kotlin reduces boilerplate, null safety, data classes, coroutines |
 | Use `@Blocking` on REST endpoints | Use `@RunOnVirtualThread` for endpoints that call blocking Temporal SDK | RESTEasy Reactive uses event-loop by default; `@RunOnVirtualThread` (JDK 21) avoids blocking the event loop without needing reactive patterns |
+| Use Hibernate ORM / Panache | Use jOOQ for type-safe SQL | jOOQ provides direct SQL control without ORM overhead, better for PostgreSQL-specific features like arrays |
 | Create a custom migration system | Use Flyway (Quarkus extension) | Flyway is battle-tested and Quarkus-integrated |
 | Manually validate JWT tokens | Use `quarkus-oidc` extension | Declarative auth via `@Authenticated` and `application.properties` |
 | Use KafkaProducer directly | Use SmallRye Reactive Messaging `Emitter` | Declarative config, auto-connection management |
@@ -743,6 +739,7 @@ No longer needed. The Quarkus service does not kubectl exec into any pods.
 | Temporal Java SDK docs | https://docs.temporal.io/develop/java |
 | Quarkus OIDC guide | https://quarkus.io/guides/security-oidc-bearer-token-authentication |
 | Quarkus Kafka guide | https://quarkus.io/guides/kafka |
+| jOOQ Quarkiverse extension | https://docs.quarkiverse.io/quarkus-jooq/dev/index.html |
 | Quarkus Flyway guide | https://quarkus.io/guides/flyway |
 | Quarkus Micrometer guide | https://quarkus.io/guides/micrometer |
 | Existing Kafka topic schema | `{ userId, recipientPhone, message, workflow, timestamp }` on `digests` topic |

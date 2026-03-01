@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
-const BACKEND_URL = 'http://web-scraper.temporal.svc.cluster.local';
+const BACKEND_URL = 'http://workflows-worker.temporal.svc.cluster.local';
 
 async function proxyResponse(response: Response) {
     const text = await response.text();
@@ -24,7 +24,7 @@ export const GET: RequestHandler = async ({ request, params }) => {
 
         return proxyResponse(response);
     } catch (e) {
-        console.error('Error proxying to web-scraper get job:', e);
+        console.error('Error proxying to workflows-worker get job:', e);
         return json({ error: 'Internal Server Error' }, { status: 500 });
     }
 };
@@ -48,7 +48,7 @@ export const PUT: RequestHandler = async ({ request, params }) => {
 
         return proxyResponse(response);
     } catch (e) {
-        console.error('Error proxying to web-scraper update job:', e);
+        console.error('Error proxying to workflows-worker update job:', e);
         return json({ error: 'Internal Server Error' }, { status: 500 });
     }
 };
@@ -67,7 +67,7 @@ export const DELETE: RequestHandler = async ({ request, params }) => {
 
         return proxyResponse(response);
     } catch (e) {
-        console.error('Error proxying to web-scraper delete job:', e);
+        console.error('Error proxying to workflows-worker delete job:', e);
         return json({ error: 'Internal Server Error' }, { status: 500 });
     }
 };
