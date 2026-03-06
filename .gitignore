@@ -15,3 +15,5 @@ temporal/chart/charts/
 node_modules/
 whatsapp/dist/
 whatsapp/package-lock.json
+.serena/
+homepage/test-results/
