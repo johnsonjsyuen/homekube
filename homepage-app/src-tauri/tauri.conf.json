@@ -10,13 +10,7 @@
     "frontendDist": "../build"
   },
   "app": {
-    "windows": [
-      {
-        "title": "HomeKube",
-        "width": 900,
-        "height": 700
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }

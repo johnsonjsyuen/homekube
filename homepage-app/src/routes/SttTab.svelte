@@ -1,23 +1,7 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
-    import {
-        initKeycloak,
-        login,
-        logout,
-        onAuthStateChange,
-        getToken,
-        type AuthState,
-    } from "$lib/auth";
+    import { getToken } from "$lib/auth";
     import { config } from "$lib/config";
-
-    // Auth state
-    let authState = $state<AuthState>({
-        authenticated: false,
-        token: null,
-        username: null,
-        roles: [],
-    });
-    let authInitialized = $state(false);
 
     // Recording state
     let isRecording = $state(false);
@@ -41,30 +25,10 @@
         return config.stt.wsUrl;
     }
 
-    onMount(() => {
-        initKeycloak().then(() => {
-            authInitialized = true;
-        });
-
-        const unsubscribe = onAuthStateChange((state) => {
-            authState = state;
-        });
-
-        return unsubscribe;
-    });
-
     onDestroy(() => {
         stopRecording();
         disconnectWebSocket();
     });
-
-    async function handleLogin() {
-        await login("/?tab=stt");
-    }
-
-    async function handleLogout() {
-        await logout();
-    }
 
     function connectWebSocket() {
         const token = getToken();
@@ -135,11 +99,6 @@
     }
 
     async function startRecording() {
-        if (!authState.authenticated) {
-            alert("Please log in to use speech-to-text.");
-            return;
-        }
-
         errorMessage = "";
 
         // Connect WebSocket first
@@ -304,107 +263,87 @@
     <div class="stt-card">
         <h3>Speech to Text</h3>
 
-        {#if !authInitialized}
-            <div class="auth-loading">
-                <span class="spinner">...</span> Loading authentication...
-            </div>
-        {:else if !authState.authenticated}
-            <div class="auth-required">
-                <p>Please log in to use the speech-to-text feature.</p>
-                <button class="login-btn" onclick={handleLogin}>
-                    Log In
-                </button>
-            </div>
-        {:else}
-            <div class="user-info">
-                <span>Logged in as: <strong>{authState.username}</strong></span>
-                <button class="logout-btn" onclick={handleLogout}
-                    >Log Out</button
-                >
-            </div>
-
-            <!-- Recording Controls -->
-            <div class="recording-section">
-                <div class="recording-controls">
-                    {#if !isRecording}
-                        <button
-                            class="record-btn start"
-                            onclick={startRecording}
-                            disabled={connectionStatus === "connecting"}
-                        >
-                            <span class="mic-icon">🎤</span>
-                            {connectionStatus === "connecting"
-                                ? "Connecting..."
-                                : "Start Recording"}
-                        </button>
-                    {:else}
-                        <button class="record-btn stop" onclick={stopRecording}>
-                            <span class="stop-icon">⏹</span>
-                            Stop Recording
-                        </button>
-                    {/if}
-                </div>
-
-                {#if isRecording}
-                    <div class="recording-indicator">
-                        <span class="pulse-dot"></span>
-                        Recording...
-                    </div>
+        <!-- Recording Controls -->
+        <div class="recording-section">
+            <div class="recording-controls">
+                {#if !isRecording}
+                    <button
+                        class="record-btn start"
+                        onclick={startRecording}
+                        disabled={connectionStatus === "connecting"}
+                    >
+                        <span class="mic-icon">🎤</span>
+                        {connectionStatus === "connecting"
+                            ? "Connecting..."
+                            : "Start Recording"}
+                    </button>
+                {:else}
+                    <button class="record-btn stop" onclick={stopRecording}>
+                        <span class="stop-icon">⏹</span>
+                        Stop Recording
+                    </button>
                 {/if}
-
-                <div class="connection-status">
-                    Status:
-                    <span class="status-badge status-{connectionStatus}">
-                        {connectionStatus}
-                    </span>
-                </div>
             </div>
 
-            <!-- Transcript Display -->
-            <div class="transcript-section">
-                <div class="transcript-header">
-                    <h4>Transcript</h4>
-                    <div class="transcript-actions">
-                        <button
-                            class="action-btn copy-btn"
-                            onclick={copyToClipboard}
-                            disabled={!transcript}
-                        >
-                            {copyFeedback ? "✓ Copied!" : "📋 Copy All"}
-                        </button>
-                        <button
-                            class="action-btn clear-btn"
-                            onclick={clearTranscript}
-                            disabled={!transcript}
-                        >
-                            🗑️ Clear
-                        </button>
-                    </div>
-                </div>
-
-                <div class="transcript-box">
-                    {#if transcript || partialTranscript}
-                        <p>
-                            {transcript}{#if partialTranscript}<span
-                                    class="partial-text"
-                                    >{transcript
-                                        ? " "
-                                        : ""}{partialTranscript}</span
-                                >{/if}
-                        </p>
-                    {:else}
-                        <p class="placeholder">
-                            Your transcription will appear here...
-                        </p>
-                    {/if}
-                </div>
-            </div>
-
-            {#if errorMessage}
-                <div class="error-msg">
-                    Error: {errorMessage}
+            {#if isRecording}
+                <div class="recording-indicator">
+                    <span class="pulse-dot"></span>
+                    Recording...
                 </div>
             {/if}
+
+            <div class="connection-status">
+                Status:
+                <span class="status-badge status-{connectionStatus}">
+                    {connectionStatus}
+                </span>
+            </div>
+        </div>
+
+        <!-- Transcript Display -->
+        <div class="transcript-section">
+            <div class="transcript-header">
+                <h4>Transcript</h4>
+                <div class="transcript-actions">
+                    <button
+                        class="action-btn copy-btn"
+                        onclick={copyToClipboard}
+                        disabled={!transcript}
+                    >
+                        {copyFeedback ? "Copied!" : "Copy All"}
+                    </button>
+                    <button
+                        class="action-btn clear-btn"
+                        onclick={clearTranscript}
+                        disabled={!transcript}
+                    >
+                        Clear
+                    </button>
+                </div>
+            </div>
+
+            <div class="transcript-box">
+                {#if transcript || partialTranscript}
+                    <p>
+                        {transcript}{#if partialTranscript}<span
+                                class="partial-text"
+                                >{transcript
+                                    ? " "
+                                    : ""}{partialTranscript}</span
+                            >{/if}
+                    </p>
+                {:else}
+                    <p class="placeholder">
+                        Your transcription will appear here...
+                    </p>
+                {/if}
+            </div>
+        </div>
+
+        {#if errorMessage}
+            <div class="error-msg">
+                Error: {errorMessage}
+            </div>
         {/if}
     </div>
 </div>
@@ -416,12 +355,12 @@
     }
 
     .stt-card {
-        background: #2a2a2a;
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.06);
         padding: 30px;
         border-radius: 20px;
         width: 100%;
         max-width: 700px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
     }
 
     .stt-card h3 {
@@ -429,73 +368,6 @@
         margin-bottom: 20px;
         text-align: center;
         color: #fff;
-    }
-
-    .auth-loading {
-        text-align: center;
-        color: #aaa;
-        padding: 20px;
-    }
-
-    .auth-required {
-        text-align: center;
-        padding: 20px;
-    }
-
-    .auth-required p {
-        color: #aaa;
-        margin-bottom: 20px;
-    }
-
-    .login-btn {
-        background: #4a90e2;
-        color: white;
-        border: none;
-        padding: 12px 30px;
-        border-radius: 8px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s;
-    }
-
-    .login-btn:hover {
-        background: #357abd;
-    }
-
-    .user-info {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-        padding: 10px 15px;
-        background: #333;
-        border-radius: 8px;
-        font-size: 0.9rem;
-    }
-
-    .user-info span {
-        color: #aaa;
-    }
-
-    .user-info strong {
-        color: #fff;
-    }
-
-    .logout-btn {
-        background: transparent;
-        color: #f87171;
-        border: 1px solid #f87171;
-        padding: 5px 15px;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 0.85rem;
-        transition: all 0.2s;
-    }
-
-    .logout-btn:hover {
-        background: #f87171;
-        color: #000;
     }
 
     .recording-section {
@@ -542,7 +414,7 @@
     }
 
     .record-btn:disabled {
-        opacity: 0.6;
+        opacity: 0.5;
         cursor: not-allowed;
         transform: none;
     }
@@ -571,21 +443,14 @@
     }
 
     @keyframes pulse {
-        0%,
-        100% {
-            transform: scale(1);
-            opacity: 1;
-        }
-        50% {
-            transform: scale(1.2);
-            opacity: 0.7;
-        }
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.2); opacity: 0.7; }
     }
 
     .connection-status {
         text-align: center;
         font-size: 0.85rem;
-        color: #888;
+        color: #6b6b7e;
     }
 
     .status-badge {
@@ -597,25 +462,10 @@
         text-transform: capitalize;
     }
 
-    .status-disconnected {
-        background: rgba(156, 163, 175, 0.2);
-        color: #9ca3af;
-    }
-
-    .status-connecting {
-        background: rgba(251, 191, 36, 0.2);
-        color: #fbbf24;
-    }
-
-    .status-connected {
-        background: rgba(74, 222, 128, 0.2);
-        color: #4ade80;
-    }
-
-    .status-error {
-        background: rgba(248, 113, 113, 0.2);
-        color: #f87171;
-    }
+    .status-disconnected { background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
+    .status-connecting { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
+    .status-connected { background: rgba(74, 222, 128, 0.2); color: #4ade80; }
+    .status-error { background: rgba(248, 113, 113, 0.2); color: #f87171; }
 
     .transcript-section {
         margin-top: 20px;
@@ -641,17 +491,17 @@
 
     .action-btn {
         background: transparent;
-        border: 1px solid #555;
-        color: #aaa;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #8b8b9e;
         padding: 5px 12px;
-        border-radius: 5px;
+        border-radius: 8px;
         font-size: 0.8rem;
         cursor: pointer;
         transition: all 0.2s;
     }
 
     .action-btn:hover:not(:disabled) {
-        border-color: #4a90e2;
+        border-color: rgba(74, 144, 226, 0.3);
         color: #4a90e2;
     }
 
@@ -661,13 +511,13 @@
     }
 
     .copy-btn {
-        min-width: 100px;
+        min-width: 80px;
     }
 
     .transcript-box {
-        background: #1a1a1a;
-        border: 1px solid #333;
-        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 12px;
         padding: 20px;
         min-height: 150px;
         max-height: 300px;
@@ -682,24 +532,19 @@
     }
 
     .transcript-box .placeholder {
-        color: #666;
+        color: #555;
         font-style: italic;
     }
 
     .partial-text {
-        color: #888;
+        color: #6b6b7e;
         font-style: italic;
         animation: partial-pulse 1.5s ease-in-out infinite;
     }
 
     @keyframes partial-pulse {
-        0%,
-        100% {
-            opacity: 1;
-        }
-        50% {
-            opacity: 0.5;
-        }
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
     }
 
     .error-msg {
@@ -710,10 +555,5 @@
         border-radius: 8px;
         text-align: center;
         border: 1px solid rgba(248, 113, 113, 0.3);
-    }
-
-    .spinner {
-        display: inline-block;
-        animation: pulse 1s ease-in-out infinite;
     }
 </style>
