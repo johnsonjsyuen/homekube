@@ -133,6 +133,11 @@
 
         try {
             // Request microphone access - don't force sample rate, use native
+            if (!navigator.mediaDevices?.getUserMedia) {
+                throw new Error(
+                    "Microphone access is not available. On macOS, build the app (not dev mode) so entitlements are applied.",
+                );
+            }
             mediaStream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     channelCount: 1,
