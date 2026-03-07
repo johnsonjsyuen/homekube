@@ -124,6 +124,39 @@ adb install src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-univ
 yarn tauri android dev
 ```
 
+## Keycloak Setup
+
+The app authenticates via Keycloak (realm: `homekube`, client: `homepage`). The Tauri webview origin varies by platform, so all must be registered in Keycloak.
+
+### Valid Redirect URIs
+
+In the Keycloak admin console, go to **Clients → `homepage` → Settings** and add these **Valid Redirect URIs**:
+
+| URI | Platform |
+|---|---|
+| `http://localhost:1420/*` | `tauri dev` (desktop) |
+| `http://tauri.localhost/*` | Built desktop app (Linux/Windows) |
+| `https://tauri.localhost/*` | Android & iOS |
+| `tauri://localhost/*` | macOS |
+
+### Web Origins
+
+Add these **Web Origins** (for CORS):
+
+| Origin | Platform |
+|---|---|
+| `http://localhost:1420` | `tauri dev` (desktop) |
+| `http://tauri.localhost` | Built desktop app (Linux/Windows) |
+| `https://tauri.localhost` | Android & iOS |
+| `tauri://localhost` | macOS |
+
+### Client Settings
+
+- **Client authentication**: Off (public client)
+- **Standard flow**: Enabled
+- **Direct access grants**: Disabled
+- **Valid post logout redirect URIs**: same as Valid Redirect URIs above
+
 ## Recommended IDE Setup
 
 [VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
