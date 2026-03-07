@@ -115,8 +115,12 @@ export async function login(): Promise<void> {
     }
     if (keycloak && !keycloak.authenticated) {
         const redirectUri = window.location.origin + window.location.pathname;
-        console.log('[Auth] login redirectUri:', redirectUri);
-        await keycloak.login({ redirectUri });
+        console.log('[Auth] login redirectUri:', redirectUri, 'origin:', window.location.origin, 'href:', window.location.href);
+        try {
+            await keycloak.login({ redirectUri });
+        } catch (error: any) {
+            throw new Error(`Login failed (redirectUri: ${redirectUri}): ${error?.message || error}`);
+        }
     }
 }
 

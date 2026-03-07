@@ -18,6 +18,7 @@
 
     // Menu state
     let menuOpen = $state(false);
+    let authError = $state("");
 
     let activeTab = $state("weather");
     let currentLocation = $state("port_melbourne");
@@ -54,6 +55,9 @@
     onMount(() => {
         initKeycloak().then(() => {
             authInitialized = true;
+        }).catch((e) => {
+            authInitialized = true;
+            authError = `Keycloak init failed (origin: ${window.location.origin}): ${e?.message || e}`;
         });
 
         const unsubscribe = onAuthStateChange((state) => {
@@ -113,7 +117,12 @@
     }
 
     async function handleLogin() {
-        await login();
+        try {
+            authError = "";
+            await login();
+        } catch (e: any) {
+            authError = e?.message || String(e);
+        }
     }
 
     async function handleLogout() {
@@ -219,6 +228,13 @@
             </div>
         </div>
     </header>
+
+    {#if authError}
+        <div class="auth-error">
+            <strong>Auth error:</strong> {authError}
+            <button class="auth-error-dismiss" onclick={() => (authError = "")}>dismiss</button>
+        </div>
+    {/if}
 
     {#if activeTab === "weather"}
         {#if loading && !data.forecast}
@@ -488,6 +504,32 @@
         color: #6b6b7e;
         padding: 40px;
         font-size: 1.1rem;
+    }
+
+    .auth-error {
+        background: rgba(248, 113, 113, 0.1);
+        border: 1px solid rgba(248, 113, 113, 0.3);
+        color: #f87171;
+        padding: 12px 16px;
+        border-radius: 12px;
+        margin-bottom: 1rem;
+        font-size: 0.85rem;
+        word-break: break-all;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .auth-error-dismiss {
+        background: none;
+        border: 1px solid rgba(248, 113, 113, 0.3);
+        color: #f87171;
+        padding: 2px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        flex-shrink: 0;
     }
 
     @media (max-width: 600px) {
