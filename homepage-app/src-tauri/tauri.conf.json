@@ -19,7 +19,8 @@
     ],
     "security": {
       "csp": null
-    }
+    },
+    "allowNavigation": ["auth.johnsonyuen.com"]
   },
   "bundle": {
     "active": true,
