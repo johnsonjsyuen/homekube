@@ -1,0 +1,102 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import 'leaflet/dist/leaflet.css';
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0f0f1a;
+    color: #e0e0e0;
+}
+
+:root {
+    --bg-primary: #0f0f1a;
+    --bg-surface: #1a1a2e;
+    --bg-surface-hover: #252540;
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --text-primary: #e0e0e0;
+    --text-secondary: #8b8b9e;
+    --text-muted: #6b6b7e;
+    --accent-blue: #4a90e2;
+    --status-online: #4caf50;
+    --status-stale: #ff9800;
+    --status-offline: #757575;
+    --geofence-fill: rgba(74, 144, 226, 0.15);
+    --geofence-stroke: #4a90e2;
+}
+
+/* Leaflet overrides for dark theme */
+.leaflet-container {
+    background: #1a1a2e;
+}
+
+.leaflet-popup-content-wrapper {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.leaflet-popup-tip {
+    background: #1a1a2e;
+}
+
+.leaflet-popup-close-button {
+    color: #8b8b9e !important;
+}
+
+.leaflet-control-zoom a {
+    background: #1a1a2e !important;
+    color: #e0e0e0 !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.leaflet-control-zoom a:hover {
+    background: #252540 !important;
+}
+
+.leaflet-control-attribution {
+    background: rgba(15, 15, 26, 0.8) !important;
+    color: #6b6b7e !important;
+}
+
+.leaflet-control-attribution a {
+    color: #8b8b9e !important;
+}
+
+.leaflet-tooltip {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.leaflet-tooltip-top::before {
+    border-top-color: #1a1a2e;
+}
+
+.leaflet-tooltip-bottom::before {
+    border-bottom-color: #1a1a2e;
+}
+
+.leaflet-tooltip-left::before {
+    border-left-color: #1a1a2e;
+}
+
+.leaflet-tooltip-right::before {
+    border-right-color: #1a1a2e;
+}
