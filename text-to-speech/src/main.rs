@@ -18,6 +18,7 @@ use axum_prometheus::PrometheusMetricLayer;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tower_http::cors::{Any, CorsLayer};
 
 #[tokio::main]
 async fn main() {
@@ -127,11 +128,17 @@ async fn main() {
 
     let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
 
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     let app = Router::new()
         .merge(authed_routes)
         .merge(ws_routes)
         .route("/health", get(|| async { "OK" }))
         .route("/metrics", get(|| async move { metric_handle.render() }))
+        .layer(cors)
         .layer(prometheus_layer)
         .with_state(state);
 
