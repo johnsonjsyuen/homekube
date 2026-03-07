@@ -141,13 +141,12 @@ In the Keycloak admin console, go to **Clients → `homepage` → Settings** and
 
 ### Web Origins
 
-Add these **Web Origins** (for CORS):
+Add these **Web Origins** (for CORS). These must be bare origins — **no trailing `/*`**:
 
 | Origin | Platform |
 |---|---|
 | `http://localhost:1420` | `tauri dev` (desktop) |
-| `http://tauri.localhost` | Built desktop app (Linux/Windows) |
-| `https://tauri.localhost` | Android & iOS |
+| `http://tauri.localhost` | Built desktop app (Linux/Windows) and Android/iOS |
 | `tauri://localhost` | macOS |
 
 ### Client Settings
