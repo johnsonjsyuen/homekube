@@ -224,7 +224,8 @@ export function getToken(): string | null {
  * Use this before making new connections (e.g. WebSocket).
  */
 export async function getFreshToken(): Promise<string | null> {
-    if (!keycloak?.authenticated) return null;
+    // In mock auth (e.g. Cypress), keycloak is null but authState has a token
+    if (!keycloak?.authenticated) return authState.token;
     try {
         const refreshed = await keycloak.updateToken(30);
         if (refreshed) {
