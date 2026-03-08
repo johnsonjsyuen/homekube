@@ -16,4 +16,8 @@ describe('config', () => {
     it('has correct default STT config', () => {
         expect(config.stt.wsUrl).toBe('wss://stt.johnsonyuen.com/transcribe');
     });
+
+    it('has correct default location config', () => {
+        expect(config.location.baseUrl).toBe('https://location.johnsonyuen.com');
+    });
 });

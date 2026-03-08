@@ -15,6 +15,7 @@ export const config = {
         wsUrl: import.meta.env.VITE_STT_WS_URL || 'wss://stt.johnsonyuen.com/transcribe',
     },
     location: {
+        baseUrl: import.meta.env.VITE_LOCATION_URL || 'https://location.johnsonyuen.com',
         defaultCenter: { lat: -37.8136, lng: 144.9631 }, // Melbourne CBD
         gpsIntervalMs: 30_000,
         pollIntervalMs: 15_000,

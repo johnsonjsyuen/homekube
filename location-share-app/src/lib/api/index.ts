@@ -1,4 +1,4 @@
-import { MockLocationApi } from './mock';
+import { HttpLocationApi } from './http';
 import type { LocationApi } from './types';
 
-export const api: LocationApi = new MockLocationApi();
+export const api: LocationApi = new HttpLocationApi();
