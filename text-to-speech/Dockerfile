@@ -25,37 +25,35 @@ COPY src ./src
 COPY migrations ./migrations
 RUN touch src/main.rs && cargo build --release
 
-# Runtime Stage
-FROM ubuntu:24.04
+# Model download stage (separate so code changes don't re-download)
+FROM python:3.11-slim AS models
 
-WORKDIR /app
-
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    software-properties-common \
-    && add-apt-repository universe \
-    && apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-venv \
-    ffmpeg \
-    espeak-ng \
-    libportaudio2 \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
-    libssl-dev \
-    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Create a virtual environment for Python dependencies
-RUN python3 -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Download Kokoro models
+WORKDIR /models
 RUN wget -q https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/kokoro-v1.0.onnx && \
     wget -q https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/voices-v1.0.bin
 
+# Runtime Stage
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install only runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    espeak-ng \
+    libportaudio2 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install kokoro-tts
-RUN pip install kokoro-tts soundfile
+RUN pip install --no-cache-dir kokoro-tts soundfile
+
+# Copy models from download stage
+COPY --from=models /models/kokoro-v1.0.onnx .
+COPY --from=models /models/voices-v1.0.bin .
 
 # Create output directory
 RUN mkdir -p /tmp/tts-output
