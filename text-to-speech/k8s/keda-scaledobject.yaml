@@ -1,0 +1,20 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: tts-worker-scaler
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: tts-worker
+  minReplicaCount: 1
+  maxReplicaCount: 5
+  pollingInterval: 15
+  cooldownPeriod: 300
+  triggers:
+  - type: kafka
+    metadata:
+      bootstrapServers: tansu.default.svc.cluster.local:9092
+      consumerGroup: tts-workers
+      topic: tts-jobs
+      lagThreshold: "2"
+      offsetResetPolicy: earliest

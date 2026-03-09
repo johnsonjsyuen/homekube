@@ -1,5 +1,5 @@
 use crate::inference::KokoroModel;
-use crate::kafka::KafkaProducer;
+use crate::kafka_producer::KafkaProducer;
 use jsonwebtoken::DecodingKey;
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;

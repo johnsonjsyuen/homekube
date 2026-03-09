@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onDestroy } from "svelte";
-    import { getToken } from "$lib/auth";
+    import { getFreshToken } from "$lib/auth";
 
     // Recording state
     let isRecording = $state(false);
@@ -49,8 +49,8 @@
         disconnectWebSocket();
     });
 
-    function connectWebSocket() {
-        const token = getToken();
+    async function connectWebSocket() {
+        const token = await getFreshToken();
         if (!token) {
             errorMessage = "No authentication token available";
             connectionStatus = "error";

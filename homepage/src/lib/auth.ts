@@ -211,7 +211,15 @@ export async function login(redirectPath?: string): Promise<void> {
 
 export async function logout(): Promise<void> {
     if (keycloak?.authenticated) {
-        await keycloak.logout({ redirectUri: window.location.origin });
+        const redirectUri = window.location.origin;
+        console.log('[Auth] Logging out, redirectUri:', redirectUri);
+        try {
+            await keycloak.logout({ redirectUri });
+        } catch (error: any) {
+            console.error('[Auth] Logout failed:', error?.message || error);
+            authState = { authenticated: false, token: null, username: null, roles: [] };
+            notifyCallbacks();
+        }
     }
 }
 

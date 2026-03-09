@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { getToken } from "$lib/auth";
+    import { getFreshToken } from "$lib/auth";
 
     let ttsFile = $state<FileList | null>(null);
     let ttsVoice = $state("af_heart");
@@ -35,7 +35,7 @@
         jobsLoading = true;
         jobsError = "";
         try {
-            const token = getToken();
+            const token = await getFreshToken();
             const res = await fetch("/api/tts/jobs", {
                 headers: token
                     ? {
@@ -96,7 +96,7 @@
 
     async function downloadJob(jobId: string) {
         try {
-            const token = getToken();
+            const token = await getFreshToken();
             const res = await fetch(`/api/tts/status/${jobId}`, {
                 headers: token
                     ? {
@@ -140,7 +140,7 @@
         formData.append("speed", ttsSpeed);
 
         try {
-            const token = getToken();
+            const token = await getFreshToken();
             const res = await fetch("/api/tts/generate", {
                 method: "POST",
                 body: formData,
@@ -182,7 +182,7 @@
 
         console.log(`[TTS] Polling status for job ${id}...`);
         try {
-            const token = getToken();
+            const token = await getFreshToken();
             const res = await fetch(`/api/tts/status/${id}`, {
                 headers: token
                     ? {

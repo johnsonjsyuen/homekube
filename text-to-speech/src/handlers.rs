@@ -111,9 +111,17 @@ pub async fn generate_speech(
 
     metrics::counter!(metric_names::TTS_JOBS_TOTAL, "status" => "queued").increment(1);
 
+    // Save text to PVC so pending jobs can be recovered after restarts
+    let pending_dir = format!("{}/pending", state.storage_path);
+    let _ = tokio::fs::create_dir_all(&pending_dir).await;
+    let pending_path = format!("{}/{}.txt", pending_dir, job_id);
+    if let Err(e) = tokio::fs::write(&pending_path, &text_bytes).await {
+        tracing::warn!(job_id = %job_id, error = %e, "Failed to save pending text file");
+    }
+
     if let Some(ref producer) = state.kafka_producer {
         // Kafka path: produce job message, consumer will process it
-        let msg = crate::kafka::TtsJobMessage {
+        let msg = crate::kafka_producer::TtsJobMessage {
             job_id: job_id.to_string(),
             username: user.username.clone(),
             text_base64: BASE64.encode(&text_bytes),
@@ -258,14 +266,20 @@ pub fn process_tts(
             speed = %speed,
             "Executing kokoro-tts"
         );
+        let model_dir = std::env::var("KOKORO_MODEL_DIR").unwrap_or_else(|_| "/app".to_string());
+        let model_path = format!("{}/kokoro-v1.0.onnx", model_dir);
+        let voices_path = format!("{}/voices-v1.0.bin", model_dir);
         let mut child = Command::new("kokoro-tts")
-            .current_dir("/app") // Model files are in /app
             .arg(&text_path)
             .arg(&wav_path)
             .arg("--voice")
             .arg(&voice)
             .arg("--speed")
             .arg(&speed)
+            .arg("--model")
+            .arg(&model_path)
+            .arg("--voices")
+            .arg(&voices_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -431,6 +445,10 @@ pub fn process_tts(
             .execute(&pool)
             .await;
     });
+
+    // Clean up pending text file
+    let pending_path = format!("{}/pending/{}.txt", storage_path, job_id);
+    let _ = std::fs::remove_file(&pending_path);
 
     Ok(())
 }

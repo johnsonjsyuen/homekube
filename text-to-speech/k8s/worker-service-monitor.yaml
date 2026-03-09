@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tts-worker
+  namespace: default
+  labels:
+    app: tts-worker
+spec:
+  selector:
+    app: tts-worker
+  ports:
+  - name: health
+    port: 3001
+    targetPort: 3001
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: tts-worker
+  namespace: default
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: tts-worker
+  endpoints:
+  - port: health
+    path: /metrics
+    interval: 30s
