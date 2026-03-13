@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: location-share-server
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: location-share-server
+  template:
+    metadata:
+      labels:
+        app: location-share-server
+    spec:
+      containers:
+      - name: location-share-server
+        image: localhost:5000/location-share-server:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        env:
+        - name: KEYCLOAK_URL
+          value: "https://auth.johnsonyuen.com"
+        - name: KEYCLOAK_REALM
+          value: "homekube"
+        - name: LOCATION_SHARE_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: location-share-db-app
+              key: username
+        - name: LOCATION_SHARE_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: location-share-db-app
+              key: password
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 3
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 2
+          periodSeconds: 10
