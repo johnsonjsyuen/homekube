@@ -5,10 +5,29 @@ use futures::{SinkExt, StreamExt};
 use serde_json::json;
 use sqlx::PgPool;
 use std::sync::Arc;
+use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use crate::auth::{JwksCache, UserClaims};
 use crate::claude;
+
+// ---------------------------------------------------------------------------
+// Broadcast event for cross-window synchronization
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct BroadcastEvent {
+    pub source: Uuid,
+    pub payload: String,
+}
+
+fn get_user_channel(state: &crate::AppState, user_id: &str) -> broadcast::Sender<BroadcastEvent> {
+    let mut channels = state.user_channels.lock().unwrap();
+    channels
+        .entry(user_id.to_string())
+        .or_insert_with(|| broadcast::channel(256).0)
+        .clone()
+}
 
 // ---------------------------------------------------------------------------
 // Handler — upgrades HTTP to WebSocket
@@ -69,6 +88,11 @@ async fn handle_socket(socket: WebSocket, state: Arc<crate::AppState>) {
 
     tracing::info!(user_id = %claims.user_id, "WebSocket authenticated");
 
+    // --- Cross-window broadcast setup ---
+    let connection_id = Uuid::new_v4();
+    let broadcast_tx = get_user_channel(&state, &claims.user_id);
+    let mut broadcast_rx = broadcast_tx.subscribe();
+
     // --- Message loop with keepalive pings ---
     let mut ping_interval = tokio::time::interval(std::time::Duration::from_secs(30));
     ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -109,7 +133,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<crate::AppState>) {
                             .get("title")
                             .and_then(|v| v.as_str())
                             .unwrap_or("New conversation");
-                        handle_create_conversation(&mut sender, &state.pool, &claims, title).await
+                        handle_create_conversation(&mut sender, &state.pool, &claims, title, &broadcast_tx, connection_id).await
                     }
                     "load_conversation" => {
                         let id_str = parsed.get("id").and_then(|v| v.as_str()).unwrap_or("");
@@ -130,12 +154,14 @@ async fn handle_socket(socket: WebSocket, state: Arc<crate::AppState>) {
                             &claims,
                             conv_id_str,
                             content,
+                            &broadcast_tx,
+                            connection_id,
                         )
                         .await
                     }
                     "delete_conversation" => {
                         let id_str = parsed.get("id").and_then(|v| v.as_str()).unwrap_or("");
-                        handle_delete_conversation(&mut sender, &state.pool, &claims, id_str).await
+                        handle_delete_conversation(&mut sender, &state.pool, &claims, id_str, &broadcast_tx, connection_id).await
                     }
                     _ => {
                         let _ = send_error(&mut sender, &format!("unknown message type: {msg_type}")).await;
@@ -152,6 +178,15 @@ async fn handle_socket(socket: WebSocket, state: Arc<crate::AppState>) {
                 if sender.send(Message::Ping(vec![].into())).await.is_err() {
                     tracing::warn!(user_id = %claims.user_id, "keepalive ping failed");
                     break;
+                }
+            }
+            event = broadcast_rx.recv() => {
+                if let Ok(event) = event {
+                    if event.source != connection_id {
+                        if sender.send(Message::Text(event.payload.into())).await.is_err() {
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -258,6 +293,8 @@ async fn handle_create_conversation(
     pool: &PgPool,
     claims: &UserClaims,
     title: &str,
+    broadcast_tx: &broadcast::Sender<BroadcastEvent>,
+    connection_id: Uuid,
 ) -> HandlerResult {
     match crate::db::create_conversation(pool, &claims.user_id, title).await {
         Ok(conv) => {
@@ -271,6 +308,14 @@ async fn handle_create_conversation(
                     .to_string().into(),
                 ))
                 .await?;
+
+            let _ = broadcast_tx.send(BroadcastEvent {
+                source: connection_id,
+                payload: json!({
+                    "type": "conversations_changed",
+                })
+                .to_string(),
+            });
         }
         Err(e) => {
             tracing::error!(error = %e, "failed to create conversation");
@@ -348,6 +393,8 @@ async fn handle_send_message(
     claims: &UserClaims,
     conv_id_str: &str,
     content: &str,
+    broadcast_tx: &broadcast::Sender<BroadcastEvent>,
+    connection_id: Uuid,
 ) -> HandlerResult {
     let pool = &state.pool;
     let nats = state.nats.as_ref();
@@ -541,6 +588,16 @@ async fn handle_send_message(
         ))
         .await?;
 
+    // 8. Broadcast to other windows so they can refresh.
+    let _ = broadcast_tx.send(BroadcastEvent {
+        source: connection_id,
+        payload: json!({
+            "type": "conversation_updated",
+            "conversation_id": conversation_id,
+        })
+        .to_string(),
+    });
+
     Ok(())
 }
 
@@ -549,6 +606,8 @@ async fn handle_delete_conversation(
     pool: &PgPool,
     claims: &UserClaims,
     id_str: &str,
+    broadcast_tx: &broadcast::Sender<BroadcastEvent>,
+    connection_id: Uuid,
 ) -> HandlerResult {
     let id = match Uuid::parse_str(id_str) {
         Ok(id) => id,
@@ -566,6 +625,14 @@ async fn handle_delete_conversation(
                         .to_string().into(),
                 ))
                 .await?;
+
+            let _ = broadcast_tx.send(BroadcastEvent {
+                source: connection_id,
+                payload: json!({
+                    "type": "conversations_changed",
+                })
+                .to_string(),
+            });
         }
         Ok(false) => {
             send_error(sender, "conversation not found").await?;

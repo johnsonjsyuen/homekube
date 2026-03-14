@@ -206,6 +206,20 @@
                 deleteConfirmId = null;
                 break;
 
+            case "conversation_updated":
+                // Another window sent/received a message - reload if we're viewing that conversation
+                if (msg.conversation_id === activeConversationId && !streaming) {
+                    sendWs({ type: "load_conversation", id: msg.conversation_id });
+                }
+                // Always refresh conversation list for updated timestamps
+                sendWs({ type: "list_conversations" });
+                break;
+
+            case "conversations_changed":
+                // Another window created or deleted a conversation - refresh the list
+                sendWs({ type: "list_conversations" });
+                break;
+
             case "error":
                 errorMessage = msg.message || "An error occurred";
                 streaming = false;
