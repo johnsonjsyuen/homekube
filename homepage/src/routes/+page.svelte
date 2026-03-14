@@ -9,6 +9,7 @@
     import WhatsAppTab from "./WhatsAppTab.svelte";
     import WorkflowsTab from "./WorkflowsTab.svelte";
     import ScraperTab from "./ScraperTab.svelte";
+    import ChatTab from "./ChatTab.svelte";
     import { onMount } from "svelte";
     import { initKeycloak, login, logout, onAuthStateChange, type AuthState } from "$lib/auth";
 
@@ -121,6 +122,7 @@
         whatsapp: "WhatsApp",
         workflows: "Workflows",
         scraper: "Scraper",
+        chat: "Claude Chat",
     };
 </script>
 
@@ -225,6 +227,8 @@
             <WorkflowsTab />
         {:else if activeTab === "scraper"}
             <ScraperTab />
+        {:else if activeTab === "chat"}
+            <ChatTab />
         {/if}
     {/if}
 </div>

@@ -1,6 +1,6 @@
 use std::process::Stdio;
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
 // ---------------------------------------------------------------------------
@@ -27,6 +27,15 @@ impl std::fmt::Display for ClaudeError {
 }
 
 impl std::error::Error for ClaudeError {}
+
+// ---------------------------------------------------------------------------
+// Streaming result
+// ---------------------------------------------------------------------------
+
+pub struct StreamResult {
+    pub session_id: Option<String>,
+    pub full_text: String,
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -79,6 +88,144 @@ pub async fn invoke_claude(
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Invoke Claude CLI in streaming mode, calling `line_callback` for each
+/// stdout line as it arrives.
+///
+/// The process uses `--output-format stream-json` and
+/// `--dangerously-skip-permissions`. If a `session_id` is provided the
+/// `--resume` flag is added for conversation continuity.
+///
+/// No timeout is applied (conversations can be long). The child process is
+/// killed on drop for cleanup.
+pub async fn invoke_claude_streaming(
+    prompt: &str,
+    session_id: Option<&str>,
+    mut line_callback: impl FnMut(String) + Send,
+) -> Result<StreamResult, ClaudeError> {
+    let mut args = vec![
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--dangerously-skip-permissions",
+        "-p",
+        "-",
+    ];
+    // Owned string to extend lifetime past args borrow.
+    let session_id_owned = session_id.map(String::from);
+    if let Some(ref sid) = session_id_owned {
+        args.push("--resume");
+        args.push(sid.as_str());
+    }
+
+    let mut child = Command::new("claude")
+        .args(&args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                ClaudeError::NotFound(e.to_string())
+            } else {
+                ClaudeError::IoError(format!("failed to spawn claude process: {e}"))
+            }
+        })?;
+
+    // Write prompt to stdin and close.
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| ClaudeError::IoError("failed to open stdin".into()))?;
+    stdin
+        .write_all(prompt.as_bytes())
+        .await
+        .map_err(|e| ClaudeError::IoError(format!("failed to write prompt to stdin: {e}")))?;
+    drop(stdin);
+
+    // Read stdout line by line.
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| ClaudeError::IoError("failed to open stdout".into()))?;
+    let mut reader = BufReader::new(stdout).lines();
+
+    let mut result = StreamResult {
+        session_id: None,
+        full_text: String::new(),
+    };
+
+    while let Some(line) = reader
+        .next_line()
+        .await
+        .map_err(|e| ClaudeError::IoError(format!("failed to read stdout line: {e}")))?
+    {
+        // Invoke callback with the raw line.
+        line_callback(line.clone());
+
+        // Parse JSON to extract text content and session_id.
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+            // Capture session_id from init or result messages.
+            if let Some(sid) = val.get("session_id").and_then(|v| v.as_str()) {
+                result.session_id = Some(sid.to_string());
+            }
+
+            // Accumulate assistant text content.
+            // The actual format is: {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
+            let msg_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            if msg_type == "assistant" {
+                if let Some(content) = val.pointer("/message/content").and_then(|v| v.as_array()) {
+                    for block in content {
+                        if block.get("type").and_then(|v| v.as_str()) == Some("text") {
+                            if let Some(text) = block.get("text").and_then(|v| v.as_str()) {
+                                result.full_text.push_str(text);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Also capture result text (final complete response).
+            if msg_type == "result" {
+                if let Some(text) = val.get("result").and_then(|v| v.as_str()) {
+                    if result.full_text.is_empty() {
+                        result.full_text = text.to_string();
+                    }
+                }
+            }
+        }
+    }
+
+    // Wait for the process to finish and capture stderr.
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| ClaudeError::IoError("failed to open stderr".into()))?;
+    let mut stderr_reader = BufReader::new(stderr);
+    let mut stderr_output = String::new();
+    let _ = tokio::io::AsyncReadExt::read_to_string(&mut stderr_reader, &mut stderr_output).await;
+
+    let status = child
+        .wait()
+        .await
+        .map_err(|e| ClaudeError::IoError(format!("failed to wait for claude process: {e}")))?;
+
+    if !status.success() {
+        tracing::warn!(code = ?status.code(), stderr = %stderr_output, "claude process exited with non-zero status");
+        // Don't fail if we already got content — the CLI sometimes exits non-zero
+        // after streaming completes.
+        if result.full_text.is_empty() {
+            return Err(ClaudeError::ProcessFailed(format!(
+                "exit code: {:?}, stderr: {}",
+                status.code(),
+                stderr_output.chars().take(500).collect::<String>()
+            )));
+        }
+    }
+
+    Ok(result)
 }
 
 /// Check whether the `claude` CLI is available by running `claude --version`.
