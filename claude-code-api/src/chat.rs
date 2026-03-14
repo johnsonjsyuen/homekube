@@ -22,7 +22,7 @@ pub struct BroadcastEvent {
 }
 
 fn get_user_channel(state: &crate::AppState, user_id: &str) -> broadcast::Sender<BroadcastEvent> {
-    let mut channels = state.user_channels.lock().unwrap();
+    let mut channels = state.user_channels.lock().unwrap_or_else(|e| e.into_inner());
     channels
         .entry(user_id.to_string())
         .or_insert_with(|| broadcast::channel(256).0)
@@ -188,6 +188,16 @@ async fn handle_socket(socket: WebSocket, state: Arc<crate::AppState>) {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // Clean up broadcast channel if no other connections remain for this user
+    {
+        let mut channels = state.user_channels.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(tx) = channels.get(&claims.user_id) {
+            if tx.receiver_count() == 0 {
+                channels.remove(&claims.user_id);
             }
         }
     }

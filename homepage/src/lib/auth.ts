@@ -85,19 +85,19 @@ const ID_TOKEN_STORAGE_KEY = 'kc_idToken';
 
 function saveTokens(kc: Keycloak) {
     if (typeof window === 'undefined') return;
-    if (kc.token) localStorage.setItem(TOKEN_STORAGE_KEY, kc.token);
-    else localStorage.removeItem(TOKEN_STORAGE_KEY);
-    if (kc.refreshToken) localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, kc.refreshToken);
-    else localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
-    if (kc.idToken) localStorage.setItem(ID_TOKEN_STORAGE_KEY, kc.idToken);
-    else localStorage.removeItem(ID_TOKEN_STORAGE_KEY);
+    if (kc.token) sessionStorage.setItem(TOKEN_STORAGE_KEY, kc.token);
+    else sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    if (kc.refreshToken) sessionStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, kc.refreshToken);
+    else sessionStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    if (kc.idToken) sessionStorage.setItem(ID_TOKEN_STORAGE_KEY, kc.idToken);
+    else sessionStorage.removeItem(ID_TOKEN_STORAGE_KEY);
 }
 
 function loadTokens(): { token?: string; refreshToken?: string; idToken?: string } | null {
     if (typeof window === 'undefined') return null;
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
-    const idToken = localStorage.getItem(ID_TOKEN_STORAGE_KEY);
+    const token = sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    const refreshToken = sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+    const idToken = sessionStorage.getItem(ID_TOKEN_STORAGE_KEY);
     if (token && refreshToken) {
         return { token, refreshToken, idToken: idToken || undefined };
     }
@@ -106,9 +106,9 @@ function loadTokens(): { token?: string; refreshToken?: string; idToken?: string
 
 function clearTokens() {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
-    localStorage.removeItem(ID_TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(ID_TOKEN_STORAGE_KEY);
 }
 
 export function onAuthStateChange(callback: AuthCallback): () => void {
@@ -208,11 +208,12 @@ async function doInitKeycloak(): Promise<AuthState> {
         // If restored from saved tokens, force an immediate refresh
         if (authenticated && savedTokens) {
             try {
+                // Force token refresh: -1 means "refresh if expiring within -1 seconds", which is always true
                 await keycloak.updateToken(-1);
             } catch {
                 console.warn('[Auth] Saved tokens expired, clearing');
-                clearTokens();
                 updateAuthState(keycloak);
+                clearTokens();
                 return authState;
             }
         }

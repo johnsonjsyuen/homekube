@@ -112,11 +112,12 @@ export async function initKeycloak(): Promise<AuthState> {
         // If restored from saved tokens, force an immediate refresh
         if (authenticated && savedTokens) {
             try {
+                // Force token refresh: -1 means "refresh if expiring within -1 seconds", which is always true
                 await keycloak.updateToken(-1);
             } catch {
                 console.warn('[Auth] Saved tokens expired, clearing');
-                clearTokens();
                 updateAuthState(keycloak);
+                clearTokens();
                 return authState;
             }
         }
