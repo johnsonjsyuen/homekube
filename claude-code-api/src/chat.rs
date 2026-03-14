@@ -69,73 +69,91 @@ async fn handle_socket(socket: WebSocket, state: Arc<crate::AppState>) {
 
     tracing::info!(user_id = %claims.user_id, "WebSocket authenticated");
 
-    // --- Message loop ---
-    while let Some(Ok(msg)) = receiver.next().await {
-        let text = match msg {
-            Message::Text(t) => t.to_string(),
-            Message::Close(_) => break,
-            _ => continue,
-        };
+    // --- Message loop with keepalive pings ---
+    let mut ping_interval = tokio::time::interval(std::time::Duration::from_secs(30));
+    ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-        let parsed: serde_json::Value = match serde_json::from_str(&text) {
-            Ok(v) => v,
-            Err(_) => {
-                let _ = send_error(&mut sender, "invalid JSON").await;
-                continue;
-            }
-        };
+    loop {
+        tokio::select! {
+            msg = receiver.next() => {
+                let msg = match msg {
+                    Some(Ok(m)) => m,
+                    _ => break,
+                };
 
-        let msg_type = parsed
-            .get("type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+                let text = match msg {
+                    Message::Text(t) => t.to_string(),
+                    Message::Close(_) => break,
+                    _ => continue,
+                };
 
-        let result = match msg_type {
-            "list_conversations" => {
-                handle_list_conversations(&mut sender, &state.pool, &claims).await
-            }
-            "create_conversation" => {
-                let title = parsed
-                    .get("title")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("New conversation");
-                handle_create_conversation(&mut sender, &state.pool, &claims, title).await
-            }
-            "load_conversation" => {
-                let id_str = parsed.get("id").and_then(|v| v.as_str()).unwrap_or("");
-                handle_load_conversation(&mut sender, &state.pool, &claims, id_str).await
-            }
-            "send_message" => {
-                let conv_id_str = parsed
-                    .get("conversation_id")
+                let parsed: serde_json::Value = match serde_json::from_str(&text) {
+                    Ok(v) => v,
+                    Err(_) => {
+                        let _ = send_error(&mut sender, "invalid JSON").await;
+                        continue;
+                    }
+                };
+
+                let msg_type = parsed
+                    .get("type")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                let content = parsed
-                    .get("content")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                handle_send_message(
-                    &mut sender,
-                    &state,
-                    &claims,
-                    conv_id_str,
-                    content,
-                )
-                .await
-            }
-            "delete_conversation" => {
-                let id_str = parsed.get("id").and_then(|v| v.as_str()).unwrap_or("");
-                handle_delete_conversation(&mut sender, &state.pool, &claims, id_str).await
-            }
-            _ => {
-                let _ = send_error(&mut sender, &format!("unknown message type: {msg_type}")).await;
-                Ok(())
-            }
-        };
 
-        if let Err(e) = result {
-            tracing::error!(error = %e, "WebSocket handler error");
-            break;
+                let result = match msg_type {
+                    "list_conversations" => {
+                        handle_list_conversations(&mut sender, &state.pool, &claims).await
+                    }
+                    "create_conversation" => {
+                        let title = parsed
+                            .get("title")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("New conversation");
+                        handle_create_conversation(&mut sender, &state.pool, &claims, title).await
+                    }
+                    "load_conversation" => {
+                        let id_str = parsed.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                        handle_load_conversation(&mut sender, &state.pool, &claims, id_str).await
+                    }
+                    "send_message" => {
+                        let conv_id_str = parsed
+                            .get("conversation_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        let content = parsed
+                            .get("content")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        handle_send_message(
+                            &mut sender,
+                            &state,
+                            &claims,
+                            conv_id_str,
+                            content,
+                        )
+                        .await
+                    }
+                    "delete_conversation" => {
+                        let id_str = parsed.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                        handle_delete_conversation(&mut sender, &state.pool, &claims, id_str).await
+                    }
+                    _ => {
+                        let _ = send_error(&mut sender, &format!("unknown message type: {msg_type}")).await;
+                        Ok(())
+                    }
+                };
+
+                if let Err(e) = result {
+                    tracing::error!(error = %e, "WebSocket handler error");
+                    break;
+                }
+            }
+            _ = ping_interval.tick() => {
+                if sender.send(Message::Ping(vec![].into())).await.is_err() {
+                    tracing::warn!(user_id = %claims.user_id, "keepalive ping failed");
+                    break;
+                }
+            }
         }
     }
 
@@ -422,35 +440,42 @@ async fn handle_send_message(
         .await
     });
 
-    // Forward streaming lines to the WebSocket client.
+    // Forward streaming lines to the WebSocket client, with keepalive pings
+    // to prevent Cloudflare tunnel idle timeout during long Claude responses.
+    let mut stream_ping_interval = tokio::time::interval(std::time::Duration::from_secs(30));
+    stream_ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
     loop {
         tokio::select! {
             line = rx.recv() => {
                 match line {
                     Some(raw_line) => {
                         // Parse to extract text for stream_text messages.
-                        // Format: {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
+                        // Format: {"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"..."}}}
                         if let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw_line) {
                             let msg_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                            if msg_type == "assistant" {
-                                if let Some(content) = val.pointer("/message/content").and_then(|v| v.as_array()) {
-                                    for block in content {
-                                        if block.get("type").and_then(|v| v.as_str()) == Some("text") {
-                                            if let Some(text) = block.get("text").and_then(|v| v.as_str()) {
-                                                let ws_msg = json!({"type": "stream_text", "text": text});
-                                                if sender.send(Message::Text(ws_msg.to_string().into())).await.is_err() {
-                                                    tracing::warn!("WebSocket send failed during streaming");
-                                                    claude_handle.abort();
-                                                    return Ok(());
-                                                }
-                                            }
-                                        }
+
+                            // Handle streaming deltas (incremental text chunks).
+                            if msg_type == "stream_event" {
+                                if let Some(text) = val.pointer("/event/delta/text").and_then(|v| v.as_str()) {
+                                    let ws_msg = json!({"type": "stream_text", "text": text});
+                                    if sender.send(Message::Text(ws_msg.to_string().into())).await.is_err() {
+                                        tracing::warn!("WebSocket send failed during streaming");
+                                        claude_handle.abort();
+                                        return Ok(());
                                     }
                                 }
                             }
                         }
                     }
                     None => break, // Channel closed — claude process finished.
+                }
+            }
+            _ = stream_ping_interval.tick() => {
+                if sender.send(Message::Ping(vec![].into())).await.is_err() {
+                    tracing::warn!("keepalive ping failed during streaming");
+                    claude_handle.abort();
+                    return Ok(());
                 }
             }
         }

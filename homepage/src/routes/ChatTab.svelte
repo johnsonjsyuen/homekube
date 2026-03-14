@@ -242,6 +242,10 @@
         streamBuffer = "";
         streaming = false;
         sendWs({ type: "load_conversation", id });
+        // Auto-close sidebar on mobile after selecting a conversation
+        if (window.matchMedia('(max-width: 768px)').matches) {
+            sidebarOpen = false;
+        }
     }
 
     function deleteConversation(id: string) {
@@ -331,14 +335,44 @@
 </script>
 
 <div class="chat-container">
-    <!-- Sidebar toggle for mobile -->
-    <button
-        class="sidebar-toggle"
-        onclick={() => (sidebarOpen = !sidebarOpen)}
-        aria-label="Toggle sidebar"
-    >
-        {sidebarOpen ? "\u2190" : "\u2192"}
-    </button>
+    <!-- Mobile header bar -->
+    <header class="mobile-header">
+        <button
+            class="header-menu-btn"
+            onclick={() => (sidebarOpen = !sidebarOpen)}
+            aria-label="Toggle sidebar"
+        >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+        </button>
+        <span class="header-title">
+            {activeConversation ? activeConversation.title : "Claude Chat"}
+        </span>
+        <button
+            class="header-new-btn"
+            onclick={createConversation}
+            disabled={!connected}
+            aria-label="New conversation"
+        >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+        </button>
+    </header>
+
+    <!-- Mobile backdrop overlay -->
+    {#if sidebarOpen}
+        <button
+            class="sidebar-backdrop"
+            onclick={() => (sidebarOpen = false)}
+            aria-label="Close sidebar"
+            tabindex="-1"
+        ></button>
+    {/if}
 
     <!-- Sidebar -->
     <aside class="sidebar" class:open={sidebarOpen}>
@@ -503,6 +537,7 @@
 <style>
     .chat-container {
         display: flex;
+        flex-direction: row;
         height: calc(100vh - 140px);
         min-height: 400px;
         background: linear-gradient(
@@ -516,6 +551,17 @@
         position: relative;
     }
 
+    /* Mobile header bar - hidden on desktop */
+    .mobile-header {
+        display: none;
+    }
+
+    /* Sidebar backdrop - hidden on desktop */
+    .sidebar-backdrop {
+        display: none;
+    }
+
+    /* Layout wrapper for sidebar + main (flex row) */
     /* Sidebar */
     .sidebar {
         width: 250px;
@@ -526,28 +572,6 @@
         background: rgba(0, 0, 0, 0.15);
         padding: 16px 12px;
         gap: 12px;
-    }
-
-    .sidebar-toggle {
-        display: none;
-        position: absolute;
-        top: 12px;
-        left: 12px;
-        z-index: 10;
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        color: #8b8b9e;
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 1rem;
-        transition: all 0.2s;
-    }
-
-    .sidebar-toggle:hover {
-        background: rgba(255, 255, 255, 0.1);
-        color: #e0e0e0;
     }
 
     .new-chat-btn {
@@ -1050,44 +1074,160 @@
         cursor: not-allowed;
     }
 
-    /* Responsive */
+    /* Responsive - Mobile (<768px) */
     @media (max-width: 768px) {
+        .chat-container {
+            flex-direction: column;
+        }
+
+        /* Mobile header bar */
+        .mobile-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            flex-shrink: 0;
+            z-index: 4;
+        }
+
+        .header-menu-btn,
+        .header-new-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #b0b0c8;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .header-menu-btn:hover,
+        .header-new-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+        }
+
+        .header-new-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .header-title {
+            flex: 1;
+            text-align: center;
+            color: #d0d0e0;
+            font-size: 0.9rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 8px;
+            min-width: 0;
+        }
+
+        /* Sidebar as overlay drawer */
         .sidebar {
             position: absolute;
             top: 0;
             left: 0;
             bottom: 0;
-            z-index: 5;
+            z-index: 20;
             transform: translateX(-100%);
             transition: transform 0.25s ease;
             box-shadow: none;
+            width: 280px;
+            min-width: 280px;
         }
 
         .sidebar.open {
             transform: translateX(0);
-            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.4);
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
         }
 
-        .sidebar-toggle {
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        /* Semi-transparent backdrop */
+        .sidebar-backdrop {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 15;
+            background: rgba(0, 0, 0, 0.5);
+            border: none;
+            cursor: default;
+            padding: 0;
+            margin: 0;
+            -webkit-appearance: none;
+            appearance: none;
         }
 
         .chat-main {
             width: 100%;
+            flex: 1;
+            min-height: 0;
         }
 
         .message-bubble {
-            max-width: 90%;
+            max-width: 95%;
         }
 
         .messages-area {
-            padding: 16px 12px;
+            padding: 12px 10px;
         }
 
         .input-area {
-            padding: 12px;
+            padding: 10px;
+        }
+
+        .input-row {
+            gap: 8px;
+        }
+
+        .chat-input {
+            padding: 8px 12px;
+            font-size: 0.88rem;
+            min-height: 38px;
+        }
+
+        .send-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+        }
+
+        /* Smaller welcome screen elements on mobile */
+        .welcome-content {
+            gap: 16px;
+        }
+
+        .welcome-icon svg {
+            width: 32px;
+            height: 32px;
+        }
+
+        .welcome-title {
+            font-size: 1.2rem;
+        }
+
+        .welcome-new-btn {
+            padding: 10px 22px;
+            font-size: 0.88rem;
+        }
+
+        .recent-card {
+            padding: 10px 12px;
+        }
+
+        .recent-card-title {
+            font-size: 0.82rem;
         }
     }
 </style>
