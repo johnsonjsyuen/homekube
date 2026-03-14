@@ -172,10 +172,19 @@ pub async fn invoke_claude_streaming(
                 result.session_id = Some(sid.to_string());
             }
 
-            // Accumulate assistant text content.
-            // The actual format is: {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
+            // Accumulate text from streaming deltas (content_block_delta events).
+            // These arrive incrementally during streaming and contain the actual text chunks.
             let msg_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
-            if msg_type == "assistant" {
+            if msg_type == "content_block_delta" {
+                if let Some(text) = val.pointer("/delta/text").and_then(|v| v.as_str()) {
+                    result.full_text.push_str(text);
+                }
+            }
+
+            // Fallback: use the assistant message text only if no deltas were received.
+            // The assistant message contains the full text at the end, so using both
+            // would double-count.
+            if msg_type == "assistant" && result.full_text.is_empty() {
                 if let Some(content) = val.pointer("/message/content").and_then(|v| v.as_array()) {
                     for block in content {
                         if block.get("type").and_then(|v| v.as_str()) == Some("text") {
@@ -187,7 +196,7 @@ pub async fn invoke_claude_streaming(
                 }
             }
 
-            // Also capture result text (final complete response).
+            // Final fallback: use result text if nothing else was captured.
             if msg_type == "result" {
                 if let Some(text) = val.get("result").and_then(|v| v.as_str()) {
                     if result.full_text.is_empty() {

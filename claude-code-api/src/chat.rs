@@ -429,22 +429,18 @@ async fn handle_send_message(
                 match line {
                     Some(raw_line) => {
                         // Parse to extract text for stream_text messages.
-                        // Format: {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
+                        // Format: {"type":"content_block_delta","delta":{"type":"text_delta","text":"..."}}
                         if let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw_line) {
                             let msg_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                            if msg_type == "assistant" {
-                                if let Some(content) = val.pointer("/message/content").and_then(|v| v.as_array()) {
-                                    for block in content {
-                                        if block.get("type").and_then(|v| v.as_str()) == Some("text") {
-                                            if let Some(text) = block.get("text").and_then(|v| v.as_str()) {
-                                                let ws_msg = json!({"type": "stream_text", "text": text});
-                                                if sender.send(Message::Text(ws_msg.to_string().into())).await.is_err() {
-                                                    tracing::warn!("WebSocket send failed during streaming");
-                                                    claude_handle.abort();
-                                                    return Ok(());
-                                                }
-                                            }
-                                        }
+
+                            // Handle streaming deltas (incremental text chunks).
+                            if msg_type == "content_block_delta" {
+                                if let Some(text) = val.pointer("/delta/text").and_then(|v| v.as_str()) {
+                                    let ws_msg = json!({"type": "stream_text", "text": text});
+                                    if sender.send(Message::Text(ws_msg.to_string().into())).await.is_err() {
+                                        tracing::warn!("WebSocket send failed during streaming");
+                                        claude_handle.abort();
+                                        return Ok(());
                                     }
                                 }
                             }
