@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
-import { proto } from '@whiskeysockets/baileys';
-import { initAuthCreds, BufferJSON } from '@whiskeysockets/baileys';
+import * as baileys from '@whiskeysockets/baileys';
+const { proto, initAuthCreds, BufferJSON } = (baileys as any).default ?? baileys;
 import type { AuthenticationCreds, AuthenticationState, SignalDataTypeMap } from '@whiskeysockets/baileys';
 
 export async function usePostgresAuthState(pool: Pool, userId: string): Promise<{

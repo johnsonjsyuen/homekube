@@ -42,8 +42,8 @@ spec:
           value: "homekube"
         - name: KEYCLOAK_AUDIENCE
           value: "whatsapp"
-        - name: KAFKA_BROKERS
-          value: "tansu:9092"
+        - name: NATS_URL
+          value: "nats://nats:4222"
         resources:
           requests:
             memory: "256Mi"

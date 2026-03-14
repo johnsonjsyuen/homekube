@@ -32,7 +32,7 @@ These must be running in the cluster before deploying services:
 |---|---|
 | **Keycloak** (realm: `homekube`) | homepage, text-to-speech, speech-to-text, whatsapp, workflows-worker |
 | **PostgreSQL** (CloudNativePG) | text-to-speech, whatsapp, workflows-worker, speedtest |
-| **Tansu** (Kafka-compatible, `tansu:9092`) | text-to-speech, whatsapp, workflows-worker |
+| **NATS JetStream** (`nats:4222`) | text-to-speech, whatsapp, workflows-worker |
 | **Temporal** (`temporal-frontend:7233`) | workflows-worker |
 
 ### Kubernetes secrets

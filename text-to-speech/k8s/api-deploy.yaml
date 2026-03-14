@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tts-api
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tts-api
+  template:
+    metadata:
+      labels:
+        app: tts-api
+    spec:
+      containers:
+      - name: tts-api
+        image: localhost:5000/text-to-speech:latest
+        imagePullPolicy: Always
+        command: ["tts-api"]
+        ports:
+        - containerPort: 3000
+        env:
+        - name: STORAGE_PATH
+          value: "/app/storage"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: text-to-speech-db-app
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: text-to-speech-db-app
+              key: password
+        - name: DB_HOST
+          value: "text-to-speech-db-rw"
+        - name: DB_NAME
+          value: "text_to_speech"
+        - name: DATABASE_URL
+          value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):5432/$(DB_NAME)"
+        - name: KOKORO_MODEL_PATH
+          value: "/app/models/kokoro-v1.0.onnx"
+        - name: KOKORO_VOICES_PATH
+          value: "/app/models/voices-v1.0.bin"
+        - name: KOKORO_MODEL_DIR
+          value: "/app/models"
+        - name: KEYCLOAK_URL
+          value: "http://keycloak.keycloak.svc.cluster.local"
+        - name: KEYCLOAK_REALM
+          value: "homekube"
+        - name: KEYCLOAK_AUDIENCE
+          value: "tts"
+        - name: NATS_URL
+          value: "nats://nats:4222"
+        volumeMounts:
+        - name: models
+          mountPath: /app/models
+          readOnly: true
+        - name: storage
+          mountPath: /app/storage
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: tts-models
+      - name: storage
+        persistentVolumeClaim:
+          claimName: text-to-speech-storage

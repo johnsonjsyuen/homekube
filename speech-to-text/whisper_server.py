@@ -46,11 +46,11 @@ class TranscribeResponse(BaseModel):
 
 @app.on_event("startup")
 async def load_model():
-    """Load the Whisper model on startup."""
+    """Load the Whisper model on startup, downloading if not cached."""
     global model
-    logger.info(f"Loading Whisper model from {MODEL_PATH}")
+    logger.info(f"Loading Whisper model '{MODEL_PATH}' (will download if not cached)")
     logger.info(f"Compute type: {COMPUTE_TYPE}, CPU threads: {CPU_THREADS}")
-    
+
     try:
         model = WhisperModel(
             MODEL_PATH,

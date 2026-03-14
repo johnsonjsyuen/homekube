@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { getToken } from "$lib/auth";
+    import { getFreshToken } from "$lib/auth";
     import { config } from "$lib/config";
 
     let ttsFile = $state<FileList | null>(null);
@@ -36,7 +36,7 @@
         jobsLoading = true;
         jobsError = "";
         try {
-            const token = getToken();
+            const token = await getFreshToken();
             const res = await fetch(`${config.tts.baseUrl}/jobs`, {
                 headers: token
                     ? { Authorization: `Bearer ${token}` }
@@ -95,7 +95,7 @@
 
     async function downloadJob(jobId: string) {
         try {
-            const token = getToken();
+            const token = await getFreshToken();
             const res = await fetch(`${config.tts.baseUrl}/status/${jobId}`, {
                 headers: token
                     ? { Authorization: `Bearer ${token}` }
@@ -137,7 +137,7 @@
         formData.append("speed", ttsSpeed);
 
         try {
-            const token = getToken();
+            const token = await getFreshToken();
             const res = await fetch(`${config.tts.baseUrl}/generate`, {
                 method: "POST",
                 body: formData,
@@ -175,7 +175,7 @@
         }
 
         try {
-            const token = getToken();
+            const token = await getFreshToken();
             const res = await fetch(`${config.tts.baseUrl}/status/${id}`, {
                 headers: token
                     ? { Authorization: `Bearer ${token}` }

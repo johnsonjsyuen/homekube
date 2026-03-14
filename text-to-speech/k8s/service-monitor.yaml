@@ -8,7 +8,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: text-to-speech
+      app: tts-api
   endpoints:
   - port: http
     path: /metrics

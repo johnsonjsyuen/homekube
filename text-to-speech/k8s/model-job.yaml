@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tts-model-init
+  namespace: default
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: download-models
+        image: busybox:1.36
+        env:
+        - name: MODEL_VERSION
+          value: "v1.0.0"
+        - name: ONNX_URL
+          value: "https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/kokoro-v1.0.onnx"
+        - name: VOICES_URL
+          value: "https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/voices-v1.0.bin"
+        - name: ONNX_FILE
+          value: "kokoro-v1.0.onnx"
+        - name: VOICES_FILE
+          value: "voices-v1.0.bin"
+        command: ['sh', '-c']
+        args:
+        - |
+          STAMP="/models/.version"
+          if [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$MODEL_VERSION" ]; then
+            echo "Models already at version $MODEL_VERSION"
+          else
+            echo "Downloading models (version $MODEL_VERSION)..."
+            rm -f "/models/$ONNX_FILE" "/models/$VOICES_FILE"
+            wget -q -O "/models/$ONNX_FILE" "$ONNX_URL"
+            wget -q -O "/models/$VOICES_FILE" "$VOICES_URL"
+            echo "$MODEL_VERSION" > "$STAMP"
+            echo "Models downloaded"
+          fi
+        volumeMounts:
+        - name: models
+          mountPath: /models
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: tts-models

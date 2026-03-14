@@ -1,0 +1,20 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: tts-worker-scaler
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: tts-worker
+  minReplicaCount: 0
+  maxReplicaCount: 5
+  pollingInterval: 15
+  cooldownPeriod: 300
+  triggers:
+  - type: nats-jetstream
+    metadata:
+      natsServerMonitoringEndpoint: "nats.default.svc.cluster.local:8222"
+      account: "$G"
+      stream: "TTS_JOBS"
+      consumer: "tts-workers"
+      lagThreshold: "2"

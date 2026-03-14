@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nats-init-streams
+spec:
+  ttlSecondsAfterFinished: 60
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init
+          image: natsio/nats-box:0.14.5
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              # Wait for NATS to be ready
+              # Wait for NATS to accept JetStream commands
+              until nats -s nats://nats:4222 stream ls 2>/dev/null; do sleep 2; done
+
+              # Create streams (idempotent - will update if exists)
+              nats -s nats://nats:4222 stream add TTS_JOBS --subjects="tts.jobs" --retention=work --storage=file --max-age=168h --replicas=1 --discard=old --max-msgs=-1 --max-bytes=-1 --max-msg-size=-1 --dupe-window=2m --no-allow-rollup --deny-delete --deny-purge --defaults
+              nats -s nats://nats:4222 stream add DIGESTS --subjects="digests" --retention=work --storage=file --max-age=168h --replicas=1 --discard=old --max-msgs=-1 --max-bytes=-1 --max-msg-size=-1 --dupe-window=2m --no-allow-rollup --deny-delete --deny-purge --defaults
+
+              # Create pull consumers
+              nats -s nats://nats:4222 consumer add TTS_JOBS tts-workers --pull --ack=explicit --wait=10m --max-deliver=3 --deliver=all --replay=instant --filter="tts.jobs" --defaults
+              nats -s nats://nats:4222 consumer add DIGESTS whatsapp-relay --pull --ack=explicit --wait=30s --max-deliver=3 --deliver=all --replay=instant --filter="digests" --defaults
+
+              echo "Streams and consumers initialized successfully"

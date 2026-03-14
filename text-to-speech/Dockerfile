@@ -3,7 +3,7 @@ FROM ubuntu:24.04 AS builder
 
 WORKDIR /app
 
-# Install build dependencies and Rust (rarely changes)
+# Install build dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     build-essential \
@@ -16,25 +16,17 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Cache dependencies by building with dummy source first
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN mkdir -p src/bin && \
+    echo "fn main() {}" > src/bin/api.rs && \
+    echo "fn main() {}" > src/bin/worker.rs && \
+    echo "" > src/lib.rs
 RUN cargo build --release
 RUN rm -rf src
 
 # Build real source (only this layer invalidates on code changes)
 COPY src ./src
 COPY migrations ./migrations
-RUN touch src/main.rs && cargo build --release
-
-# Model download stage (separate so code changes don't re-download)
-FROM python:3.11-slim AS models
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /models
-RUN wget -q https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/kokoro-v1.0.onnx && \
-    wget -q https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/voices-v1.0.bin
+RUN touch src/lib.rs && cargo build --release
 
 # Runtime Stage
 FROM python:3.11-slim
@@ -48,19 +40,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libportaudio2 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install kokoro-tts
+# Install kokoro-tts CLI (used by worker for file-based TTS)
 RUN pip install --no-cache-dir kokoro-tts soundfile
-
-# Copy models from download stage
-COPY --from=models /models/kokoro-v1.0.onnx .
-COPY --from=models /models/voices-v1.0.bin .
 
 # Create output directory
 RUN mkdir -p /tmp/tts-output
 
-# Copy binary from builder
-COPY --from=builder /app/target/release/text-to-speech /usr/local/bin/text-to-speech
+# Copy both binaries from builder
+COPY --from=builder /app/target/release/tts-api /usr/local/bin/tts-api
+COPY --from=builder /app/target/release/tts-worker /usr/local/bin/tts-worker
 
-EXPOSE 3000
+EXPOSE 3000 3001
 
-CMD ["text-to-speech"]
+# Default to API; worker deployment overrides via k8s command
+CMD ["tts-api"]

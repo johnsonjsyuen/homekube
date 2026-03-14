@@ -13,6 +13,26 @@ spec:
       labels:
         app: speech-to-text
     spec:
+      initContainers:
+      - name: check-model-version
+        image: busybox:1.36
+        env:
+        - name: MODEL_VERSION
+          value: "large-v3-turbo-1"
+        command: ['sh', '-c']
+        args:
+        - |
+          STAMP="/models/.version"
+          if [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$MODEL_VERSION" ]; then
+            echo "Model cache at version $MODEL_VERSION, skipping"
+          else
+            echo "Model version changed to $MODEL_VERSION, clearing cache..."
+            rm -rf /models/huggingface
+            echo "$MODEL_VERSION" > "$STAMP"
+          fi
+        volumeMounts:
+        - name: models
+          mountPath: /models
       containers:
       # Rust WebSocket proxy
       - name: speech-to-text
@@ -50,7 +70,6 @@ spec:
             port: 3000
           initialDelaySeconds: 5
           periodSeconds: 5
-      
       # Whisper sidecar for transcription
       - name: whisper
         image: localhost:5000/speech-to-text-whisper:latest
@@ -61,6 +80,13 @@ spec:
         env:
         - name: CPU_THREADS
           value: "4"
+        - name: MODEL_PATH
+          value: "large-v3-turbo"
+        - name: HF_HOME
+          value: "/models/huggingface"
+        volumeMounts:
+        - name: models
+          mountPath: /models
         resources:
           requests:
             memory: "2Gi"
@@ -73,10 +99,14 @@ spec:
             port: 8000
           initialDelaySeconds: 30
           periodSeconds: 10
-          failureThreshold: 10
+          failureThreshold: 30
         livenessProbe:
           httpGet:
             path: /health
             port: 8000
-          initialDelaySeconds: 60
+          initialDelaySeconds: 120
           periodSeconds: 30
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: speech-to-text-models

@@ -4,10 +4,10 @@ metadata:
   name: text-to-speech
   namespace: default
   labels:
-    app: text-to-speech
+    app: tts-api
 spec:
   selector:
-    app: text-to-speech
+    app: tts-api
   ports:
   - name: http
     protocol: TCP
