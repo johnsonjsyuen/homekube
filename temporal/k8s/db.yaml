@@ -5,6 +5,13 @@ metadata:
   namespace: temporal
 spec:
   instances: 1
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
   storage:
     size: 2Gi
   bootstrap:

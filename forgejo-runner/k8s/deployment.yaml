@@ -38,6 +38,12 @@ spec:
           ports:
             - containerPort: 3000
               name: metrics
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
           volumeMounts:
             - name: config
               mountPath: /conf
@@ -53,6 +59,12 @@ spec:
           env:
             - name: DOCKER_TLS_CERTDIR
               value: /certs
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
           securityContext:
             privileged: true
           volumeMounts:

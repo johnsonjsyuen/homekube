@@ -19,6 +19,12 @@ spec:
         env:
         - name: WHATSAPP_BACKEND_URL
           value: "ws://whatsapp"
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
         ports:
         - containerPort: 3000
 ---
