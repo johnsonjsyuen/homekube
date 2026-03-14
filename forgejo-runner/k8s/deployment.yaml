@@ -17,6 +17,13 @@ spec:
       containers:
         - name: runner
           image: code.forgejo.org/forgejo/runner:12.6.3
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 100m
+            limits:
+              memory: 512Mi
+              cpu: 500m
           command:
             - /bin/bash
             - -c
@@ -50,6 +57,13 @@ spec:
               mountPath: /data
         - name: dind
           image: docker:24-dind
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 200m
+            limits:
+              memory: 2Gi
+              cpu: "2"
           env:
             - name: DOCKER_TLS_CERTDIR
               value: /certs
