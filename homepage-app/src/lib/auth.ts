@@ -128,14 +128,16 @@ export async function initKeycloak(): Promise<AuthState> {
         updateAuthState(keycloak);
 
         // Clean auth params from URL after successful login redirect
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('code') || urlParams.has('state') || urlParams.has('session_state')) {
-            const cleanUrl = new URL(window.location.href);
-            cleanUrl.searchParams.delete('code');
-            cleanUrl.searchParams.delete('state');
-            cleanUrl.searchParams.delete('session_state');
-            cleanUrl.searchParams.delete('iss');
-            history.replaceState(null, '', cleanUrl.toString());
+        if (typeof window !== 'undefined') {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('code') || urlParams.has('state') || urlParams.has('session_state')) {
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.searchParams.delete('code');
+                cleanUrl.searchParams.delete('state');
+                cleanUrl.searchParams.delete('session_state');
+                cleanUrl.searchParams.delete('iss');
+                history.replaceState(null, '', cleanUrl.toString());
+            }
         }
 
         // Set up token refresh
