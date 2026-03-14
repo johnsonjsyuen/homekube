@@ -55,7 +55,6 @@ spec:
             secretKeyRef:
               name: github-token
               key: token
-              optional: true
         - name: GIT_AUTHOR_NAME
           value: "Claude Code"
         - name: GIT_AUTHOR_EMAIL
