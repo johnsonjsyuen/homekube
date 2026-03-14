@@ -58,6 +58,7 @@ function setupTokenProxy() {
 let keycloak: Keycloak | null = null;
 let initPromise: Promise<AuthState> | null = null;
 let tokenProxySetup = false;
+let refreshInterval: ReturnType<typeof setInterval> | null = null;
 
 export interface AuthState {
     authenticated: boolean;
@@ -77,6 +78,38 @@ let authState: AuthState = {
 // Callbacks for state changes
 type AuthCallback = (state: AuthState) => void;
 const callbacks: AuthCallback[] = [];
+
+const TOKEN_STORAGE_KEY = 'kc_token';
+const REFRESH_TOKEN_STORAGE_KEY = 'kc_refreshToken';
+const ID_TOKEN_STORAGE_KEY = 'kc_idToken';
+
+function saveTokens(kc: Keycloak) {
+    if (typeof window === 'undefined') return;
+    if (kc.token) sessionStorage.setItem(TOKEN_STORAGE_KEY, kc.token);
+    else sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    if (kc.refreshToken) sessionStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, kc.refreshToken);
+    else sessionStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    if (kc.idToken) sessionStorage.setItem(ID_TOKEN_STORAGE_KEY, kc.idToken);
+    else sessionStorage.removeItem(ID_TOKEN_STORAGE_KEY);
+}
+
+function loadTokens(): { token?: string; refreshToken?: string; idToken?: string } | null {
+    if (typeof window === 'undefined') return null;
+    const token = sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    const refreshToken = sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+    const idToken = sessionStorage.getItem(ID_TOKEN_STORAGE_KEY);
+    if (token && refreshToken) {
+        return { token, refreshToken, idToken: idToken || undefined };
+    }
+    return null;
+}
+
+function clearTokens() {
+    if (typeof window === 'undefined') return;
+    sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(ID_TOKEN_STORAGE_KEY);
+}
 
 export function onAuthStateChange(callback: AuthCallback): () => void {
     callbacks.push(callback);
@@ -100,6 +133,7 @@ function updateAuthState(kc: Keycloak) {
         username: kc.tokenParsed?.preferred_username || null,
         roles: kc.tokenParsed?.realm_access?.roles || []
     };
+    saveTokens(kc);
     notifyCallbacks();
 }
 
@@ -152,17 +186,36 @@ async function doInitKeycloak(): Promise<AuthState> {
             history.replaceState = History.prototype.replaceState.bind(history);
         }
 
+        const savedTokens = loadTokens();
         const authenticated = await keycloak.init({
             onLoad: 'check-sso',
             pkceMethod: 'S256',
             silentCheckSsoRedirectUri: window.location.origin + '/silent-check-sso.html',
             checkLoginIframe: false,
-            responseMode: 'query'
+            responseMode: 'query',
+            ...savedTokens && {
+                token: savedTokens.token,
+                refreshToken: savedTokens.refreshToken,
+                idToken: savedTokens.idToken
+            }
         });
 
         // Restore SvelteKit's patched replaceState
         if (hasAuthCode) {
             history.replaceState = patchedReplaceState;
+        }
+
+        // If restored from saved tokens, force an immediate refresh
+        if (authenticated && savedTokens) {
+            try {
+                // Force token refresh: -1 means "refresh if expiring within -1 seconds", which is always true
+                await keycloak.updateToken(-1);
+            } catch {
+                console.warn('[Auth] Saved tokens expired, clearing');
+                updateAuthState(keycloak);
+                clearTokens();
+                return authState;
+            }
         }
 
         updateAuthState(keycloak);
@@ -175,19 +228,22 @@ async function doInitKeycloak(): Promise<AuthState> {
         }
 
         // Set up token refresh
-        setInterval(async () => {
-            if (keycloak?.authenticated) {
-                try {
-                    const refreshed = await keycloak.updateToken(60);
-                    if (refreshed) {
-                        updateAuthState(keycloak);
+        if (authenticated) {
+            refreshInterval = setInterval(async () => {
+                if (keycloak?.authenticated) {
+                    try {
+                        const refreshed = await keycloak.updateToken(60);
+                        if (refreshed) {
+                            updateAuthState(keycloak);
+                        }
+                    } catch {
+                        console.error('Failed to refresh token');
+                        clearTokens();
+                        await logout();
                     }
-                } catch {
-                    console.error('Failed to refresh token');
-                    await logout();
                 }
-            }
-        }, 30000);
+            }, 30000);
+        }
 
         return authState;
     } catch (error) {
@@ -210,6 +266,8 @@ export async function login(redirectPath?: string): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
+    clearTokens();
+    if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
     if (keycloak?.authenticated) {
         const redirectUri = window.location.origin;
         console.log('[Auth] Logging out, redirectUri:', redirectUri);
@@ -241,6 +299,7 @@ export async function getFreshToken(): Promise<string | null> {
         }
     } catch {
         console.error('[Auth] Failed to refresh token');
+        clearTokens();
         return null;
     }
     return keycloak.token || null;

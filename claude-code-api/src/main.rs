@@ -17,6 +17,7 @@ use metrics::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Semaphore;
@@ -34,6 +35,7 @@ pub struct AppState {
     pool: PgPool,
     nats: Option<NatsClient>,
     jwks: JwksCache,
+    pub user_channels: std::sync::Mutex<HashMap<String, tokio::sync::broadcast::Sender<chat::BroadcastEvent>>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -279,6 +281,7 @@ async fn main() {
         pool,
         nats,
         jwks,
+        user_channels: std::sync::Mutex::new(HashMap::new()),
     });
 
     let cors = CorsLayer::new()
