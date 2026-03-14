@@ -51,8 +51,8 @@ spec:
           value: "homekube"
         - name: KEYCLOAK_AUDIENCE
           value: "tts"
-        - name: KAFKA_BROKERS
-          value: "tansu:9092"
+        - name: NATS_URL
+          value: "nats://nats:4222"
         volumeMounts:
         - name: models
           mountPath: /app/models
@@ -64,7 +64,7 @@ spec:
             memory: "2Gi"
             cpu: "500m"
           limits:
-            memory: "6Gi"
+            memory: "2Gi"
         livenessProbe:
           httpGet:
             path: /health

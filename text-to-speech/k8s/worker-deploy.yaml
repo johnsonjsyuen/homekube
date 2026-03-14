@@ -41,8 +41,8 @@ spec:
           value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):5432/$(DB_NAME)"
         - name: KOKORO_MODEL_DIR
           value: "/app/models"
-        - name: KAFKA_BROKERS
-          value: "tansu:9092"
+        - name: NATS_URL
+          value: "nats://nats:4222"
         volumeMounts:
         - name: models
           mountPath: /app/models
@@ -54,7 +54,7 @@ spec:
             memory: "2Gi"
             cpu: "500m"
           limits:
-            memory: "6Gi"
+            memory: "3Gi"
         livenessProbe:
           httpGet:
             path: /health

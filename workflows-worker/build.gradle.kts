@@ -33,8 +33,8 @@ dependencies {
     implementation("io.quarkus:quarkus-oidc")
     implementation("io.quarkus:quarkus-oidc-client")
 
-    // Kafka
-    implementation("io.quarkus:quarkus-messaging-kafka")
+    // NATS
+    implementation("io.nats:jnats:2.20.5")
 
     // Observability
     implementation("io.quarkus:quarkus-micrometer-registry-prometheus")

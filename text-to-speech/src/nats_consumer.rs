@@ -1,73 +1,64 @@
-use base64::Engine;
+use async_nats::jetstream;
+use async_nats::jetstream::consumer::PullConsumer;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use futures::StreamExt;
-use rdkafka::ClientConfig;
-use rdkafka::Message;
-use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
-use rdkafka::message::BorrowedMessage;
 use sqlx::{Pool, Postgres, Row};
 use uuid::Uuid;
 
 use crate::handlers::process_tts;
-use crate::kafka_producer::TtsJobMessage;
 use crate::metrics as metric_names;
+use crate::nats_producer::TtsJobMessage;
 
-const TOPIC: &str = "tts-jobs";
-const GROUP_ID: &str = "tts-workers";
+const STREAM: &str = "TTS_JOBS";
+const CONSUMER: &str = "tts-workers";
 
 pub async fn run_consumer(
-    brokers: String,
+    nats_url: String,
     pool: Pool<Postgres>,
     storage_path: String,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let consumer: StreamConsumer = ClientConfig::new()
-        .set("bootstrap.servers", &brokers)
-        .set("group.id", GROUP_ID)
-        .set("auto.offset.reset", "earliest")
-        .set("enable.auto.commit", "false")
-        .set("session.timeout.ms", "30000")
-        .set("max.poll.interval.ms", "600000")
-        .create()?;
+    let client = async_nats::connect(&nats_url).await?;
+    let jetstream = jetstream::new(client);
 
-    consumer.subscribe(&[TOPIC])?;
-    tracing::info!("TTS Kafka consumer connected (group: {})", GROUP_ID);
+    let stream = jetstream.get_stream(STREAM).await?;
+    let consumer: PullConsumer = stream.get_consumer(CONSUMER).await?;
 
-    let mut stream = consumer.stream();
+    tracing::info!("NATS JetStream consumer connected (consumer: {})", CONSUMER);
 
-    while let Some(result) = stream.next().await {
-        let borrowed_msg = match result {
+    let mut messages = consumer.messages().await?;
+
+    while let Some(result) = messages.next().await {
+        let msg = match result {
             Ok(m) => m,
             Err(e) => {
-                tracing::error!(error = %e, "Kafka consumer error");
+                tracing::error!(error = %e, "NATS consumer error");
                 continue;
             }
         };
 
-        process_message(&borrowed_msg, &consumer, &pool, &storage_path).await;
+        process_message(&msg, &pool, &storage_path).await;
     }
 
     Ok(())
 }
 
 async fn process_message(
-    msg: &BorrowedMessage<'_>,
-    consumer: &StreamConsumer,
+    msg: &jetstream::Message,
     pool: &Pool<Postgres>,
     storage_path: &str,
 ) {
-    let payload = match msg.payload() {
-        Some(p) => p,
-        None => {
-            let _ = consumer.commit_message(msg, CommitMode::Sync);
-            return;
-        }
-    };
+    let payload = msg.payload.as_ref();
+    if payload.is_empty() {
+        let _ = msg.ack().await;
+        return;
+    }
 
     let job_msg: TtsJobMessage = match serde_json::from_slice(payload) {
         Ok(m) => m,
         Err(e) => {
             tracing::error!(error = %e, "Failed to deserialize TTS job message");
-            let _ = consumer.commit_message(msg, CommitMode::Sync);
+            let _ = msg.ack().await;
             return;
         }
     };
@@ -76,7 +67,7 @@ async fn process_message(
         Ok(id) => id,
         Err(e) => {
             tracing::error!(error = %e, job_id = %job_msg.job_id, "Invalid job UUID");
-            let _ = consumer.commit_message(msg, CommitMode::Sync);
+            let _ = msg.ack().await;
             return;
         }
     };
@@ -91,18 +82,18 @@ async fn process_message(
             let status: String = r.get("status");
             if status != "pending" {
                 tracing::debug!(job_id = %job_id, status = %status, "Skipping non-pending job");
-                let _ = consumer.commit_message(msg, CommitMode::Sync);
+                let _ = msg.ack().await;
                 return;
             }
         }
         Ok(None) => {
             tracing::warn!(job_id = %job_id, "Job not found in DB, skipping");
-            let _ = consumer.commit_message(msg, CommitMode::Sync);
+            let _ = msg.ack().await;
             return;
         }
         Err(e) => {
             tracing::error!(job_id = %job_id, error = %e, "DB error checking job status, will retry");
-            // Don't commit — transient DB error should trigger redelivery
+            // Don't ack — NATS will redeliver after ack_wait
             return;
         }
     }
@@ -128,7 +119,7 @@ async fn process_message(
                     .await;
             metrics::counter!(metric_names::TTS_JOBS_TOTAL, "status" => "failed").increment(1);
             metrics::gauge!(metric_names::TTS_ACTIVE_JOBS).decrement(1);
-            let _ = consumer.commit_message(msg, CommitMode::Sync);
+            let _ = msg.ack().await;
             return;
         }
     };
@@ -155,7 +146,7 @@ async fn process_message(
 
     match result {
         Ok(Ok(())) => {
-            tracing::info!(job_id = %job_id, "TTS job completed via Kafka consumer");
+            tracing::info!(job_id = %job_id, "TTS job completed via NATS consumer");
             metrics::counter!(metric_names::TTS_JOBS_TOTAL, "status" => "completed").increment(1);
             metrics::gauge!(metric_names::TTS_ACTIVE_JOBS).decrement(1);
         }
@@ -183,8 +174,8 @@ async fn process_message(
         }
     }
 
-    // Commit offset after processing (whether success or failure)
-    if let Err(e) = consumer.commit_message(msg, CommitMode::Sync) {
-        tracing::error!(job_id = %job_id, error = %e, "Failed to commit Kafka offset");
+    // Ack after processing (whether success or failure)
+    if let Err(e) = msg.ack().await {
+        tracing::error!(job_id = %job_id, error = %e, "Failed to ack NATS message");
     }
 }

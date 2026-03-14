@@ -2,13 +2,11 @@ package com.homekube.worker.activities
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.homekube.worker.MetricsService
+import com.homekube.worker.NatsPublisher
 import com.homekube.worker.SendNotificationInput
-import io.smallrye.reactive.messaging.kafka.Record
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.enterprise.context.control.ActivateRequestContext
 import jakarta.inject.Inject
-import org.eclipse.microprofile.reactive.messaging.Channel
-import org.eclipse.microprofile.reactive.messaging.Emitter
 import org.jboss.logging.Logger
 import java.time.Instant
 
@@ -18,8 +16,7 @@ class SendNotificationActivity {
     private val log = Logger.getLogger(SendNotificationActivity::class.java)
 
     @Inject
-    @Channel("digests")
-    lateinit var digestsEmitter: Emitter<Record<String, String>>
+    lateinit var natsPublisher: NatsPublisher
 
     @Inject
     lateinit var objectMapper: ObjectMapper
@@ -43,8 +40,7 @@ class SendNotificationActivity {
                     )
                 )
 
-                val record = Record.of(subscriber.userId, messageValue)
-                digestsEmitter.send(record).toCompletableFuture().get()
+                natsPublisher.publish("digests", messageValue)
 
                 log.infof("[Send] Produced notification for %s", subscriber.phone)
                 metricsService.incrementNotificationsSent(input.jobName)

@@ -3,14 +3,12 @@ FROM ubuntu:24.04 AS builder
 
 WORKDIR /app
 
-# Install build dependencies including cmake for rdkafka
+# Install build dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     build-essential \
     pkg-config \
     libssl-dev \
-    cmake \
-    libcurl4-openssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y

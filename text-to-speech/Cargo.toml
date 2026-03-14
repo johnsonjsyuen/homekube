@@ -37,7 +37,7 @@ zip = "2"
 byteorder = "1"
 axum-prometheus = "0.7"
 metrics = "0.23"
-rdkafka = { version = "0.36", features = ["cmake-build"] }
+async-nats = "0.38"
 base64 = "0.22"
 futures = "0.3"
 

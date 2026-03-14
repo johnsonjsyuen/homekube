@@ -88,8 +88,8 @@ pub async fn generate_speech(
     tracing::info!(speed = %speed, voice = %voice, text_size_bytes = text_bytes.len(), "Processing TTS request");
 
     let job_id = Uuid::new_v4();
-    let use_kafka = state.kafka_producer.is_some();
-    let initial_status = if use_kafka { "pending" } else { "processing" };
+    let use_nats = state.nats_producer.is_some();
+    let initial_status = if use_nats { "pending" } else { "processing" };
 
     // Insert into DB with user info
     tracing::info!(job_id = %job_id, username = %user.username, status = initial_status, "Creating job in database");
@@ -119,9 +119,9 @@ pub async fn generate_speech(
         tracing::warn!(job_id = %job_id, error = %e, "Failed to save pending text file");
     }
 
-    if let Some(ref producer) = state.kafka_producer {
-        // Kafka path: produce job message, consumer will process it
-        let msg = crate::kafka_producer::TtsJobMessage {
+    if let Some(ref producer) = state.nats_producer {
+        // NATS path: produce job message, consumer will process it
+        let msg = crate::nats_producer::TtsJobMessage {
             job_id: job_id.to_string(),
             username: user.username.clone(),
             text_base64: BASE64.encode(&text_bytes),
@@ -131,10 +131,10 @@ pub async fn generate_speech(
             timestamp: Utc::now().to_rfc3339(),
         };
         if let Err(e) = producer.produce_tts_job(&msg).await {
-            tracing::error!(job_id = %job_id, error = %e, "Failed to produce TTS job to Kafka");
+            tracing::error!(job_id = %job_id, error = %e, "Failed to produce TTS job to NATS");
             // Clean up orphaned pending row
             let _ = sqlx::query("UPDATE jobs SET status = 'error', error_message = $1 WHERE id = $2")
-                .bind(format!("Kafka produce failed: {}", e))
+                .bind(format!("NATS produce failed: {}", e))
                 .bind(job_id)
                 .execute(&state.pool)
                 .await;

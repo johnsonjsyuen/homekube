@@ -6,15 +6,15 @@ metadata:
 spec:
   scaleTargetRef:
     name: tts-worker
-  minReplicaCount: 1
+  minReplicaCount: 0
   maxReplicaCount: 5
   pollingInterval: 15
   cooldownPeriod: 300
   triggers:
-  - type: kafka
+  - type: nats-jetstream
     metadata:
-      bootstrapServers: tansu.default.svc.cluster.local:9092
-      consumerGroup: tts-workers
-      topic: tts-jobs
+      natsServerMonitoringEndpoint: "nats.default.svc.cluster.local:8222"
+      account: "$G"
+      stream: "TTS_JOBS"
+      consumer: "tts-workers"
       lagThreshold: "2"
-      offsetResetPolicy: earliest

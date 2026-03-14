@@ -44,8 +44,8 @@ spec:
               key: password
         - name: WHATSAPP_URL
           value: "http://whatsapp.default.svc.cluster.local"
-        - name: KAFKA_BROKERS
-          value: "tansu.default.svc.cluster.local:9092"
+        - name: NATS_URL
+          value: "nats://nats.default.svc.cluster.local:4222"
         - name: CLAUDE_API_URL
           value: "http://claude-code-api.default.svc.cluster.local"
         resources:
