@@ -34,4 +34,19 @@ echo "--- Monitoring ---"
 ./monitoring/install.sh
 kubectl apply -f monitoring/grafana-proxy/
 
+# GitHub Token for Claude Code API
+# Required so the claude-code-api pod can use `gh` CLI for PRs, issues, etc.
+# The token is a GitHub Personal Access Token with appropriate scopes (e.g. repo, read:org).
+echo "--- GitHub Token (Claude Code API) ---"
+if kubectl get secret github-token -n default &>/dev/null; then
+  echo "Secret 'github-token' already exists, skipping."
+else
+  echo "Secret 'github-token' not found."
+  echo "Create it manually with:"
+  echo ""
+  echo "  kubectl create secret generic github-token --from-literal=token=ghp_YOUR_PERSONAL_ACCESS_TOKEN"
+  echo ""
+  echo "Skipping for now."
+fi
+
 echo "=== Infrastructure deployed ==="
