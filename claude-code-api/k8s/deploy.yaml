@@ -17,9 +17,20 @@ spec:
       - name: claude-config
         persistentVolumeClaim:
           claimName: claude-code-config
+      - name: git-workspace
+        persistentVolumeClaim:
+          claimName: claude-code-workspace
+      initContainers:
+      - name: fix-permissions
+        image: busybox
+        command: ["sh", "-c", "chown -R 1000:1000 /workspace"]
+        volumeMounts:
+        - name: git-workspace
+          mountPath: /workspace
       containers:
       - name: claude-code-api
         image: localhost:5000/claude-code-api:latest
+        workingDir: /workspace
         ports:
         - containerPort: 3000
         env:
@@ -39,9 +50,25 @@ spec:
           value: "postgres://$(DB_USER):$(DB_PASS)@claude-chat-db-rw:5432/claude_chat"
         - name: NATS_URL
           value: "nats://nats.default.svc.cluster.local:4222"
+        - name: GH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-token
+              key: token
+              optional: true
+        - name: GIT_AUTHOR_NAME
+          value: "Claude Code"
+        - name: GIT_AUTHOR_EMAIL
+          value: "claude@johnsonyuen.com"
+        - name: GIT_COMMITTER_NAME
+          value: "Claude Code"
+        - name: GIT_COMMITTER_EMAIL
+          value: "claude@johnsonyuen.com"
         volumeMounts:
         - name: claude-config
           mountPath: /home/node/.claude
+        - name: git-workspace
+          mountPath: /workspace
         resources:
           requests:
             memory: "256Mi"
