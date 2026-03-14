@@ -27,6 +27,7 @@ const REFRESH_TOKEN_STORAGE_KEY = 'kc_refreshToken';
 const ID_TOKEN_STORAGE_KEY = 'kc_idToken';
 
 function saveTokens(kc: Keycloak) {
+    if (typeof localStorage === 'undefined') return;
     if (kc.token) localStorage.setItem(TOKEN_STORAGE_KEY, kc.token);
     else localStorage.removeItem(TOKEN_STORAGE_KEY);
     if (kc.refreshToken) localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, kc.refreshToken);
@@ -36,6 +37,7 @@ function saveTokens(kc: Keycloak) {
 }
 
 function loadTokens(): { token?: string; refreshToken?: string; idToken?: string } | null {
+    if (typeof localStorage === 'undefined') return null;
     const token = localStorage.getItem(TOKEN_STORAGE_KEY);
     const refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
     const idToken = localStorage.getItem(ID_TOKEN_STORAGE_KEY);
@@ -46,6 +48,7 @@ function loadTokens(): { token?: string; refreshToken?: string; idToken?: string
 }
 
 function clearTokens() {
+    if (typeof localStorage === 'undefined') return;
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
     localStorage.removeItem(ID_TOKEN_STORAGE_KEY);
