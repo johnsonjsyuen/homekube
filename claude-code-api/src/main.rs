@@ -1,5 +1,9 @@
+mod auth;
+mod chat;
 mod claude;
+mod db;
 mod metrics;
+mod nats_client;
 
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -12,17 +16,24 @@ use metrics::{
     CLAUDE_REQUEST_DURATION_SECONDS,
 };
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Semaphore;
 use tower_http::cors::{Any, CorsLayer};
 
+use crate::auth::JwksCache;
+use crate::nats_client::NatsClient;
+
 // ---------------------------------------------------------------------------
 // Application state
 // ---------------------------------------------------------------------------
 
-struct AppState {
+pub struct AppState {
     semaphore: Semaphore,
+    pool: PgPool,
+    nats: Option<NatsClient>,
+    jwks: JwksCache,
 }
 
 // ---------------------------------------------------------------------------
@@ -225,8 +236,49 @@ async fn main() {
         .and_then(|v| v.parse().ok())
         .unwrap_or(3);
 
+    // --- Database ---
+    let database_url = std::env::var("DATABASE_URL")
+        .expect("DATABASE_URL must be set");
+    let pool = PgPool::connect(&database_url)
+        .await
+        .expect("failed to connect to database");
+
+    // Run migrations.
+    sqlx::migrate!("./migrations")
+        .run(&pool as &PgPool)
+        .await
+        .expect("failed to run database migrations");
+    tracing::info!("database migrations applied");
+
+    // --- NATS (optional) ---
+    let nats = match std::env::var("NATS_URL") {
+        Ok(nats_url) => match NatsClient::connect(&nats_url).await {
+            Ok(client) => {
+                tracing::info!(url = %nats_url, "connected to NATS");
+                Some(client)
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "failed to connect to NATS — continuing without it");
+                None
+            }
+        },
+        Err(_) => {
+            tracing::warn!("NATS_URL not set — NATS integration disabled");
+            None
+        }
+    };
+
+    // --- JWKS ---
+    let jwks = JwksCache::new()
+        .await
+        .expect("failed to fetch JWKS keys from Keycloak");
+    tracing::info!("JWKS keys loaded");
+
     let state = Arc::new(AppState {
         semaphore: Semaphore::new(max_concurrent),
+        pool,
+        nats,
+        jwks,
     });
 
     let cors = CorsLayer::new()
@@ -238,6 +290,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/api/analyze", post(analyze))
+        .route("/ws/chat", get(chat::ws_handler))
         .route("/health", get(health))
         .route("/ready", get(ready))
         .route("/metrics", get(|| async move { metric_handle.render() }))

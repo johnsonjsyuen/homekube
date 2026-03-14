@@ -3,6 +3,7 @@
     import TtsTab from "./TtsTab.svelte";
     import SttTab from "./SttTab.svelte";
     import LiveTtsTab from "./LiveTtsTab.svelte";
+    import ChatTab from "./ChatTab.svelte";
     import { onMount } from "svelte";
     import { initKeycloak, login, logout, onAuthStateChange, type AuthState } from "$lib/auth";
     import { loadWeather, LOCATIONS, type WeatherData } from "$lib/weather";
@@ -140,6 +141,7 @@
         tts: "Text to Speech",
         stt: "Speech to Text",
         "live-tts": "Live TTS",
+        chat: "Claude Chat",
     };
 </script>
 
@@ -249,6 +251,8 @@
             <SttTab />
         {:else if activeTab === "live-tts"}
             <LiveTtsTab />
+        {:else if activeTab === "chat"}
+            <ChatTab />
         {/if}
     {/if}
 </div>

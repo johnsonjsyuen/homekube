@@ -25,9 +25,23 @@ spec:
         env:
         - name: RUST_LOG
           value: "info"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: claude-chat-db-app
+              key: username
+        - name: DB_PASS
+          valueFrom:
+            secretKeyRef:
+              name: claude-chat-db-app
+              key: password
+        - name: DATABASE_URL
+          value: "postgres://$(DB_USER):$(DB_PASS)@claude-chat-db-rw:5432/claude_chat"
+        - name: NATS_URL
+          value: "nats://nats.default.svc.cluster.local:4222"
         volumeMounts:
         - name: claude-config
-          mountPath: /root/.claude
+          mountPath: /home/node/.claude
         resources:
           requests:
             memory: "256Mi"
