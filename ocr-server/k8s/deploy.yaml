@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ocr-server
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ocr-server
+  template:
+    metadata:
+      labels:
+        app: ocr-server
+    spec:
+      containers:
+        - name: ocr-server
+          image: localhost:5000/ocr-server:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          env:
+            - name: KEYCLOAK_URL
+              value: "http://keycloak.keycloak.svc.cluster.local"
+            - name: KEYCLOAK_REALM
+              value: "homekube"
+            - name: OCR_LANG
+              value: "en"
+            - name: CLAUDE_API_URL
+              value: "http://claude-code-api.default.svc.cluster.local"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ocr-server-db-app
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ocr-server-db-app
+                  key: password
+            - name: DB_HOST
+              value: "ocr-server-db-rw.default.svc.cluster.local"
+            - name: DB_NAME
+              value: "app"
+            - name: DATABASE_URL
+              value: "postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):5432/$(DB_NAME)"
+          volumeMounts:
+            - name: ocr-models
+              mountPath: /root/.paddlex
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "1000m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            periodSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            periodSeconds: 10
+      volumes:
+        - name: ocr-models
+          persistentVolumeClaim:
+            claimName: ocr-models
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ocr-models
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ocr-server
+  namespace: default
+spec:
+  selector:
+    app: ocr-server
+  ports:
+    - port: 80
+      targetPort: 3000
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: ocr-server-db
+  namespace: default
+spec:
+  instances: 1
+  storage:
+    size: 1Gi
+  bootstrap:
+    initdb:
+      database: app
+      owner: app

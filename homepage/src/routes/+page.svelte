@@ -10,6 +10,7 @@
     import WorkflowsTab from "./WorkflowsTab.svelte";
     import ScraperTab from "./ScraperTab.svelte";
     import ChatTab from "./ChatTab.svelte";
+    import OcrTab from "./OcrTab.svelte";
     import { onMount } from "svelte";
     import { initKeycloak, login, logout, onAuthStateChange, type AuthState } from "$lib/auth";
 
@@ -123,6 +124,7 @@
         workflows: "Workflows",
         scraper: "Scraper",
         chat: "Claude Chat",
+        ocr: "OCR",
     };
 </script>
 
@@ -229,6 +231,8 @@
             <ScraperTab />
         {:else if activeTab === "chat"}
             <ChatTab />
+        {:else if activeTab === "ocr"}
+            <OcrTab />
         {/if}
     {/if}
 </div>

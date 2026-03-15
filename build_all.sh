@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-services=(homepage whatsapp claude-code claude-code-api workflows-worker location-share-server text-to-speech)
+services=(homepage whatsapp claude-code claude-code-api workflows-worker location-share-server text-to-speech ocr-server)
 # Undeployed services:
 # speech-to-text
 pids=()
