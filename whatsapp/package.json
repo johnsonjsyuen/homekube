@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@hapi/boom": "^10.0.1",
+    "cors": "^2.8.5",
     "@whiskeysockets/baileys": "^6.7.16",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
@@ -22,6 +23,7 @@
     "nats": "^2.28"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^22.13.0",
