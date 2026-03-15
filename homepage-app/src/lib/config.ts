@@ -17,4 +17,10 @@ export const config = {
     claudeChat: {
         wsUrl: import.meta.env.VITE_CLAUDE_CHAT_WS_URL || 'wss://claude.johnsonyuen.com/ws/chat',
     },
+    whatsapp: {
+        baseUrl: import.meta.env.VITE_WHATSAPP_URL || 'https://whatsapp.johnsonyuen.com',
+    },
+    workflows: {
+        baseUrl: import.meta.env.VITE_WORKFLOWS_URL || 'https://workflows.johnsonyuen.com',
+    },
 };
