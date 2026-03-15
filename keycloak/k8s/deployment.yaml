@@ -21,6 +21,7 @@ spec:
         args:
         - start-dev
         - --hostname-strict=false
+        - --import-realm
         env:
         - name: KEYCLOAK_ADMIN
           valueFrom:
@@ -73,6 +74,10 @@ spec:
           initialDelaySeconds: 180
           periodSeconds: 30
           failureThreshold: 5
+        volumeMounts:
+        - name: realm-config
+          mountPath: /opt/keycloak/data/import
+          readOnly: true
         resources:
           requests:
             memory: "1Gi"
@@ -80,3 +85,7 @@ spec:
           limits:
             memory: "3Gi"
             cpu: "2"
+      volumes:
+      - name: realm-config
+        configMap:
+          name: keycloak-realm-config
