@@ -86,6 +86,37 @@ fn error_json(status: StatusCode, message: impl Into<String>) -> (StatusCode, Js
     )
 }
 
+fn handle_claude_error(e: ClaudeError, timeout_secs: u32) -> axum::response::Response {
+    match e {
+        ClaudeError::Timeout => {
+            ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "timeout").increment(1);
+            tracing::warn!(timeout_secs, "claude timed out");
+            error_json(
+                StatusCode::REQUEST_TIMEOUT,
+                format!("claude timed out after {timeout_secs}s"),
+            )
+            .into_response()
+        }
+        ClaudeError::NotFound(_) => {
+            ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "error").increment(1);
+            tracing::error!("claude command not found");
+            error_json(StatusCode::SERVICE_UNAVAILABLE, "claude command not found")
+                .into_response()
+        }
+        ClaudeError::ProcessFailed(ref msg) => {
+            ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "error").increment(1);
+            tracing::error!(error = %e, "claude process failed");
+            error_json(StatusCode::BAD_GATEWAY, format!("claude process failed: {msg}"))
+                .into_response()
+        }
+        ClaudeError::IoError(ref msg) => {
+            ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "error").increment(1);
+            tracing::error!(error = %e, "claude io error");
+            error_json(StatusCode::BAD_GATEWAY, format!("io error: {msg}")).into_response()
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -166,34 +197,7 @@ async fn analyze(
             )
                 .into_response()
         }
-        Err(e) => match e {
-            ClaudeError::Timeout => {
-                ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "timeout").increment(1);
-                tracing::warn!(timeout_secs, "claude timed out");
-                error_json(
-                    StatusCode::REQUEST_TIMEOUT,
-                    format!("claude timed out after {timeout_secs}s"),
-                )
-                .into_response()
-            }
-            ClaudeError::NotFound(_) => {
-                ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "error").increment(1);
-                tracing::error!("claude command not found");
-                error_json(StatusCode::SERVICE_UNAVAILABLE, "claude command not found")
-                    .into_response()
-            }
-            ClaudeError::ProcessFailed(ref msg) => {
-                ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "error").increment(1);
-                tracing::error!(error = %e, "claude process failed");
-                error_json(StatusCode::BAD_GATEWAY, format!("claude process failed: {msg}"))
-                    .into_response()
-            }
-            ClaudeError::IoError(ref msg) => {
-                ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "error").increment(1);
-                tracing::error!(error = %e, "claude io error");
-                error_json(StatusCode::BAD_GATEWAY, format!("io error: {msg}")).into_response()
-            }
-        },
+        Err(e) => handle_claude_error(e, timeout_secs),
     }
 }
 
@@ -216,12 +220,25 @@ async fn analyze_image(
         }
     };
 
-    if image_bytes.len() > 30 * 1024 * 1024 {
-        return error_json(StatusCode::BAD_REQUEST, "image exceeds 30MB limit").into_response();
+    if image_bytes.len() > 20 * 1024 * 1024 {
+        return error_json(StatusCode::BAD_REQUEST, "image exceeds 20MB limit").into_response();
     }
 
+    // Detect image format from magic bytes
+    let suffix = if image_bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+        ".png"
+    } else if image_bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        ".jpg"
+    } else if image_bytes.starts_with(b"RIFF") && image_bytes.len() > 11 && &image_bytes[8..12] == b"WEBP" {
+        ".webp"
+    } else if image_bytes.starts_with(b"GIF8") {
+        ".gif"
+    } else {
+        ".png" // fallback
+    };
+
     // Write to temp file
-    let temp_file = match tempfile::Builder::new().suffix(".png").tempfile() {
+    let temp_file = match tempfile::Builder::new().suffix(suffix).tempfile() {
         Ok(f) => f,
         Err(e) => {
             return error_json(
@@ -293,30 +310,7 @@ async fn analyze_image(
             )
                 .into_response()
         }
-        Err(e) => match e {
-            ClaudeError::Timeout => {
-                ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "timeout").increment(1);
-                error_json(
-                    StatusCode::REQUEST_TIMEOUT,
-                    format!("claude timed out after {timeout_secs}s"),
-                )
-                .into_response()
-            }
-            ClaudeError::NotFound(_) => {
-                ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "error").increment(1);
-                error_json(StatusCode::SERVICE_UNAVAILABLE, "claude command not found")
-                    .into_response()
-            }
-            ClaudeError::ProcessFailed(ref msg) => {
-                ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "error").increment(1);
-                error_json(StatusCode::BAD_GATEWAY, format!("claude process failed: {msg}"))
-                    .into_response()
-            }
-            ClaudeError::IoError(ref msg) => {
-                ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "error").increment(1);
-                error_json(StatusCode::BAD_GATEWAY, format!("io error: {msg}")).into_response()
-            }
-        },
+        Err(e) => handle_claude_error(e, timeout_secs),
     }
 }
 

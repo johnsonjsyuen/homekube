@@ -7,6 +7,8 @@ import tempfile
 import uuid
 from contextlib import asynccontextmanager
 
+import numpy as np
+
 import httpx
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,30 +20,34 @@ logging.basicConfig(level=logging.INFO)
 
 ocr_engine = None
 db_pool = None
+claude_client = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global ocr_engine, db_pool
+    global ocr_engine, db_pool, claude_client
 
-    # Init PaddleOCR
+    # Init PaddleOCR — models cached on PVC mounted at ~/.paddlex
     logger.info("Loading PaddleOCR engine...")
     from paddleocr import PaddleOCR
-    model_dir = os.getenv("OCR_MODEL_DIR", "/models")
-    os.makedirs(model_dir, exist_ok=True)
+    logging.getLogger("paddlex").setLevel(logging.ERROR)
     ocr_engine = PaddleOCR(
         lang=os.getenv("OCR_LANG", "en"),
-        use_angle_cls=True,
-        show_log=False,
-        det_model_dir=os.path.join(model_dir, "det"),
-        rec_model_dir=os.path.join(model_dir, "rec"),
-        cls_model_dir=os.path.join(model_dir, "cls"),
+        use_textline_orientation=False,
+        use_doc_orientation_classify=False,
+        use_doc_unwarping=False,
     )
     logger.info("PaddleOCR engine loaded")
+
+    # Warm up inference (first predict triggers JIT compilation)
+    dummy = np.ones((10, 10, 3), dtype=np.uint8) * 255
+    list(ocr_engine.predict(dummy))
+    logger.info("PaddleOCR warm-up complete")
 
     # Check claude-code-api availability
     claude_api_url = os.getenv("CLAUDE_API_URL")
     if claude_api_url:
+        claude_client = httpx.AsyncClient(base_url=claude_api_url, timeout=180)
         logger.info(f"Claude OCR will route through {claude_api_url}")
     else:
         logger.warning("CLAUDE_API_URL not set, Claude OCR disabled")
@@ -59,6 +65,8 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    if claude_client:
+        await claude_client.aclose()
     if db_pool:
         db_pool.close()
 
@@ -93,7 +101,7 @@ app.add_middleware(
         "http://tauri.localhost",
         "http://localhost:5173",
         "http://localhost:1420",
-        "https://home.johnsonyuen.com",
+        "https://www.johnsonyuen.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -125,21 +133,25 @@ async def health():
 
 async def _ocr_paddle(contents: bytes) -> dict:
     """Run PaddleOCR on image bytes."""
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=True) as tmp:
-        tmp.write(contents)
-        tmp.flush()
-        result = await asyncio.to_thread(ocr_engine.ocr, tmp.name, cls=True)  # type: ignore[union-attr]
+
+    def _run(data: bytes):
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=True) as tmp:
+            tmp.write(data)
+            tmp.flush()
+            return list(ocr_engine.predict(tmp.name))
+
+    results = await asyncio.wait_for(
+        asyncio.to_thread(_run, contents),
+        timeout=60,
+    )
 
     lines = []
-    if result and result[0]:
-        for line in result[0]:
-            box = line[0]
-            text = line[1][0]
-            confidence = line[1][1]
+    for result in results:
+        for text, score in zip(result["rec_texts"], result["rec_scores"]):
             lines.append({
                 "text": text,
-                "confidence": round(confidence, 4),
-                "bbox": box,
+                "confidence": round(score, 4),
+                "bbox": [],
             })
 
     full_text = "\n".join(item["text"] for item in lines)
@@ -148,18 +160,15 @@ async def _ocr_paddle(contents: bytes) -> dict:
 
 async def _ocr_claude(contents: bytes) -> dict:
     """Run Claude vision OCR via claude-code-api service."""
-    claude_api_url = os.getenv("CLAUDE_API_URL", "http://claude-code-api.default.svc.cluster.local")
-    if not os.getenv("CLAUDE_API_URL"):
+    if not claude_client:
         raise HTTPException(status_code=503, detail="Claude OCR not available (CLAUDE_API_URL not configured)")
 
     b64 = base64.standard_b64encode(contents).decode("utf-8")
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{claude_api_url}/api/analyze-image",
-            json={"image_base64": b64, "timeout_seconds": 120},
-            timeout=180,
-        )
+    resp = await claude_client.post(
+        "/api/analyze-image",
+        json={"image_base64": b64, "timeout_seconds": 120},
+    )
 
     if resp.status_code != 200:
         detail = resp.text[:200]
@@ -223,7 +232,10 @@ async def ocr_extract(
 
     # Save to history
     job_id = str(uuid.uuid4())
-    await asyncio.to_thread(_save_job, job_id, user, file.filename or "unknown", engine, result)
+    try:
+        await asyncio.to_thread(_save_job, job_id, user, file.filename or "unknown", engine, result)
+    except Exception:
+        logger.exception(f"Failed to save OCR job {job_id}")
 
     result["id"] = job_id
     result["engine"] = engine

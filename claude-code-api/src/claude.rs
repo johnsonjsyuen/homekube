@@ -51,7 +51,7 @@ pub async fn invoke_claude(
     timeout: Duration,
 ) -> Result<String, ClaudeError> {
     let mut child = Command::new("claude")
-        .args(["--output-format", output_format, "-p", "-"])
+        .args(["--output-format", output_format, "--dangerously-skip-permissions", "-p", "-"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

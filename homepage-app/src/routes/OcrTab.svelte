@@ -123,7 +123,13 @@
                 body: formData,
             });
 
-            const data = await res.json();
+            let data;
+            try {
+                data = await res.json();
+            } catch {
+                error = `Server error (${res.status})`;
+                return;
+            }
             if (!res.ok) {
                 error = data.detail || data.error || 'OCR failed';
                 return;
@@ -180,7 +186,13 @@
             const res = await fetch(`${config.ocr.baseUrl}/api/ocr/history?limit=20`, {
                 headers: { 'Authorization': `Bearer ${token}` },
             });
-            const data = await res.json();
+            let data;
+            try {
+                data = await res.json();
+            } catch {
+                historyError = `Server error (${res.status})`;
+                return;
+            }
             if (!res.ok) {
                 historyError = data.detail || 'Failed to load history';
                 return;
@@ -201,7 +213,13 @@
             const res = await fetch(`${config.ocr.baseUrl}/api/ocr/history/${jobId}`, {
                 headers: { 'Authorization': `Bearer ${token}` },
             });
-            const data = await res.json();
+            let data;
+            try {
+                data = await res.json();
+            } catch {
+                error = `Server error (${res.status})`;
+                return;
+            }
             if (!res.ok) {
                 error = data.detail || 'Failed to load job';
                 return;

@@ -1,34 +1,34 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
+
+from main import app, get_current_user
+
+
+_test_user = {"sub": "test_user", "preferred_username": "test_user"}
+app.dependency_overrides[get_current_user] = lambda: _test_user
 
 
 @pytest.fixture
 def mock_ocr_engine():
-    """Mock PaddleOCR engine."""
+    """Mock PaddleOCR engine with 3.0 result objects."""
     engine = MagicMock()
-    engine.ocr.return_value = [[
-        [[[0, 0], [100, 0], [100, 20], [0, 20]], ("Hello World", 0.95)],
-        [[[0, 30], [100, 30], [100, 50], [0, 50]], ("Second line", 0.88)],
-    ]]
+    result_obj = MagicMock()
+    result_obj.rec_texts = ["Hello World", "Second line"]
+    result_obj.rec_scores = [0.95, 0.88]
+    engine.predict.return_value = [result_obj]
     return engine
 
 
 @pytest.fixture
 def client(mock_ocr_engine):
     """Create test client with mocked OCR and auth."""
-    import os
-    os.environ["OCR_TEST_MODE"] = "1"
+    import main
+    main.ocr_engine = mock_ocr_engine
+    main.db_pool = None
 
-    with patch.dict(os.environ, {"OCR_TEST_MODE": "1"}):
-        import importlib
-        import main
-        importlib.reload(main)
-        main.ocr_engine = mock_ocr_engine
-        main.db_pool = None
-
-        with TestClient(main.app) as c:
-            yield c
+    with TestClient(app) as c:
+        yield c
 
 
 def test_health(client):
@@ -40,14 +40,23 @@ def test_health(client):
     assert data["history_available"] is False
 
 
-def test_ocr_no_auth(client):
-    """Request without auth should fail."""
-    png = _make_tiny_png()
-    resp = client.post(
-        "/api/ocr",
-        files={"file": ("test.png", png, "image/png")},
-    )
-    assert resp.status_code == 422  # Missing authorization header
+def test_ocr_no_auth():
+    """Request without auth should fail (test without dependency override)."""
+    original = app.dependency_overrides.pop(get_current_user, None)
+    try:
+        import main
+        main.ocr_engine = MagicMock()
+        main.db_pool = None
+        with TestClient(app) as c:
+            png = _make_tiny_png()
+            resp = c.post(
+                "/api/ocr",
+                files={"file": ("test.png", png, "image/png")},
+            )
+            assert resp.status_code == 422  # Missing authorization header
+    finally:
+        if original is not None:
+            app.dependency_overrides[get_current_user] = original
 
 
 def test_ocr_success(client):
@@ -82,7 +91,10 @@ def test_ocr_non_image(client):
 
 def test_ocr_empty_result(client, mock_ocr_engine):
     """OCR with no detected text should return empty."""
-    mock_ocr_engine.ocr.return_value = [None]
+    empty_result = MagicMock()
+    empty_result.rec_texts = []
+    empty_result.rec_scores = []
+    mock_ocr_engine.predict.return_value = [empty_result]
     png = _make_tiny_png()
     resp = client.post(
         "/api/ocr",

@@ -26,8 +26,6 @@ spec:
               value: "homekube"
             - name: OCR_LANG
               value: "en"
-            - name: OCR_MODEL_DIR
-              value: "/models"
             - name: CLAUDE_API_URL
               value: "http://claude-code-api.default.svc.cluster.local"
             - name: DB_USER
@@ -48,11 +46,11 @@ spec:
               value: "postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):5432/$(DB_NAME)"
           volumeMounts:
             - name: ocr-models
-              mountPath: /models
+              mountPath: /root/.paddlex
           resources:
             requests:
-              memory: "512Mi"
-              cpu: "250m"
+              memory: "1Gi"
+              cpu: "1000m"
             limits:
               memory: "2Gi"
               cpu: "2000m"

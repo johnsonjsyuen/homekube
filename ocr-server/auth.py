@@ -5,7 +5,6 @@ import httpx
 
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak.keycloak.svc.cluster.local")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "homekube")
-TEST_MODE = os.getenv("OCR_TEST_MODE")
 
 _jwks_cache: dict = {}
 _jwks_fetched_at: float = 0
@@ -35,9 +34,6 @@ def _get_signing_key(jwks: dict, kid: str):
 
 async def validate_token(token: str) -> dict:
     """Validate a Keycloak JWT token and return claims."""
-    if TEST_MODE:
-        return {"sub": "test_user", "preferred_username": "test_user"}
-
     header = jwt.get_unverified_header(token)
     kid = header.get("kid")
     if not kid:
@@ -55,7 +51,6 @@ async def validate_token(token: str) -> dict:
         token,
         public_key,
         algorithms=["RS256"],
-        audience="homepage",
-        options={"verify_aud": True},
+        options={"verify_aud": False},
     )
     return claims
