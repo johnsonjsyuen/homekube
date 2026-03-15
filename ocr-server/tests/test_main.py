@@ -25,6 +25,8 @@ def client(mock_ocr_engine):
         import main
         importlib.reload(main)
         main.ocr_engine = mock_ocr_engine
+        main.anthropic_api_key = None
+        main.db_pool = None
 
         with TestClient(main.app) as c:
             yield c
@@ -33,7 +35,10 @@ def client(mock_ocr_engine):
 def test_health(client):
     resp = client.get("/health")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert data["claude_available"] is False
+    assert data["history_available"] is False
 
 
 def test_ocr_no_auth(client):
@@ -58,6 +63,7 @@ def test_ocr_success(client):
     data = resp.json()
     assert data["text"] == "Hello World\nSecond line"
     assert data["line_count"] == 2
+    assert data["engine"] == "paddle"
     assert len(data["lines"]) == 2
     assert data["lines"][0]["text"] == "Hello World"
     assert data["lines"][0]["confidence"] == 0.95
@@ -89,6 +95,37 @@ def test_ocr_empty_result(client, mock_ocr_engine):
     assert data["text"] == ""
     assert data["line_count"] == 0
     assert data["lines"] == []
+
+
+def test_ocr_claude_not_available(client):
+    """Claude engine should return 503 when API key not configured."""
+    png = _make_tiny_png()
+    resp = client.post(
+        "/api/ocr?engine=claude",
+        files={"file": ("test.png", png, "image/png")},
+        headers={"Authorization": "Bearer test-token"},
+    )
+    assert resp.status_code == 503
+
+
+def test_ocr_invalid_engine(client):
+    """Invalid engine should be rejected."""
+    png = _make_tiny_png()
+    resp = client.post(
+        "/api/ocr?engine=invalid",
+        files={"file": ("test.png", png, "image/png")},
+        headers={"Authorization": "Bearer test-token"},
+    )
+    assert resp.status_code == 422
+
+
+def test_history_not_available(client):
+    """History should return 503 when database not configured."""
+    resp = client.get(
+        "/api/ocr/history",
+        headers={"Authorization": "Bearer test-token"},
+    )
+    assert resp.status_code == 503
 
 
 def _make_tiny_png() -> bytes:

@@ -28,6 +28,27 @@ spec:
               value: "en"
             - name: OCR_MODEL_DIR
               value: "/models"
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: anthropic-api-key
+                  key: api-key
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ocr-server-db-app
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ocr-server-db-app
+                  key: password
+            - name: DB_HOST
+              value: "ocr-server-db-rw.default.svc.cluster.local"
+            - name: DB_NAME
+              value: "app"
+            - name: DATABASE_URL
+              value: "postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):5432/$(DB_NAME)"
           volumeMounts:
             - name: ocr-models
               mountPath: /models
@@ -82,3 +103,17 @@ spec:
   ports:
     - port: 80
       targetPort: 3000
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: ocr-server-db
+  namespace: default
+spec:
+  instances: 1
+  storage:
+    size: 1Gi
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
