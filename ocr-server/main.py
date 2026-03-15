@@ -18,12 +18,11 @@ logging.basicConfig(level=logging.INFO)
 
 ocr_engine = None
 db_pool = None
-anthropic_api_key: str | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global ocr_engine, db_pool, anthropic_api_key
+    global ocr_engine, db_pool
 
     # Init PaddleOCR
     logger.info("Loading PaddleOCR engine...")
@@ -40,12 +39,12 @@ async def lifespan(app: FastAPI):
     )
     logger.info("PaddleOCR engine loaded")
 
-    # Init Anthropic API key (used via httpx, no SDK)
-    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
-    if anthropic_api_key:
-        logger.info("Anthropic API key configured, Claude OCR available")
+    # Check claude-code-api availability
+    claude_api_url = os.getenv("CLAUDE_API_URL")
+    if claude_api_url:
+        logger.info(f"Claude OCR will route through {claude_api_url}")
     else:
-        logger.warning("ANTHROPIC_API_KEY not set, Claude OCR disabled")
+        logger.warning("CLAUDE_API_URL not set, Claude OCR disabled")
 
     # Init database
     db_url = os.getenv("DATABASE_URL")
@@ -119,7 +118,7 @@ async def get_current_user(authorization: str = Header(...)) -> dict:
 async def health():
     return {
         "status": "ok",
-        "claude_available": anthropic_api_key is not None,
+        "claude_available": os.getenv("CLAUDE_API_URL") is not None,
         "history_available": db_pool is not None,
     }
 
@@ -147,51 +146,28 @@ async def _ocr_paddle(contents: bytes) -> dict:
     return {"text": full_text, "lines": lines, "line_count": len(lines)}
 
 
-async def _ocr_claude(contents: bytes, content_type: str) -> dict:
-    """Run Claude vision OCR via Anthropic Messages API (httpx, no SDK)."""
-    if not anthropic_api_key:
-        raise HTTPException(status_code=503, detail="Claude OCR not available (API key not configured)")
+async def _ocr_claude(contents: bytes) -> dict:
+    """Run Claude vision OCR via claude-code-api service."""
+    claude_api_url = os.getenv("CLAUDE_API_URL", "http://claude-code-api.default.svc.cluster.local")
+    if not os.getenv("CLAUDE_API_URL"):
+        raise HTTPException(status_code=503, detail="Claude OCR not available (CLAUDE_API_URL not configured)")
 
     b64 = base64.standard_b64encode(contents).decode("utf-8")
-    media_type = content_type or "image/png"
 
     async with httpx.AsyncClient() as client:
         resp = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": anthropic_api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": "claude-sonnet-4-20250514",
-                "max_tokens": 4096,
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {"type": "base64", "media_type": media_type, "data": b64},
-                        },
-                        {
-                            "type": "text",
-                            "text": "Extract all text from this image exactly as it appears. "
-                                    "Preserve the original formatting, line breaks, and structure. "
-                                    "Output only the extracted text, nothing else.",
-                        },
-                    ],
-                }],
-            },
-            timeout=60,
+            f"{claude_api_url}/api/analyze-image",
+            json={"image_base64": b64, "timeout_seconds": 120},
+            timeout=180,
         )
 
     if resp.status_code != 200:
         detail = resp.text[:200]
-        logger.error(f"Claude API error {resp.status_code}: {detail}")
+        logger.error(f"claude-code-api error {resp.status_code}: {detail}")
         raise HTTPException(status_code=502, detail=f"Claude API error: {resp.status_code}")
 
     data = resp.json()
-    extracted = data["content"][0]["text"]
+    extracted = data["response"]
 
     lines_list = [l for l in extracted.split("\n") if l.strip()]
     lines = [{"text": l, "confidence": 1.0, "bbox": []} for l in lines_list]
@@ -238,7 +214,7 @@ async def ocr_extract(
     contents = b"".join(chunks)
 
     if engine == "claude":
-        result = await _ocr_claude(contents, file.content_type)
+        result = await _ocr_claude(contents)
     else:
         result = await _ocr_paddle(contents)
 

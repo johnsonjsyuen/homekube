@@ -28,11 +28,8 @@ spec:
               value: "en"
             - name: OCR_MODEL_DIR
               value: "/models"
-            - name: ANTHROPIC_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: anthropic-api-key
-                  key: api-key
+            - name: CLAUDE_API_URL
+              value: "http://claude-code-api.default.svc.cluster.local"
             - name: DB_USER
               valueFrom:
                 secretKeyRef:

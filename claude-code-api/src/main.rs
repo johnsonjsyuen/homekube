@@ -49,6 +49,13 @@ struct AnalyzeRequest {
     timeout_seconds: Option<u32>,
 }
 
+#[derive(Deserialize)]
+struct AnalyzeImageRequest {
+    image_base64: String,
+    prompt: Option<String>,
+    timeout_seconds: Option<u32>,
+}
+
 #[derive(Serialize)]
 struct AnalyzeResponse {
     response: String,
@@ -190,6 +197,129 @@ async fn analyze(
     }
 }
 
+async fn analyze_image(
+    state: axum::extract::State<Arc<AppState>>,
+    Json(req): Json<AnalyzeImageRequest>,
+) -> impl IntoResponse {
+    use base64::Engine;
+
+    if req.image_base64.is_empty() {
+        return error_json(StatusCode::BAD_REQUEST, "image_base64 is required").into_response();
+    }
+
+    // Decode base64 image
+    let image_bytes = match base64::engine::general_purpose::STANDARD.decode(&req.image_base64) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            return error_json(StatusCode::BAD_REQUEST, format!("invalid base64: {e}"))
+                .into_response()
+        }
+    };
+
+    if image_bytes.len() > 30 * 1024 * 1024 {
+        return error_json(StatusCode::BAD_REQUEST, "image exceeds 30MB limit").into_response();
+    }
+
+    // Write to temp file
+    let temp_file = match tempfile::Builder::new().suffix(".png").tempfile() {
+        Ok(f) => f,
+        Err(e) => {
+            return error_json(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("failed to create temp file: {e}"),
+            )
+            .into_response()
+        }
+    };
+
+    if let Err(e) = std::fs::write(temp_file.path(), &image_bytes) {
+        return error_json(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("failed to write image: {e}"),
+        )
+        .into_response();
+    }
+
+    let default_prompt = "Extract all text from this image exactly as it appears. Preserve the original formatting, line breaks, and structure. Output only the extracted text, nothing else.";
+    let user_prompt = req.prompt.as_deref().unwrap_or(default_prompt);
+
+    let prompt = format!(
+        "{}\n\nThe image to analyze is at: {}",
+        user_prompt,
+        temp_file.path().display()
+    );
+
+    // Validate timeout
+    let timeout_secs = req.timeout_seconds.unwrap_or(120);
+    if timeout_secs < 10 || timeout_secs > 300 {
+        return error_json(
+            StatusCode::BAD_REQUEST,
+            "timeout_seconds must be between 10 and 300",
+        )
+        .into_response();
+    }
+    let timeout = Duration::from_secs(timeout_secs as u64);
+
+    tracing::info!(
+        image_size = image_bytes.len(),
+        timeout_secs,
+        "analyze-image request",
+    );
+
+    // Acquire semaphore permit
+    let _permit = state.semaphore.acquire().await.expect("semaphore closed");
+    ::metrics::gauge!(CLAUDE_CONCURRENT_REQUESTS).increment(1.0);
+
+    let start = Instant::now();
+    let result = claude::invoke_claude(&prompt, "text", timeout).await;
+    let duration = start.elapsed();
+
+    // temp_file is dropped here, cleaning up the temp file
+    drop(temp_file);
+
+    ::metrics::gauge!(CLAUDE_CONCURRENT_REQUESTS).decrement(1.0);
+    ::metrics::histogram!(CLAUDE_REQUEST_DURATION_SECONDS).record(duration.as_secs_f64());
+
+    match result {
+        Ok(response) => {
+            ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "success").increment(1);
+            tracing::info!(duration_ms = duration.as_millis() as u64, "analyze-image success");
+            (
+                StatusCode::OK,
+                Json(AnalyzeResponse {
+                    response,
+                    duration_ms: duration.as_millis() as u64,
+                }),
+            )
+                .into_response()
+        }
+        Err(e) => match e {
+            ClaudeError::Timeout => {
+                ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "timeout").increment(1);
+                error_json(
+                    StatusCode::REQUEST_TIMEOUT,
+                    format!("claude timed out after {timeout_secs}s"),
+                )
+                .into_response()
+            }
+            ClaudeError::NotFound(_) => {
+                ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "error").increment(1);
+                error_json(StatusCode::SERVICE_UNAVAILABLE, "claude command not found")
+                    .into_response()
+            }
+            ClaudeError::ProcessFailed(ref msg) => {
+                ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "error").increment(1);
+                error_json(StatusCode::BAD_GATEWAY, format!("claude process failed: {msg}"))
+                    .into_response()
+            }
+            ClaudeError::IoError(ref msg) => {
+                ::metrics::counter!(CLAUDE_REQUESTS_TOTAL, "status" => "error").increment(1);
+                error_json(StatusCode::BAD_GATEWAY, format!("io error: {msg}")).into_response()
+            }
+        },
+    }
+}
+
 async fn health() -> Json<HealthResponse> {
     let available = claude::check_available().await;
     Json(HealthResponse {
@@ -293,6 +423,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/api/analyze", post(analyze))
+        .route("/api/analyze-image", post(analyze_image))
         .route("/ws/chat", get(chat::ws_handler))
         .route("/health", get(health))
         .route("/ready", get(ready))

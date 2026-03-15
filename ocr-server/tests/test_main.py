@@ -25,7 +25,6 @@ def client(mock_ocr_engine):
         import main
         importlib.reload(main)
         main.ocr_engine = mock_ocr_engine
-        main.anthropic_api_key = None
         main.db_pool = None
 
         with TestClient(main.app) as c:
