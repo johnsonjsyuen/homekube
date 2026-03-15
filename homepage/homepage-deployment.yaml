@@ -16,6 +16,13 @@ spec:
       - name: homepage
         image: localhost:5000/homepage:latest
         imagePullPolicy: Always
+        resources:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 256Mi
+            cpu: 500m
         env:
         - name: WHATSAPP_BACKEND_URL
           value: "ws://whatsapp"

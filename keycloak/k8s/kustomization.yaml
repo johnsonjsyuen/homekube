@@ -9,3 +9,11 @@ resources:
 - db.yaml
 - deployment.yaml
 - service.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+- name: keycloak-realm-config
+  files:
+  - homekube-realm.json=realm-export.json
