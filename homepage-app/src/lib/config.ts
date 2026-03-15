@@ -23,4 +23,7 @@ export const config = {
     workflows: {
         baseUrl: import.meta.env.VITE_WORKFLOWS_URL || 'https://workflows.johnsonyuen.com',
     },
+    ocr: {
+        baseUrl: import.meta.env.VITE_OCR_URL || 'https://ocr.johnsonyuen.com',
+    },
 };

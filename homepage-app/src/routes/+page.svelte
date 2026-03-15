@@ -7,6 +7,7 @@
     import WhatsAppTab from "./WhatsAppTab.svelte";
     import WorkflowsTab from "./WorkflowsTab.svelte";
     import ScraperTab from "./ScraperTab.svelte";
+    import OcrTab from "./OcrTab.svelte";
     import { onMount } from "svelte";
     import { initKeycloak, login, logout, onAuthStateChange, type AuthState } from "$lib/auth";
     import { loadWeather, LOCATIONS, type WeatherData } from "$lib/weather";
@@ -148,6 +149,7 @@
         whatsapp: "WhatsApp",
         workflows: "Workflows",
         scraper: "Scraper",
+        ocr: "OCR",
     };
 </script>
 
@@ -265,6 +267,8 @@
             <WorkflowsTab />
         {:else if activeTab === "scraper"}
             <ScraperTab />
+        {:else if activeTab === "ocr"}
+            <OcrTab />
         {/if}
     {/if}
 </div>
