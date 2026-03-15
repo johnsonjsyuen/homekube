@@ -35,6 +35,10 @@
     let dragOver = $state(false);
     let engine = $state<'paddle' | 'claude'>('paddle');
 
+    // Filter lines with confidence > 75%
+    let filteredLines = $derived(result?.lines.filter(l => l.confidence > 0.75) ?? []);
+    let filteredText = $derived(filteredLines.map(l => l.text).join('\n'));
+
     // History state
     let showHistory = $state(false);
     let history = $state<HistoryJob[]>([]);
@@ -144,9 +148,9 @@
     }
 
     async function copyText() {
-        if (!result?.text) return;
+        if (!filteredText) return;
         try {
-            await navigator.clipboard.writeText(result.text);
+            await navigator.clipboard.writeText(filteredText);
             copied = true;
             setTimeout(() => { copied = false; }, 2000);
         } catch {
@@ -155,8 +159,8 @@
     }
 
     function downloadText() {
-        if (!result?.text) return;
-        const blob = new Blob([result.text], { type: 'text/plain' });
+        if (!filteredText) return;
+        const blob = new Blob([filteredText], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -355,7 +359,7 @@
             <div class="result-section">
                 <div class="result-header">
                     <h4>
-                        Extracted Text ({result.line_count} line{result.line_count !== 1 ? 's' : ''})
+                        Extracted Text ({filteredLines.length} line{filteredLines.length !== 1 ? 's' : ''})
                         {#if result.engine}
                             <span class="result-engine" class:engine-claude={result.engine === 'claude'}>
                                 via {result.engine}
@@ -371,13 +375,13 @@
                         </button>
                     </div>
                 </div>
-                <textarea class="result-text" readonly rows="10">{result.text}</textarea>
+                <textarea class="result-text" readonly rows="10">{filteredText}</textarea>
 
-                {#if result.lines.length > 0}
+                {#if filteredLines.length > 0}
                     <details class="lines-details">
-                        <summary>Line details with confidence</summary>
+                        <summary>Line details with confidence ({filteredLines.length} of {result.lines.length} lines above 75%)</summary>
                         <div class="lines-list">
-                            {#each result.lines as line, i}
+                            {#each filteredLines as line, i}
                                 <div class="line-item">
                                     <span class="line-num">{i + 1}.</span>
                                     <span class="line-text">{line.text}</span>
