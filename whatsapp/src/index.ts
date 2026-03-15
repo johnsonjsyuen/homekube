@@ -1,3 +1,4 @@
+import cors from 'cors';
 import express from 'express';
 import { createServer } from 'http';
 import pool, { runMigrations } from './db.js';
@@ -31,6 +32,11 @@ async function main() {
 
     // Create Express app
     const app = express();
+    app.use(cors({
+        origin: ['http://tauri.localhost', 'https://tauri.localhost', 'tauri://localhost', 'http://localhost:1420'],
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Authorization', 'Content-Type'],
+    }));
     app.use(express.json());
 
     // Metrics middleware — record HTTP request count and duration
