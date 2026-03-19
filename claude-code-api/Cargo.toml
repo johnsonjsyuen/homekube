@@ -14,7 +14,6 @@ tower-http = { version = "0.5", features = ["cors"] }
 axum-prometheus = "0.7"
 metrics = "0.23"
 sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono"] }
-async-nats = "0.38"
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 futures = "0.3"

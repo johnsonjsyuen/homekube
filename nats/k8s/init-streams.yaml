@@ -22,7 +22,6 @@ spec:
               # Create streams (idempotent - will update if exists)
               nats -s nats://nats:4222 stream add TTS_JOBS --subjects="tts.jobs" --retention=work --storage=file --max-age=168h --replicas=1 --discard=old --max-msgs=-1 --max-bytes=-1 --max-msg-size=-1 --dupe-window=2m --no-allow-rollup --deny-delete --deny-purge --defaults
               nats -s nats://nats:4222 stream add DIGESTS --subjects="digests" --retention=work --storage=file --max-age=168h --replicas=1 --discard=old --max-msgs=-1 --max-bytes=-1 --max-msg-size=-1 --dupe-window=2m --no-allow-rollup --deny-delete --deny-purge --defaults
-              nats -s nats://nats:4222 stream add CHAT_MESSAGES --subjects="chat.>" --retention=limits --storage=file --max-age=720h --replicas=1 --discard=old --max-msgs=-1 --max-bytes=-1 --max-msg-size=-1 --dupe-window=2m --no-allow-rollup --deny-delete --deny-purge --defaults
 
               # Create pull consumers
               nats -s nats://nats:4222 consumer add TTS_JOBS tts-workers --pull --ack=explicit --wait=10m --max-deliver=3 --deliver=all --replay=instant --filter="tts.jobs" --defaults

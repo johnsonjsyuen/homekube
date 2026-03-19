@@ -3,7 +3,6 @@ mod chat;
 mod claude;
 mod db;
 mod metrics;
-mod nats_client;
 
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -24,7 +23,6 @@ use tokio::sync::Semaphore;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::auth::JwksCache;
-use crate::nats_client::NatsClient;
 
 // ---------------------------------------------------------------------------
 // Application state
@@ -33,7 +31,6 @@ use crate::nats_client::NatsClient;
 pub struct AppState {
     semaphore: Semaphore,
     pool: PgPool,
-    nats: Option<NatsClient>,
     jwks: JwksCache,
     pub user_channels: std::sync::Mutex<HashMap<String, tokio::sync::broadcast::Sender<chat::BroadcastEvent>>>,
 }
@@ -252,24 +249,6 @@ async fn main() {
         .expect("failed to run database migrations");
     tracing::info!("database migrations applied");
 
-    // --- NATS (optional) ---
-    let nats = match std::env::var("NATS_URL") {
-        Ok(nats_url) => match NatsClient::connect(&nats_url).await {
-            Ok(client) => {
-                tracing::info!(url = %nats_url, "connected to NATS");
-                Some(client)
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, "failed to connect to NATS — continuing without it");
-                None
-            }
-        },
-        Err(_) => {
-            tracing::warn!("NATS_URL not set — NATS integration disabled");
-            None
-        }
-    };
-
     // --- JWKS ---
     let jwks = JwksCache::new()
         .await
@@ -279,7 +258,6 @@ async fn main() {
     let state = Arc::new(AppState {
         semaphore: Semaphore::new(max_concurrent),
         pool,
-        nats,
         jwks,
         user_channels: std::sync::Mutex::new(HashMap::new()),
     });

@@ -407,7 +407,6 @@ async fn handle_send_message(
     connection_id: Uuid,
 ) -> HandlerResult {
     let pool = &state.pool;
-    let nats = state.nats.as_ref();
     let conversation_id = match Uuid::parse_str(conv_id_str) {
         Ok(id) => id,
         Err(_) => {
@@ -442,18 +441,7 @@ async fn handle_send_message(
         return Ok(());
     }
 
-    // 2. Publish user message to NATS (best-effort).
-    if let Some(nats) = nats {
-        let conv_id_str = conversation_id.to_string();
-        if let Err(e) = nats
-            .publish_chat_message(&claims.user_id, &conv_id_str, "user", content)
-            .await
-        {
-            tracing::warn!(error = %e, "failed to publish user message to NATS");
-        }
-    }
-
-    // 3. Acquire semaphore to limit concurrent Claude invocations.
+    // 2. Acquire semaphore to limit concurrent Claude invocations.
     let _permit = state.semaphore.acquire().await.expect("semaphore closed");
 
     // Build prompt with conversation history for context.
@@ -553,7 +541,7 @@ async fn handle_send_message(
         }
     };
 
-    // 4. Save assistant response to DB.
+    // 3. Save assistant response to DB.
     if !stream_result.full_text.is_empty() {
         if let Err(e) =
             crate::db::insert_message(pool, conversation_id, "assistant", &stream_result.full_text)
@@ -563,30 +551,14 @@ async fn handle_send_message(
         }
     }
 
-    // 5. Update conversation session_id.
+    // 4. Update conversation session_id.
     if let Some(ref sid) = stream_result.session_id {
         if let Err(e) = crate::db::update_session_id(pool, conversation_id, sid).await {
             tracing::error!(error = %e, "failed to update session_id");
         }
     }
 
-    // 6. Publish assistant message to NATS (best-effort).
-    if let Some(nats) = nats {
-        let conv_id_str = conversation_id.to_string();
-        if let Err(e) = nats
-            .publish_chat_message(
-                &claims.user_id,
-                &conv_id_str,
-                "assistant",
-                &stream_result.full_text,
-            )
-            .await
-        {
-            tracing::warn!(error = %e, "failed to publish assistant message to NATS");
-        }
-    }
-
-    // 7. Send message_complete.
+    // 5. Send message_complete.
     sender
         .send(Message::Text(
             json!({
@@ -598,7 +570,7 @@ async fn handle_send_message(
         ))
         .await?;
 
-    // 8. Broadcast to other windows so they can refresh.
+    // 6. Broadcast to other windows so they can refresh.
     let _ = broadcast_tx.send(BroadcastEvent {
         source: connection_id,
         payload: json!({
