@@ -44,6 +44,7 @@ function degToCompass(num: number): string {
 // Location mapping
 const LOCATIONS: Record<string, { lat: string, lon: string, timezone: string, name: string }> = {
     "port_melbourne": { lat: "-37.8396", lon: "144.9423", timezone: "Australia/Melbourne", name: "Port Melbourne, Australia" },
+    "auckland": { lat: "-36.8485", lon: "174.7633", timezone: "Pacific/Auckland", name: "Auckland, New Zealand" },
     "sydney": { lat: "-33.8688", lon: "151.2093", timezone: "Australia/Sydney", name: "Sydney, Australia" },
     "hong_kong": { lat: "22.3193", lon: "114.1694", timezone: "Asia/Hong_Kong", name: "Hong Kong" }
 };
