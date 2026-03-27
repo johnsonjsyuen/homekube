@@ -222,6 +222,7 @@
                         value={currentSelectValue}
                     >
                         <option value="port_melbourne">Port Melbourne</option>
+                        <option value="auckland">Auckland</option>
                         <option value="sydney">Sydney</option>
                         <option value="hong_kong">Hong Kong</option>
                         <option value="current_location">Current Location</option>
