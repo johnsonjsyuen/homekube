@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: nats
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: nats
   ports:
