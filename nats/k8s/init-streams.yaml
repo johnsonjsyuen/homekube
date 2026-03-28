@@ -28,4 +28,7 @@ spec:
               nats -s nats://nats:4222 consumer add TTS_JOBS tts-workers --pull --ack=explicit --wait=10m --max-deliver=3 --deliver=all --replay=instant --filter="tts.jobs" --defaults
               nats -s nats://nats:4222 consumer add DIGESTS whatsapp-relay --pull --ack=explicit --wait=30s --max-deliver=3 --deliver=all --replay=instant --filter="digests" --defaults
 
+              # Project1 task worker consumer
+              nats -s nats://nats:4222 consumer add PROJECT1 task-workers --pull --ack=explicit --wait=30m --max-deliver=3 --deliver=all --replay=instant --filter="project1.tasks" --defaults
+
               echo "Streams and consumers initialized successfully"

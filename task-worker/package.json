@@ -1,0 +1,13 @@
+{
+  "name": "task-worker",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "nats": "^2.28.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0"
+  }
+}
