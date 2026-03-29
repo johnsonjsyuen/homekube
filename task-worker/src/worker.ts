@@ -1,5 +1,5 @@
 import { hostname } from "os";
-import { NativeConnection, Worker } from "@temporalio/worker";
+import { NativeConnection, Worker, bundleWorkflowCode } from "@temporalio/worker";
 import { connectNats, ensureResultStream, disconnectNats } from "./nats.js";
 import { setWorkerId } from "./activities.js";
 import * as activities from "./activities.js";
@@ -27,10 +27,14 @@ const temporalConnection = await NativeConnection.connect({
   address: TEMPORAL_ADDRESS,
 });
 
+const workflowBundle = await bundleWorkflowCode({
+  workflowsPath: new URL("./workflows.ts", import.meta.url).pathname,
+});
+
 const worker = await Worker.create({
   connection: temporalConnection,
   namespace: TEMPORAL_NAMESPACE,
-  workflowsPath: new URL("./workflows.js", import.meta.url).pathname,
+  workflowBundle,
   activities,
   taskQueue: TASK_QUEUE,
   maxConcurrentActivityTaskExecutions: 1,
