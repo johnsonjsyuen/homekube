@@ -23,7 +23,7 @@ function validateExtraFlags(flags: string[]): void {
 }
 
 export async function runClaude(input: TaskInput): Promise<TaskResult> {
-  const timeoutMs = (input.timeoutSeconds ?? 300) * 1000;
+  const timeoutMs = (input.timeoutSeconds ?? 1800) * 1000;
   const startTime = Date.now();
 
   log.info("Starting task", { taskId: input.taskId, workDir: input.workDir, prompt: input.prompt.slice(0, 100) });
@@ -112,7 +112,7 @@ export async function runClaude(input: TaskInput): Promise<TaskResult> {
       const msg =
         race.type === "cancelled"
           ? "Cancelled by Temporal"
-          : `Timed out after ${input.timeoutSeconds ?? 300}s`;
+          : `Timed out after ${input.timeoutSeconds ?? 1800}s`;
       // Timeouts/cancellations are non-retryable
       throw ApplicationFailure.nonRetryable(msg, race.type);
     }

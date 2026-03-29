@@ -5,7 +5,7 @@ export interface TaskInput {
   prompt: string;
   /** Working directory for Claude Code (absolute path on worker) */
   workDir: string;
-  /** Max time in seconds for Claude Code execution. Default: 300 */
+  /** Max time in seconds for Claude Code execution. Default: 1800 (30 min) */
   timeoutSeconds?: number;
   /** Additional CLI flags passed to claude */
   extraFlags?: string[];
