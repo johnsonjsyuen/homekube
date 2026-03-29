@@ -1,5 +1,5 @@
 import { stat } from "fs/promises";
-import { Context } from "@temporalio/activity";
+import { Context, log } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import type { TaskInput, TaskResult } from "./types.js";
 import { publishResult as natsPublish } from "./nats.js";
@@ -25,6 +25,8 @@ function validateExtraFlags(flags: string[]): void {
 export async function runClaude(input: TaskInput): Promise<TaskResult> {
   const timeoutMs = (input.timeoutSeconds ?? 300) * 1000;
   const startTime = Date.now();
+
+  log.info("Starting task", { taskId: input.taskId, workDir: input.workDir, prompt: input.prompt.slice(0, 100) });
 
   // Validate workDir
   try {
@@ -52,6 +54,8 @@ export async function runClaude(input: TaskInput): Promise<TaskResult> {
     "json",
     ...(input.extraFlags ?? []),
   ];
+
+  log.info("Spawning claude process", { taskId: input.taskId, cwd: input.workDir });
 
   const proc = Bun.spawn(args, {
     cwd: input.workDir,
@@ -93,6 +97,7 @@ export async function runClaude(input: TaskInput): Promise<TaskResult> {
     ]);
 
     if (race.type === "cancelled" || race.type === "timed_out") {
+      log.warn("Task interrupted", { taskId: input.taskId, reason: race.type });
       proc.kill("SIGTERM");
       const killed = await Promise.race([
         proc.exited,
@@ -114,21 +119,25 @@ export async function runClaude(input: TaskInput): Promise<TaskResult> {
 
     // Process completed normally
     const { stdout, stderr, exitCode } = race;
+    const durationMs = Date.now() - startTime;
 
     if (exitCode === 0) {
-      return {
+      const result: TaskResult = {
         taskId: input.taskId,
         workflowId: `task-${input.taskId}`,
         status: "completed" as const,
         output: stdout,
-        durationMs: Date.now() - startTime,
+        durationMs,
         workerId,
         completedAt: new Date().toISOString(),
         metadata: input.metadata,
       };
+      log.info("Task completed", { taskId: input.taskId, durationMs, outputLength: stdout.length });
+      return result;
     }
 
     // Non-zero exit — throw so Temporal retries (up to 3x per retry policy)
+    log.warn("Claude exited with error", { taskId: input.taskId, exitCode, stderr: stderr.slice(0, 500) });
     throw ApplicationFailure.create({
       message: stderr || `Claude exited with code ${exitCode}`,
       type: "ClaudeExecutionError",
@@ -141,5 +150,7 @@ export async function runClaude(input: TaskInput): Promise<TaskResult> {
 }
 
 export async function publishTaskResult(result: TaskResult): Promise<void> {
+  log.info("Publishing result to NATS", { taskId: result.taskId, status: result.status });
   await natsPublish(result.taskId, JSON.stringify(result));
+  log.info("Result published", { taskId: result.taskId });
 }
