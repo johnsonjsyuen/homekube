@@ -24,6 +24,10 @@ temporal:
   fullnameOverride: temporal
 
   server:
+    frontend:
+      service:
+        type: NodePort
+        nodePort: 30233
     config:
       numHistoryShards: 128
       persistence:

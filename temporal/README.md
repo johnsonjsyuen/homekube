@@ -33,7 +33,7 @@ A single `helm install` provisions everything:
 |-----------|-------------|
 | **CNPG Cluster** | PostgreSQL instance with `temporal` and `temporal_visibility` databases |
 | **Schema Job** | One-shot job that runs Temporal schema migrations (retries until DB is ready) |
-| **Frontend** | gRPC server (port 7233) — client/worker entry point |
+| **Frontend** | gRPC server (port 7233, NodePort 30233) — client/worker entry point |
 | **History** | Manages workflow execution history |
 | **Matching** | Routes tasks to workers via task queues |
 | **Worker** | Internal Temporal system worker |
@@ -59,6 +59,14 @@ temporal:
   server:
     config:
       numHistoryShards: 128   # Immutable after first install
+```
+
+### External Access
+
+The frontend gRPC service is exposed as a NodePort on port **30233**. LAN workers connect using:
+
+```
+TEMPORAL_ADDRESS=<node-ip>:30233
 ```
 
 ### Common Overrides
@@ -124,7 +132,7 @@ kubectl exec -n temporal deploy/temporal-admintools -- temporal workflow list -n
 └──────────────────┬──────────────────────────┘
                    │
                    ▼
-         temporal-frontend:7233
+         temporal-frontend:7233 (NodePort 30233)
                    │
       ┌────────────┼────────────┐
       ▼            ▼            ▼
