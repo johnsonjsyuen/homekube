@@ -39,6 +39,7 @@ const worker = await Worker.create({
   taskQueue: TASK_QUEUE,
   maxConcurrentActivityTaskExecutions: 1,
   maxConcurrentWorkflowTaskExecutions: 1,
+  maxCachedWorkflows: 0,
   identity: workerId,
 });
 
