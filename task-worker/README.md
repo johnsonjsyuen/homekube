@@ -1,61 +1,80 @@
-# task-worker
+# Task Worker
 
-NATS JetStream pull consumer that executes tasks via Claude Code CLI. Runs on worker machines (not in k8s).
-
-## How it works
-
-1. Pulls tasks from the `task-workers` durable consumer on the `PROJECT1` JetStream stream
-2. Filters by `target` (worker ID) and `required_capabilities`
-3. Invokes `claude --dangerously-skip-permissions -p "<instruction>"`
-4. Acks on success, nacks on failure (NATS redelivers up to 3x)
-5. Publishes `task_started`/`task_completed`/`task_failed` events to `project1.events`
+Temporal-based worker that executes Claude Code tasks on remote machines. Workers poll a Temporal task queue, run `claude --dangerously-skip-permissions`, and publish results to NATS JetStream.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) installed
-- Claude Code CLI installed and authenticated (`claude login`)
-- Network access to NATS at `192.168.8.209:4222`
+- [Bun](https://bun.sh) runtime
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- Network access to Temporal server and NATS server
 
-## Setup
+## Install
 
 ```bash
+git clone <repo-url>
+cd task-worker
 bun install
 ```
 
-## Running
+## Run the worker
 
 ```bash
-WORKER_ID=windows1 WORKER_CAPABILITIES=gpu,windows,media bun run src/index.ts
+TEMPORAL_ADDRESS=temporal-frontend.temporal:7233 \
+NATS_URL=nats://nats.nats:4222 \
+TASK_QUEUE=worker.myhost \
+bun run start
 ```
 
-## Environment variables
+### Environment variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `WORKER_ID` | yes | — | Unique worker identifier (e.g. `windows1`) |
-| `WORKER_CAPABILITIES` | no | — | Comma-separated capabilities (e.g. `gpu,windows,media`) |
-| `NATS_URL` | no | `nats://192.168.8.209:4222` | NATS server URL |
+| `TEMPORAL_ADDRESS` | No | `localhost:7233` | Temporal frontend gRPC address |
+| `TEMPORAL_NAMESPACE` | No | `default` | Temporal namespace |
+| `NATS_URL` | No | `nats://localhost:4222` | NATS server URL |
+| `TASK_QUEUE` | No | `worker.default` | Task queue name (convention: `worker.<machine-name>`) |
+| `WORK_DIR` | No | current directory | Default working directory for Claude Code |
 
-## Capabilities
+## Submit a task
 
-Workers declare capabilities on startup. Tasks can require capabilities via `required_capabilities`. A worker only accepts a task if it has **all** required capabilities.
+### CLI
 
-Example capabilities: `gpu`, `windows`, `unix`, `media`
-
-## Task format
-
-Published to `project1.tasks`:
-
-```json
-{
-  "task_id": "uuid",
-  "target": "windows1",
-  "required_capabilities": ["gpu", "media"],
-  "instruction": "do something",
-  "type": "command"
-}
+```bash
+TEMPORAL_ADDRESS=localhost:7233 \
+bun run submit worker.myhost "List all files in this repo" /path/to/repo
 ```
 
-## Pairing with /dispatch skill
+### Programmatic (TypeScript)
 
-The orchestrator uses the `/dispatch` Claude Code skill (in `~/.claude/skills/dispatch/`) to enqueue tasks and wait for results.
+```typescript
+import { TaskSubmitter } from "./src/client.js";
+
+const submitter = await TaskSubmitter.connect("temporal-frontend.temporal:7233");
+
+const workflowId = await submitter.submit("worker.windows", {
+  taskId: crypto.randomUUID(),
+  prompt: "Refactor the auth module",
+  workDir: "/home/user/myrepo",
+});
+
+// Block until the worker finishes
+const result = await submitter.waitForResult(workflowId);
+console.log(result.status, result.output);
+
+await submitter.close();
+```
+
+Resubmitting the same `taskId` is idempotent — it returns the existing workflow.
+
+## Architecture
+
+```
+Submitter → Temporal Server → Worker (polls task queue)
+                                 ├── runs claude CLI
+                                 └── publishes result → NATS (task.results.<taskId>)
+```
+
+- Each machine runs one worker with its own task queue name
+- Workers execute one task at a time
+- Failed tasks are retried up to 3x by Temporal
+- Results are stored in Temporal (queryable) and published to NATS for fanout
