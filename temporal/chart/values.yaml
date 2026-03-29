@@ -80,5 +80,8 @@ temporal:
 
   web:
     enabled: true
+    service:
+      type: NodePort
+      nodePort: 30234
   admintools:
     enabled: true

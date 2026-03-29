@@ -63,10 +63,23 @@ temporal:
 
 ### External Access
 
-The frontend gRPC service is exposed as a NodePort on port **30233**. LAN workers connect using:
+Both the gRPC frontend and web UI are exposed as NodePorts for LAN access:
+
+| Service | NodePort | URL |
+|---------|----------|-----|
+| Frontend (gRPC) | 30233 | `<node-ip>:30233` |
+| Web UI | 30234 | `http://<node-ip>:30234` |
+
+Workers connect using:
 
 ```
 TEMPORAL_ADDRESS=<node-ip>:30233
+```
+
+To check the current ports:
+
+```bash
+kubectl get svc -n temporal
 ```
 
 ### Common Overrides
