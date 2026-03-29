@@ -33,8 +33,13 @@ export async function claudeTask(input: TaskInput): Promise<TaskResult> {
     result = await claudeActivities.runClaude(input);
   } catch (err) {
     // All retries exhausted or non-retryable — build a failed result
-    const message = err instanceof ApplicationFailure ? err.message : String(err);
-    const type = err instanceof ApplicationFailure ? err.type : "unknown";
+    // Temporal wraps errors: ActivityFailure -> ApplicationFailure (cause chain)
+    let cause = err;
+    while (cause && typeof cause === "object" && "cause" in cause && cause.cause) {
+      cause = cause.cause;
+    }
+    const message = cause instanceof Error ? cause.message : String(err);
+    const type = cause instanceof ApplicationFailure ? cause.type : "unknown";
 
     result = {
       taskId: input.taskId,
