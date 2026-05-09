@@ -55,7 +55,7 @@ TTS_TEST_MODE=1 cargo test --test integration_test
 
 ### CI Testing
 
-The CI workflow (`.forgejo/workflows/e2e.yml`) automatically runs in test mode:
+The CI workflow automatically runs in test mode:
 
 1. Builds the Docker image
 2. Starts PostgreSQL and the TTS service with `TTS_TEST_MODE=1`

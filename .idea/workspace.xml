@@ -21,13 +21,33 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="bced141c-8f72-4ae3-9235-20b45816a941" name="Changes" comment="cleanup" />
+    <list default="true" id="bced141c-8f72-4ae3-9235-20b45816a941" name="Changes" comment="cleanup">
+      <change beforePath="$PROJECT_DIR$/.forgejo/workflows/e2e.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deploy_infra.sh" beforeDir="false" afterPath="$PROJECT_DIR$/deploy_infra.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/forgejo-runner/.runner" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/forgejo-runner/k8s/configmap.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/forgejo-runner/k8s/debugpod.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/forgejo-runner/k8s/deployment.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/forgejo-runner/k8s/dind-config.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/forgejo-runner/k8s/pvc.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/forgejo-runner/k8s/service.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/forgejo-runner/on-host/install-and-register.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/forgejo-runner/on-host/install-values.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/forgejo-runner/register.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/text-to-speech/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/text-to-speech/README.md" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="GitHubPullRequestSearchHistory">{
@@ -66,7 +86,7 @@
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.rust.reset.selective.auto.import": "true",
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "git-widget-placeholder": "agent-team",
+    "git-widget-placeholder": "delete-forejo-runner",
     "last_opened_file_path": "/Users/johnsonyuen/Code/homekube",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",

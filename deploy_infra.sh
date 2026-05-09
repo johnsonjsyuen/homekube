@@ -16,10 +16,6 @@ echo "--- Keycloak ---"
 kubectl apply -f keycloak/k8s/namespace.yaml
 kubectl apply -f keycloak/k8s/db.yaml -f keycloak/k8s/secret.yaml -f keycloak/k8s/service.yaml -f keycloak/k8s/deployment.yaml
 
-# Forgejo Runner
-echo "--- Forgejo Runner ---"
-kubectl apply -f forgejo-runner/k8s/
-
 # Speedtest
 echo "--- Speedtest ---"
 kubectl apply -f speedtest/k8s/
