@@ -19,3 +19,6 @@ whatsapp/package-lock.json
 homepage/test-results/
 bin
 keycloak/k8s/secret.yaml
+
+.idea/
+.vscode/
