@@ -1,0 +1,20 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: location-share-db
+  namespace: default
+spec:
+  instances: 1
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
+  storage:
+    size: 2Gi
+  bootstrap:
+    initdb:
+      database: location_share
+      owner: location_share
