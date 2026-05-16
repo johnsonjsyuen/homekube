@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # Configuration
 TAP_DEV="tap0"
@@ -11,7 +11,7 @@ ROOTFS="ubuntu-rootfs.ext4"
 FC_BINARY="./firecracker"
 API_SOCKET="/tmp/firecracker.socket"
 
-if [ "$EUID" -ne 0 ]; then
+if [ "${EUID:-0}" -ne 0 ]; then
   echo "Please run as root (or with sudo)"
   exit 1
 fi
@@ -31,12 +31,34 @@ if [ ! -f "$ROOTFS" ]; then
     exit 1
 fi
 
-# Cleanup
-rm -f $API_SOCKET
+if [ ! -x "$FC_BINARY" ]; then
+    echo "Firecracker binary $FC_BINARY not found or not executable. Please run setup.sh."
+    exit 1
+fi
+
+# Determine default interface early so cleanup can reference it
+DEFAULT_IFACE=""
+DEFAULT_IFACE=$(ip route | grep default | awk '{print $5}' | head -n 1) || true
+
+# Cleanup function for network resources
+cleanup() {
+    echo "Cleaning up network resources..."
+    rm -f "$API_SOCKET"
+    ip link del "$TAP_DEV" 2>/dev/null || true
+    if [ -n "$DEFAULT_IFACE" ]; then
+        iptables -t nat -D POSTROUTING -o "$DEFAULT_IFACE" -j MASQUERADE 2>/dev/null || true
+        iptables -D FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
+        iptables -D FORWARD -i "$TAP_DEV" -o "$DEFAULT_IFACE" -j ACCEPT 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT INT TERM
+
+# Pre-launch cleanup (remove stale socket)
+rm -f "$API_SOCKET"
 
 # Network Setup
 echo "Setting up network..."
-ip link del "$TAP_DEV" 2> /dev/null || true
+ip link del "$TAP_DEV" 2>/dev/null || true
 ip tuntap add dev "$TAP_DEV" mode tap
 ip addr add "${TAP_IP}${MASK_SHORT}" dev "$TAP_DEV"
 ip link set dev "$TAP_DEV" up
@@ -45,19 +67,18 @@ ip link set dev "$TAP_DEV" up
 echo 1 > /proc/sys/net/ipv4/ip_forward
 
 # Iptables
-# Find default interface
-DEFAULT_IFACE=$(ip route | grep default | awk '{print $5}')
 if [ -z "$DEFAULT_IFACE" ]; then
     echo "Warning: Could not determine default interface. Internet access might not work."
 else
     echo "Using outgoing interface: $DEFAULT_IFACE"
-    iptables -t nat -D POSTROUTING -o $DEFAULT_IFACE -j MASQUERADE 2>/dev/null || true
+    # Remove any stale rules first, then add fresh ones
+    iptables -t nat -D POSTROUTING -o "$DEFAULT_IFACE" -j MASQUERADE 2>/dev/null || true
     iptables -D FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
-    iptables -D FORWARD -i $TAP_DEV -o $DEFAULT_IFACE -j ACCEPT 2>/dev/null || true
+    iptables -D FORWARD -i "$TAP_DEV" -o "$DEFAULT_IFACE" -j ACCEPT 2>/dev/null || true
 
-    iptables -t nat -A POSTROUTING -o $DEFAULT_IFACE -j MASQUERADE
+    iptables -t nat -A POSTROUTING -o "$DEFAULT_IFACE" -j MASQUERADE
     iptables -I FORWARD 1 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-    iptables -I FORWARD 1 -i $TAP_DEV -o $DEFAULT_IFACE -j ACCEPT
+    iptables -I FORWARD 1 -i "$TAP_DEV" -o "$DEFAULT_IFACE" -j ACCEPT
 fi
 
 # Create Config
@@ -92,4 +113,4 @@ EOF
 
 echo "Launching Firecracker..."
 echo "To connect to the VM: ssh root@172.16.0.2 (password: root)"
-$FC_BINARY --api-sock $API_SOCKET --config-file vm_config.json
+"$FC_BINARY" --api-sock "$API_SOCKET" --config-file vm_config.json

@@ -1,4 +1,5 @@
 <script lang="ts">
+    import UvChart from './UvChart.svelte';
     import { tick } from 'svelte';
 
     let { data } = $props();
@@ -182,6 +183,14 @@
                 {/each}
             </div>
         </div>
+    {/if}
+
+    {#if data.uvChartData}
+        <UvChart
+            chartData={data.uvChartData}
+            maxUV={data.uvChartMax}
+            maxUVTime={data.uvChartMaxTime}
+        />
     {/if}
 {/if}
 
