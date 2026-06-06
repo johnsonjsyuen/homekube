@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kvrocks-stream-demo
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: kvrocks-stream-demo
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: demo
+          image: your-registry/kvrocks-stream-demo:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KVROCKS_URL
+              value: redis://kvrocks:6666
+            - name: STREAM_NAME
+              value: demo:stream
+            - name: GROUP_NAME
+              value: demo-group
+            - name: MESSAGE_COUNT
+              value: "12"

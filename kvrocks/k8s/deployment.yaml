@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kvrocks
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kvrocks
+  template:
+    metadata:
+      labels:
+        app: kvrocks
+    spec:
+      containers:
+        - name: kvrocks
+          image: apache/kvrocks:2.10.0
+          ports:
+            - name: redis
+              containerPort: 6666
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/kvrocks/data
+          readinessProbe:
+            tcpSocket:
+              port: 6666
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 6666
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: kvrocks-data
