@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: task-worker
+  namespace: default
+  labels:
+    app: task-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: task-worker
+  template:
+    metadata:
+      labels:
+        app: task-worker
+    spec:
+      containers:
+        - name: task-worker
+          image: registry.johnsonyuen.com/task-worker:latest
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: "temporal-frontend.temporal:7233"
+            - name: NATS_URL
+              value: "nats://nats.nats:4222"
+            - name: TASK_QUEUE
+              value: "worker.k8s"
+            - name: WORK_DIR
+              value: "/workspace"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
