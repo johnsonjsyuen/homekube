@@ -16,6 +16,7 @@ node_modules/
 whatsapp/dist/
 whatsapp/package-lock.json
 .serena/
+.worktrees/
 homepage/test-results/
 bin
 keycloak/k8s/secret.yaml
