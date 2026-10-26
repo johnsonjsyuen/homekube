@@ -21,6 +21,8 @@ spec:
       containers:
         - image: cloudflare/cloudflared:latest
           name: cloudflared
+          # Always re-pull latest when the pod is recreated.
+          imagePullPolicy: Always
           env:
             # Defines an environment variable for the tunnel token.
             - name: TUNNEL_TOKEN

@@ -30,6 +30,11 @@ echo "--- Monitoring ---"
 ./monitoring/install.sh
 kubectl apply -f monitoring/grafana-proxy/
 
+# Cloudflare Tunnel
+echo "--- Cloudflare Tunnel ---"
+kubectl create namespace cloudflare --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f cloudflare-tunnel/cloudflare-tunnel.yaml -f cloudflare-tunnel/auto-update.yaml
+
 # GitHub Token for Claude Code API
 # Required so the claude-code-api pod can use `gh` CLI for PRs, issues, etc.
 # The token is a GitHub Personal Access Token with appropriate scopes (e.g. repo, read:org).
